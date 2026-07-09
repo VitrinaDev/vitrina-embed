@@ -45,8 +45,7 @@
     "url": "https://github.com/VitrinaDev/vitrina-embed/issues"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "scripts": {
     "build": "tsup",
