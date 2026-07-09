@@ -1,7 +1,7 @@
-// @vitrinadev/widget — public entry.
+// @vitrina/widget — public entry.
 //
 // Two ways to embed:
-//   1. NPM (storefront template):  import { init } from '@vitrinadev/widget'
+//   1. NPM (storefront template):  import { init } from '@vitrina/widget'
 //   2. <script> loader (any site):  see ./loader — reads window.vitrinaChat
 //
 // The widget renders a Shadow-DOM launcher + conversation panel (style-isolated

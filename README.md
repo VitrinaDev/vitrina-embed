@@ -1,16 +1,16 @@
 # vitrina-embed
 
-Embeddable web SDK for Vitrina dealer websites. Published to the private
-`@vitrinadev` GitHub Packages scope.
+Embeddable web SDK for Vitrina dealer websites. Published to the public npm
+registry under the `@vitrina` org scope.
 
 ## Packages
 
 | Package | What it is | Status |
 |---|---|---|
-| `@vitrinadev/client` | Headless, framework-agnostic TS client for the Vitrina public API (stock read, lead submit, webchat transport). Generated from `openapi.json`. | scaffold |
-| `@vitrinadev/widget` | The embeddable **chat widget** — launcher (Shadow DOM) + conversation panel (iframe), SSE client, config/theming, `<script>` loader. Talks to Vitrina Core with a publishable widget key. | **in progress (W6)** |
+| `@vitrina/client` | Headless, framework-agnostic TS client for the Vitrina public API (stock read, lead submit, webchat transport). Generated from `openapi.json`. | scaffold |
+| `@vitrina/widget` | The embeddable **chat widget** — launcher (Shadow DOM) + conversation panel (iframe), SSE client, config/theming, `<script>` loader. Talks to Vitrina Core with a publishable widget key. | **in progress (W6)** |
 
-Later: `@vitrinadev/react` (headless hooks) and `@vitrinadev/stock-ui` (themeable
+Later: `@vitrina/react` (headless hooks) and `@vitrina/stock-ui` (themeable
 stock components) for the Vitrina-built storefront templates.
 
 ## Architecture

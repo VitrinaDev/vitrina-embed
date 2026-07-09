@@ -1,4 +1,4 @@
-# @vitrinadev/widget
+# @vitrina/widget
 
 Embeddable chat widget for dealer websites. Renders a floating launcher + a
 conversation panel inside a **Shadow DOM** (fully style-isolated from the host
@@ -12,36 +12,39 @@ codebases, or a **`<script>` loader** for any static site.
 
 ---
 
-## Install (GitHub Packages)
+## Install
 
-This package is published to **GitHub Packages** under the `@vitrinadev` scope,
-not the public npm registry. Point that scope at the GitHub registry and provide
-an auth token.
+This package is published to the **public npm registry** under the `@vitrina`
+org scope. No authentication or `.npmrc` configuration is required.
 
-Create/append `.npmrc` next to your `package.json`:
-
-```ini
-@vitrinadev:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-`GITHUB_TOKEN` must be a GitHub Personal Access Token (classic) with at least the
-`read:packages` scope, exported in your shell / CI env. GitHub Packages requires
-authentication **even to read** — an anonymous install will 401.
-
-Then:
+### Option A — NPM import (app/storefront codebases)
 
 ```bash
-pnpm add @vitrinadev/widget
-# or: npm i @vitrinadev/widget
+npm install @vitrina/widget
+# or: pnpm add @vitrina/widget
+# or: yarn add @vitrina/widget
 ```
+
+### Option B — `<script>` loader (any static site, no build step)
+
+```html
+<script>
+  window.vitrinaChat = {
+    publicKey: 'pk_live_xxx',
+    apiBaseUrl: 'https://app.vitrina.dev/api/v1',
+  };
+</script>
+<script src="https://unpkg.com/@vitrina/widget/dist/loader.global.js" defer></script>
+```
+
+See "Usage — `<script>` loader" below for the full config.
 
 ---
 
 ## Usage — `import { init }`
 
 ```ts
-import { init } from '@vitrinadev/widget';
+import { init } from '@vitrina/widget';
 
 const widget = init({
   publicKey: 'pk_live_xxx',

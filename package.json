@@ -1,5 +1,5 @@
 {
-  "name": "@vitrinadev/embed-workspace",
+  "name": "@vitrina/embed-workspace",
   "version": "0.0.0",
   "private": true,
   "description": "Vitrina embeddable web SDK: chat widget + lead form + stock client for dealer websites.",
