@@ -92,10 +92,12 @@ describe('openStream reconnect backfill', () => {
       if (!String(url).includes('/widget/stream')) return Promise.resolve(emptyRes(404));
       streamCount += 1;
       if (streamCount === 1) {
-        // First connection: advance the cursor via an id-ONLY frame (no
-        // `message.created`), so it does NOT itself trigger onInvalidation. Then
-        // close the stream to force a reconnect.
-        return Promise.resolve(closingStreamRes([`id: ${cursorA}\n\n`]));
+        // First connection: a real `message.created` frame — the ONLY frame the
+        // server stamps an `id:` on (ADR 0035 ¶4), and therefore the only one
+        // that may advance the cursor. Then close to force a reconnect.
+        return Promise.resolve(
+          closingStreamRes([`event: message.created\nid: ${cursorA}\ndata: {}\n\n`]),
+        );
       }
       // Reconnect: stay open. The backfill onInvalidation must fire here.
       return Promise.resolve(openStreamRes(opts?.signal ?? undefined));
@@ -109,10 +111,47 @@ describe('openStream reconnect backfill', () => {
     await vi.advanceTimersByTimeAsync(5000);
 
     expect(streamCount).toBeGreaterThanOrEqual(2);
-    // The id-only frame did NOT invalidate; the reconnect backfill did — exactly
-    // once, carrying the cursor the widget will pass as `since`.
+    // Twice: once for the live frame, once for the reconnect catch-up — and the
+    // catch-up carries the cursor the widget will pass as `since`.
+    expect(onInvalidation).toHaveBeenCalledTimes(2);
+    expect(onInvalidation).toHaveBeenNthCalledWith(1, cursorA);
+    expect(onInvalidation).toHaveBeenNthCalledWith(2, cursorA);
+
+    close();
+  });
+
+  it('an id-bearing frame that is NOT message.created neither invalidates nor moves the cursor', async () => {
+    // ADR 0035 ¶4, defence in depth. The server stamps `id:` only on
+    // `message.created`, but a widget installed on a dealer site outlives the
+    // server it was built against. If some future/rogue frame carries an id, it
+    // must not become the `since` cursor — the next catch-up read would skip
+    // every real message written before it.
+    const alienCursor = '2030-01-01T00:00:00.000Z';
+    let streamCount = 0;
+    fetchMock.mockImplementation((url: string, opts?: RequestInit) => {
+      if (!String(url).includes('/widget/stream')) return Promise.resolve(emptyRes(404));
+      streamCount += 1;
+      if (streamCount === 1) {
+        return Promise.resolve(
+          closingStreamRes([
+            `event: agent.typing\nid: ${alienCursor}\ndata: {"ttlMs":5000}\n\n`,
+            'id: 2031-01-01T00:00:00.000Z\n\n', // bare id frame, no event name
+          ]),
+        );
+      }
+      return Promise.resolve(openStreamRes(opts?.signal ?? undefined));
+    });
+
+    const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, memStore());
+    const onInvalidation = vi.fn();
+    const close = t.openStream(onInvalidation);
+
+    await vi.advanceTimersByTimeAsync(5000);
+
+    // The unknown frames invalidated nothing. The reconnect catch-up still fires
+    // (exactly once) but with NO cursor — a full re-read, never a forward skip.
     expect(onInvalidation).toHaveBeenCalledTimes(1);
-    expect(onInvalidation).toHaveBeenCalledWith(cursorA);
+    expect(onInvalidation).toHaveBeenCalledWith(undefined);
 
     close();
   });

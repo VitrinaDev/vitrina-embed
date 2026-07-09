@@ -380,10 +380,17 @@ export class VitrinaTransport {
             buffer = buffer.slice(idx + 2);
             const frame = parseSseFrame(raw);
             if (!frame) continue;
+            // FORWARD COMPATIBILITY (ADR 0035 ¶4). This widget is installed on
+            // dealer sites we cannot force-upgrade, so it WILL one day receive
+            // event types that did not exist when it was built. Anything
+            // unrecognised is ignored — never an error, and never allowed to
+            // advance `lastCursor`. Only `message.created` corresponds to a
+            // persisted row, so only it is a valid `since` cursor; letting a
+            // typing/handoff frame move the cursor forward would make the next
+            // catch-up read skip the messages in between.
+            if (frame.event !== 'message.created') continue;
             if (frame.id) lastCursor = frame.id;
-            if (frame.event === 'message.created') {
-              onInvalidation(frame.id ?? lastCursor);
-            }
+            onInvalidation(frame.id ?? lastCursor);
           }
         }
       } finally {
