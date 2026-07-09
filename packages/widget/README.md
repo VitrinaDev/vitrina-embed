@@ -31,7 +31,7 @@ npm install @vitrina/widget
 <script>
   window.vitrinaChat = {
     publicKey: 'pk_live_xxx',
-    apiBaseUrl: 'https://app.vitrina.dev/api/v1',
+    apiBaseUrl: 'https://api.vitrinadev.com/api/v1',
   };
 </script>
 <script src="https://unpkg.com/@vitrina/widget/dist/loader.global.js" defer></script>
@@ -75,7 +75,7 @@ script, and it auto-initializes:
 <script>
   window.vitrinaChat = {
     publicKey: 'pk_live_xxx',
-    apiBaseUrl: 'https://app.vitrina.dev/api/v1',
+    apiBaseUrl: 'https://api.vitrinadev.com/api/v1',
     // optional:
     vehicleId: 'veh_123',
     locale: 'es',
