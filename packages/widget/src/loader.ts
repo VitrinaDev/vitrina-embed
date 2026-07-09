@@ -5,9 +5,6 @@
 //
 // Defensive: no-ops with a console.warn on a missing/invalid config, guards
 // against a double-load (idempotent), and never throws into the host page.
-//
-// NOTE (W6 Stage A): init() is still the scaffold no-op stub — the real UI
-// mount lands in Stage B. This loader wires the final control surface today.
 
 import { init } from './index';
 import type { WidgetConfig, WidgetInstance } from './types';
