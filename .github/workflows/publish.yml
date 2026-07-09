@@ -1,0 +1,41 @@
+name: Publish @vitrina/widget to npm
+
+# Publishes @vitrina/widget to PUBLIC npm on a version tag (v*) via OIDC
+# "trusted publishing" — NO npm token stored anywhere (same model as Atribu's
+# atribu-tracker). Requires (one-time, done on npmjs.com by an org owner):
+#   1. The @vitrina scope owned by the `vitrina` npm org (done).
+#   2. The package to already exist on npm (do the FIRST publish manually — see
+#      PUBLISHING.md — because trusted-publisher config needs an existing pkg).
+#   3. Package → Settings → Trusted Publisher → GitHub Actions: org VitrinaDev,
+#      repo vitrina-embed, workflow publish.yml, environment npm-publish.
+#   4. This repo → Settings → Environments → create `npm-publish`, restrict
+#      deployments to tags matching v* (optionally a required reviewer).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC trusted publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      # Node's bundled npm is too old for OIDC on scoped packages.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @vitrina/widget build
+      - run: pnpm --filter @vitrina/widget test
+      - name: Publish (OIDC provenance)
+        working-directory: packages/widget
+        run: npm publish --provenance --access public
