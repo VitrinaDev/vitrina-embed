@@ -2,13 +2,15 @@
 // from host-page CSS. This module is presentation-only — it owns NO transport
 // state; index.ts wires it to VitrinaTransport via the callbacks below.
 //
-// XSS SAFETY (AC#6): every piece of message content and the welcome greeting is
-// written with textContent / createTextNode; ids and metadata go through
-// dataset/setAttribute. There is NO innerHTML anywhere, no eval, no remote
-// script/style/asset (the only remote asset is a validated logo <img>).
+// XSS SAFETY (AC#6): message content reaches the DOM only as text nodes or as
+// elements built by ./markdown, which constructs nodes and never produces an
+// HTML string; ids and metadata go through dataset/setAttribute. There is NO
+// innerHTML anywhere, no eval, no remote script/style/asset (the only remote
+// assets are a validated logo <img> and validated http(s) link targets).
 
 import type { WidgetMessage } from './config';
 import type { Translate } from './i18n';
+import { renderMarkdown } from './markdown';
 import { STYLES } from './styles';
 import { resolveAccent, resolvePosition, validateLogoUrl } from './theme';
 import type { WidgetTheme } from './types';
@@ -191,8 +193,16 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     el.className = 'vtr-msg';
     el.setAttribute('data-dir', dir);
     if (id !== undefined) el.dataset.id = id;
-    // XSS-safe: content is inserted as text, NEVER parsed as HTML.
-    el.textContent = content;
+    if (dir === 'outbound') {
+      // Server-authored: the dealer's reply, the AI's reply, or the dealer's
+      // configured greeting. Rendered through the safe-subset markdown parser,
+      // which builds DOM nodes — an injected tag becomes a text node, because
+      // no code path anywhere parses HTML.
+      el.appendChild(renderMarkdown(content));
+    } else {
+      // The visitor's own text. They typed it; render it verbatim.
+      el.textContent = content;
+    }
     return el;
   }
 

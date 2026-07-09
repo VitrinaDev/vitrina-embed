@@ -419,3 +419,78 @@ describe('mergeMessages reconciles a local echo against its server row', () => {
     expect(latestServerCursor([serverRow, skewed])).toBe('2026-07-01T00:00:00.000Z');
   });
 });
+
+// ---------------------------------------------------------------------------
+// X2 at the widget level: OUTBOUND content is the only thing markdown parses,
+// and parsing it still never produces HTML.
+// ---------------------------------------------------------------------------
+describe('X2: outbound markdown renders; outbound HTML does not', () => {
+  it('renders a dealer reply’s bold text and clickable link', async () => {
+    server.history = [
+      {
+        id: 'srv_1',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        content: 'Sí, el **Corolla 2020** está disponible. [Verlo](https://dealer.cl/stock/42)',
+        direction: 'outbound',
+        type: 'text',
+      },
+    ];
+
+    const w = init({ publicKey: PK, apiBaseUrl: BASE });
+    w.open();
+    const shadow = shadowOf();
+
+    await vi.waitFor(() => {
+      const bubble = shadow.querySelector('.vtr-msg[data-dir="outbound"][data-id="srv_1"]');
+      expect(bubble?.querySelector('strong')?.textContent).toBe('Corolla 2020');
+      const a = bubble?.querySelector('a') as HTMLAnchorElement;
+      expect(a.getAttribute('href')).toBe('https://dealer.cl/stock/42');
+      expect(a.getAttribute('rel')).toBe('noopener noreferrer');
+    });
+
+    w.destroy();
+  });
+
+  it('an <img onerror> in a dealer reply is a text node, not an element', async () => {
+    const payload = '<img src=x onerror=alert(1)>';
+    server.history = [
+      {
+        id: 'srv_1',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        content: payload,
+        direction: 'outbound',
+        type: 'text',
+      },
+    ];
+
+    const w = init({ publicKey: PK, apiBaseUrl: BASE });
+    w.open();
+    const shadow = shadowOf();
+
+    await vi.waitFor(() => {
+      const bubble = shadow.querySelector('.vtr-msg[data-dir="outbound"][data-id="srv_1"]');
+      expect(bubble?.textContent).toBe(payload);
+    });
+    expect(shadow.querySelector('img')).toBeNull();
+
+    w.destroy();
+  });
+
+  it('the visitor’s OWN message is never markdown-parsed', async () => {
+    server.postStatus = 202;
+    const w = init({ publicKey: PK, apiBaseUrl: BASE });
+    w.open();
+    const shadow = shadowOf();
+    submit(shadow, 'cuesta 5**000**000?');
+
+    await vi.waitFor(() => {
+      const bubbles = inboundBubbles(shadow);
+      expect(bubbles.length).toBe(1);
+      // Verbatim: they typed asterisks, they see asterisks.
+      expect(bubbles[0].textContent).toBe('cuesta 5**000**000?');
+      expect(bubbles[0].querySelector('strong')).toBeNull();
+    });
+
+    w.destroy();
+  });
+});

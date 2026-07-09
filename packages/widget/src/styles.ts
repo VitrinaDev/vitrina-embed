@@ -90,6 +90,24 @@ export const STYLES = `
   align-self: flex-start; background: var(--vtr-bubble-out); color: var(--vtr-text);
   border-bottom-left-radius: 4px;
 }
+/* Rendered markdown inside an outbound bubble (see markdown.ts for the subset).
+   Lists reset their default indent/margins so a bubble does not gain a gutter;
+   pre-wrap on the bubble means block elements need no extra separators.
+   NOTE: this file is one big template literal — no backticks in these comments. */
+.vtr-msg .vtr-list { margin: 4px 0; padding-left: 20px; }
+.vtr-msg .vtr-list li { margin: 2px 0; }
+.vtr-msg .vtr-link { color: inherit; text-decoration: underline; }
+.vtr-msg .vtr-link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.vtr-msg .vtr-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em; padding: 1px 4px; border-radius: 4px;
+  background: rgba(0,0,0,0.07);
+}
+@media (prefers-color-scheme: dark) {
+  .vtr-msg .vtr-code { background: rgba(255,255,255,0.12); }
+}
+.vtr-msg strong { font-weight: 650; }
+
 /* A message the visitor sent that the server has not yet accepted. Dimmed, not
    hidden — it is a real message, and it stays on screen whatever happens. */
 .vtr-msg[data-status="pending"] { opacity: 0.6; }
