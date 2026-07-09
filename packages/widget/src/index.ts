@@ -58,6 +58,8 @@ export function init(config: WidgetConfig): WidgetInstance {
   let bootstrapped = false;
   let bootstrapping: Promise<void> | null = null;
   let closeStream: (() => void) | null = null;
+  let panelOpen = false;
+  let unread = 0;
 
   // The banner has ONE slot but TWO independent sources: how the connection is
   // doing, and how the last send went. They used to overwrite each other — a
@@ -146,8 +148,25 @@ export function init(config: WidgetConfig): WidgetInstance {
     if (destroyed) return;
     if (!res.ok) return;
     if (res.messages.length > 0) {
+      // Count replies that arrived while the visitor was not looking. The poke
+      // already reaches us with the panel closed and we already refetch on it —
+      // nothing new is fetched here, it is simply counted.
+      //
+      // Rows we already hold are excluded, so the INCLUSIVE `since` boundary row
+      // and the reconnect catch-up cannot inflate the count. Inbound rows are
+      // excluded because they are the visitor's own messages.
+      const known = new Set(messages.map((m) => String(m.id)));
+      const arrived = res.messages.filter(
+        (row) => row.direction === 'outbound' && !known.has(String(row.id)),
+      ).length;
+
       messages = mergeMessages(messages, res.messages);
       cursor = latestServerCursor(messages);
+
+      if (arrived > 0 && !panelOpen) {
+        unread += arrived;
+        ui.setUnread(unread);
+      }
     }
     ui.renderMessages(messages);
   }
@@ -265,12 +284,17 @@ export function init(config: WidgetConfig): WidgetInstance {
 
   function instanceOpen(): void {
     if (destroyed) return;
+    panelOpen = true;
+    // Opening IS reading. No timers, no scroll tracking, no read receipts.
+    unread = 0;
+    ui.setUnread(0);
     ui.openPanel();
     void ensureSession();
   }
 
   function instanceClose(): void {
     if (destroyed) return;
+    panelOpen = false;
     ui.closePanel();
   }
 

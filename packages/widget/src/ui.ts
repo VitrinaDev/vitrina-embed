@@ -51,6 +51,8 @@ export interface WidgetUi {
    */
   renderMessages(messages: WidgetMessage[]): void;
   setBanner(state: BannerState): void;
+  /** Unread replies waiting behind a closed panel. 0 hides the badge. */
+  setUnread(count: number): void;
 }
 
 interface TrackedListener {
@@ -120,6 +122,15 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   launcher.type = 'button';
   launcher.setAttribute('aria-label', t('launcherLabel'));
   launcher.appendChild(chatIcon());
+
+  // Unread badge. Lives on the launcher, hidden at zero. `aria-hidden` because
+  // the count is announced through the launcher's own aria-label instead — a
+  // screen reader should hear "Open chat, 2 unread messages", not a loose "2".
+  const badge = document.createElement('span');
+  badge.className = 'vtr-badge';
+  badge.setAttribute('aria-hidden', 'true');
+  badge.hidden = true;
+  launcher.appendChild(badge);
 
   // --- Panel ---
   const panel = document.createElement('div');
@@ -304,6 +315,20 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       banner.hidden = false;
       banner.setAttribute('data-state', state);
       banner.textContent = BANNER_STRING[state] ? t(BANNER_STRING[state]) : '';
+    },
+    setUnread(count: number): void {
+      const n = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+      if (n === 0) {
+        badge.hidden = true;
+        badge.textContent = '';
+        launcher.setAttribute('aria-label', t('launcherLabel'));
+        return;
+      }
+      badge.hidden = false;
+      // A dealer chat never has 100 unread replies; cap the glyph anyway so a
+      // pathological count cannot stretch the launcher off the page.
+      badge.textContent = n > 99 ? '99+' : String(n);
+      launcher.setAttribute('aria-label', `${t('launcherLabel')} — ${n} ${t('unread')}`);
     },
   };
 

@@ -24,6 +24,8 @@ export interface WidgetStrings {
   notSent: string;
   /** Button that re-sends a failed message with its original client id. */
   retry: string;
+  /** Suffix in the launcher's aria-label when replies are waiting. */
+  unread: string;
 }
 
 export type StringKey = keyof WidgetStrings;
@@ -43,6 +45,7 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     poweredBy: 'con tecnología de Vitrina',
     notSent: 'No se envió',
     retry: 'Reintentar',
+    unread: 'mensajes sin leer',
   },
   en: {
     launcherLabel: 'Open chat',
@@ -58,6 +61,7 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     poweredBy: 'powered by Vitrina',
     notSent: 'Not sent',
     retry: 'Retry',
+    unread: 'unread messages',
   },
 };
 

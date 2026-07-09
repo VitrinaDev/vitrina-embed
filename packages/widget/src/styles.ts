@@ -35,6 +35,7 @@ export const STYLES = `
 .vtr-root[data-pos="bl"] { left: 20px; }
 
 .vtr-launcher {
+  position: relative;
   width: 56px; height: 56px; border-radius: 50%;
   background: var(--vtr-accent); color: #fff;
   border: none; cursor: pointer;
@@ -47,6 +48,17 @@ export const STYLES = `
 .vtr-launcher:focus-visible { outline: 3px solid rgba(0,0,0,0.35); outline-offset: 2px; }
 .vtr-launcher svg { width: 26px; height: 26px; fill: currentColor; }
 .vtr-launcher[hidden] { display: none; }
+
+/* Unread badge on the launcher. No sound, no browser notification, no favicon
+   dot, no title flashing — a count is a signal; the rest is an interruption. */
+.vtr-badge {
+  position: absolute; top: -2px; right: -2px;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  border-radius: 10px; background: #dc2626; color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 20px; text-align: center;
+  box-shadow: 0 0 0 2px var(--vtr-surface);
+}
+.vtr-badge[hidden] { display: none; }
 
 .vtr-panel {
   position: absolute; bottom: 0;
