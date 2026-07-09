@@ -48,7 +48,7 @@ import { init } from '@vitrina/widget';
 
 const widget = init({
   publicKey: 'pk_live_xxx',
-  apiBaseUrl: 'https://app.vitrina.dev/api/v1',
+  apiBaseUrl: 'https://api.vitrinadev.com/api/v1',
   vehicleId: 'veh_123',            // optional: pre-attach the inquiry to a vehicle
   locale: 'es',                    // optional: 'es' | 'en' (auto-detected otherwise)
   theme: { accent: '#2563eb', position: 'br', logoUrl: 'https://…/logo.png' },
