@@ -63,6 +63,27 @@ export interface SseFrame {
   retry?: number;
 }
 
+/**
+ * The realtime stream's connection state, as the UI needs to understand it.
+ *
+ *   connecting    — the first attempt is in flight; nothing to tell the visitor
+ *   open          — connected and listening
+ *   reconnecting  — the stream dropped and a backoff is running
+ *
+ * The transport has always KNOWN all three: it has a full backoff loop with
+ * jitter, a re-mint-on-401 path, and a longer backoff on rate limiting. It just
+ * never told anyone, so a visitor waiting on a reply could not distinguish a
+ * recovering connection from a dealership ignoring them.
+ */
+export type StreamState = 'connecting' | 'open' | 'reconnecting';
+
+export interface StreamHandlers {
+  /** Something changed server-side; refetch history from `cursor`. */
+  onInvalidation(cursor?: string): void;
+  /** Connection state transitions. Fires only on CHANGE, never repeated. */
+  onState?(state: StreamState): void;
+}
+
 type Ok<T> = { ok: true; data: T };
 type Fail = { ok: false; status: number | null };
 type CallResult<T> = Ok<T> | Fail;
@@ -402,12 +423,26 @@ export class VitrinaTransport {
    * absorbs the publish-before-persist race. 401→re-bootstrap once; 429→longer
    * backoff. Returns a close() that aborts the in-flight fetch + reader.
    */
-  openStream(onInvalidation: (cursor?: string) => void): () => void {
+  openStream(handlers: StreamHandlers): () => void {
+    const { onInvalidation, onState } = handlers;
     const ac = new AbortController();
     let closed = false;
     let attempt = 0;
     let connectedOnce = false;
     let lastCursor: string | undefined;
+
+    // Report only on CHANGE. Every failure path funnels through `backoff()`, so
+    // without this the visitor's banner would flap on each retry.
+    let state: StreamState | null = null;
+    const setState = (next: StreamState): void => {
+      if (closed || state === next) return;
+      state = next;
+      try {
+        onState?.(next);
+      } catch {
+        /* a UI callback must never break the stream loop */
+      }
+    };
 
     const sleep = (ms: number): Promise<void> =>
       new Promise<void>((resolve) => {
@@ -422,7 +457,11 @@ export class VitrinaTransport {
         );
       });
 
+    // Every retry path goes through here, so this is the one place that has to
+    // announce "reconnecting" — the state is true for exactly the backoff's
+    // duration plus the reconnect attempt that follows it.
     const backoff = async (n: number, longer = false): Promise<void> => {
+      setState('reconnecting');
       const base = longer ? 5000 : 1000;
       const cap = 30000;
       const exp = Math.min(cap, base * 2 ** Math.min(n, 10));
@@ -469,6 +508,7 @@ export class VitrinaTransport {
     };
 
     const loop = async (): Promise<void> => {
+      setState('connecting');
       while (!closed) {
         let res: Response;
         try {
@@ -500,6 +540,7 @@ export class VitrinaTransport {
           continue;
         }
         attempt = 0;
+        setState('open');
         // A RECONNECT always backfills (dedupe absorbs the overlap). The first
         // connect does not — the widget already painted history on bootstrap.
         if (connectedOnce) onInvalidation(lastCursor);

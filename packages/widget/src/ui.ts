@@ -9,13 +9,13 @@
 // assets are a validated logo <img> and validated http(s) link targets).
 
 import type { WidgetMessage } from './config';
-import type { Translate } from './i18n';
+import type { StringKey, Translate } from './i18n';
 import { renderMarkdown } from './markdown';
 import { STYLES } from './styles';
 import { resolveAccent, resolvePosition, validateLogoUrl } from './theme';
 import type { WidgetTheme } from './types';
 
-export type BannerState = 'none' | 'offline' | 'error' | 'sending';
+export type BannerState = 'none' | 'offline' | 'reconnecting' | 'error' | 'sending';
 
 export interface WidgetUiCallbacks {
   /** Composer submit: raw text + the honeypot field value (empty for humans). */
@@ -58,6 +58,14 @@ interface TrackedListener {
   type: string;
   handler: EventListener;
 }
+
+/** Banner state -> the i18n key whose string it shows. */
+const BANNER_STRING: Record<Exclude<BannerState, 'none'>, StringKey> = {
+  offline: 'offline',
+  reconnecting: 'reconnecting',
+  error: 'error',
+  sending: 'sending',
+};
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const CHAT_ICON_PATH =
@@ -295,8 +303,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       }
       banner.hidden = false;
       banner.setAttribute('data-state', state);
-      banner.textContent =
-        state === 'offline' ? t('offline') : state === 'error' ? t('error') : t('sending');
+      banner.textContent = BANNER_STRING[state] ? t(BANNER_STRING[state]) : '';
     },
   };
 

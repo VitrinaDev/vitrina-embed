@@ -113,7 +113,7 @@ describe('VitrinaTransport.openStream', () => {
 
     const seen: Array<string | undefined> = [];
     const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, store);
-    const close = t.openStream((c) => seen.push(c));
+    const close = t.openStream({ onInvalidation: (c) => seen.push(c) });
 
     await vi.waitFor(() => expect(seen.length).toBe(2));
     // Comments produced NO invalidation; cursors captured from id: lines.
@@ -151,7 +151,7 @@ describe('VitrinaTransport.openStream', () => {
 
     const seen: Array<string | undefined> = [];
     const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, store);
-    const close = t.openStream((c) => seen.push(c));
+    const close = t.openStream({ onInvalidation: (c) => seen.push(c) });
 
     await vi.waitFor(() => expect(seen).toContain('t1'));
     // The recovery bootstrap POSTed /widget/conversations and refreshed the token.
@@ -169,7 +169,7 @@ describe('VitrinaTransport.openStream', () => {
       return Promise.resolve(streamRes([': connected\n\n'], init.signal ?? undefined));
     });
     const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, store);
-    const close = t.openStream(() => {});
+    const close = t.openStream({ onInvalidation: () => {} });
     await vi.waitFor(() => expect(capturedSignal).toBeDefined());
     expect(capturedSignal?.aborted).toBe(false);
     close();

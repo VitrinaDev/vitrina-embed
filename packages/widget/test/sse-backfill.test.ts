@@ -105,7 +105,7 @@ describe('openStream reconnect backfill', () => {
 
     const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, memStore());
     const onInvalidation = vi.fn();
-    const close = t.openStream(onInvalidation);
+    const close = t.openStream({ onInvalidation });
 
     // Flush: first read, stream close, backoff sleep (~2s + jitter), reconnect.
     await vi.advanceTimersByTimeAsync(5000);
@@ -144,7 +144,7 @@ describe('openStream reconnect backfill', () => {
 
     const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, memStore());
     const onInvalidation = vi.fn();
-    const close = t.openStream(onInvalidation);
+    const close = t.openStream({ onInvalidation });
 
     await vi.advanceTimersByTimeAsync(5000);
 
@@ -165,7 +165,7 @@ describe('openStream reconnect backfill', () => {
 
     const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, memStore());
     const onInvalidation = vi.fn();
-    const close = t.openStream(onInvalidation);
+    const close = t.openStream({ onInvalidation });
 
     await vi.advanceTimersByTimeAsync(5000);
 

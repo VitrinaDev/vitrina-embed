@@ -98,7 +98,7 @@ describe('openStream tolerates unknown visitor event types (ADR 0035)', () => {
 
     const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, memStore());
     const onInvalidation = vi.fn();
-    const close = t.openStream(onInvalidation);
+    const close = t.openStream({ onInvalidation });
 
     await vi.advanceTimersByTimeAsync(100);
 
@@ -130,7 +130,7 @@ describe('openStream tolerates unknown visitor event types (ADR 0035)', () => {
 
     const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, memStore());
     const onInvalidation = vi.fn();
-    const close = t.openStream(onInvalidation);
+    const close = t.openStream({ onInvalidation });
 
     await vi.advanceTimersByTimeAsync(100);
 

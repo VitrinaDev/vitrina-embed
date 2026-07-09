@@ -59,6 +59,32 @@ export function init(config: WidgetConfig): WidgetInstance {
   let bootstrapping: Promise<void> | null = null;
   let closeStream: (() => void) | null = null;
 
+  // The banner has ONE slot but TWO independent sources: how the connection is
+  // doing, and how the last send went. They used to overwrite each other — a
+  // successful send called setBanner('none') and wiped an offline notice that
+  // was still true. Track them separately and resolve with an explicit
+  // precedence: a failed send is the most actionable thing the visitor can see,
+  // then the connection being down, then transient send progress.
+  let connectionState: 'ok' | 'offline' | 'reconnecting' = 'ok';
+  let sendState: 'idle' | 'sending' | 'error' = 'idle';
+
+  function paintBanner(): void {
+    if (destroyed) return;
+    if (sendState === 'error') ui.setBanner('error');
+    else if (connectionState === 'offline') ui.setBanner('offline');
+    else if (connectionState === 'reconnecting') ui.setBanner('reconnecting');
+    else if (sendState === 'sending') ui.setBanner('sending');
+    else ui.setBanner('none');
+  }
+  const setConnection = (next: typeof connectionState): void => {
+    connectionState = next;
+    paintBanner();
+  };
+  const setSend = (next: typeof sendState): void => {
+    sendState = next;
+    paintBanner();
+  };
+
   const ui = createWidgetUI({
     t,
     theme: resolved.theme,
@@ -134,15 +160,24 @@ export function init(config: WidgetConfig): WidgetInstance {
       const boot = await transport.bootstrap();
       if (destroyed) return;
       if (!boot) {
-        ui.setBanner('offline');
+        setConnection('offline');
         return;
       }
       bootstrapped = true;
-      ui.setBanner('none');
+      setConnection('ok');
       await refreshHistory();
       if (destroyed) return;
-      closeStream = transport.openStream(() => {
-        void refreshHistory();
+      closeStream = transport.openStream({
+        onInvalidation: () => {
+          void refreshHistory();
+        },
+        // The transport has always known it was reconnecting. Now it says so.
+        // 'connecting' is deliberately silent: the panel has only just opened
+        // and there is nothing for the visitor to worry about yet.
+        onState: (state) => {
+          if (state === 'reconnecting') setConnection('reconnecting');
+          else if (state === 'open') setConnection('ok');
+        },
       });
     })();
     // Allow a retry if this bootstrap attempt failed (bootstrapped stays false).
@@ -166,7 +201,7 @@ export function init(config: WidgetConfig): WidgetInstance {
    */
   async function deliver(clientMessageId: string, text: string, honeypot: string): Promise<void> {
     setStatus(clientMessageId, 'pending');
-    ui.setBanner('sending');
+    setSend('sending');
     const res = await transport.send({
       message: text,
       honeypot,
@@ -177,11 +212,11 @@ export function init(config: WidgetConfig): WidgetInstance {
     if ('error' in res && res.error) {
       // The message STAYS on screen, marked failed, with a retry beside it.
       setStatus(clientMessageId, 'failed');
-      ui.setBanner('error');
+      setSend('error');
       return;
     }
     setStatus(clientMessageId, undefined);
-    ui.setBanner('none');
+    setSend('idle');
     // Pull our own now-accepted inbound. If the row has not been written yet,
     // the merge keeps the local echo and nothing is lost.
     await refreshHistory();
@@ -194,7 +229,7 @@ export function init(config: WidgetConfig): WidgetInstance {
     await ensureSession();
     if (destroyed) return;
     if (!bootstrapped) {
-      ui.setBanner('offline');
+      setConnection('offline');
       return;
     }
     const clientMessageId = newClientMessageId();
