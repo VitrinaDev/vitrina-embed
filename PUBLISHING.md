@@ -21,23 +21,36 @@ Verify: `npm view @vitrina/widget version` → `0.1.0`.
 That's all your dev needs — see the package README for the `init()` and `<script>`
 embed usage. Nothing else below is required for the Alport demo.
 
-## Automated publishing (later, optional)
+## Automated publishing (OIDC — removes the 2FA/OTP prompt)
 
 `.github/workflows/publish.yml` publishes on a `v*` git tag via **OIDC trusted
-publishing** — no npm token in CI (same model as `AtribuCore/atribu-tracker`).
-To turn it on, one-time:
+publishing** — no npm token, and **no `--otp` one-time password** (the workflow
+exchanges its `id-token` for a short-lived npm credential). Same model as
+`AtribuCore/atribu-tracker`, plus a tag↔version guard and a test gate.
 
-1. Push this repo to `github.com/VitrinaDev/vitrina-embed` (it must be **public**
-   for provenance; the widget is browser-shipped client code, so public source is fine).
-2. On npmjs.com: `@vitrina/widget` → Settings → **Trusted Publisher** → GitHub
-   Actions → org `VitrinaDev`, repo `vitrina-embed`, workflow `publish.yml`,
-   environment `npm-publish`.
-3. In the repo: Settings → **Environments** → create `npm-publish`, restrict to
-   `v*` tags (optionally a required reviewer).
+Setup status:
 
-Then each release is: bump `packages/widget/package.json` version + CHANGELOG →
-commit → `git tag v0.1.1 && git push --tags` → the workflow builds, tests, and
-publishes with provenance.
+- [x] Repo pushed to `github.com/VitrinaDev/vitrina-embed` and made **public**
+      (provenance requires it; the widget is browser-shipped client code).
+- [x] Repo → Settings → **Environments** → `npm-publish`, restricted to `v*` **tags**.
+- [ ] **On npmjs.com (only an org owner can do this):** `@vitrina/widget` →
+      Settings → **Trusted Publisher** → GitHub Actions →
+      organization `VitrinaDev`, repository `vitrina-embed`,
+      workflow `publish.yml`, environment `npm-publish`.
+
+Once that last box is ticked, every release is:
+
+```bash
+# bump packages/widget/package.json version (+ CHANGELOG), commit, then:
+git tag v0.1.2 && git push origin v0.1.2
+```
+
+The workflow verifies the tag matches `package.json`, installs, builds, runs the
+test suite, and publishes with provenance. A mismatched tag fails loudly instead
+of silently republishing the previous version.
+
+> The first publish (0.1.0) and the 0.1.1 fix were published manually, so they
+> carry no provenance attestation. Tagged releases from here on will.
 
 > Note: `publishConfig` intentionally does **not** set `provenance: true` — that
 > would break the manual first publish (provenance needs a CI/OIDC environment).

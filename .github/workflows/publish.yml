@@ -34,8 +34,28 @@ jobs:
       - name: Upgrade npm
         run: npm install -g npm@latest
       - run: pnpm install --frozen-lockfile
+
+      # The tag is the ONLY thing that triggers a release, so it must agree with
+      # the version we are about to publish. Without this, tagging v0.1.2 while
+      # packages/widget/package.json still says 0.1.1 would quietly try to
+      # re-publish 0.1.1 — either a confusing no-op or a 403 conflict, long
+      # after the tag made it look like 0.1.2 shipped.
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./packages/widget/package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag v$TAG does not match packages/widget/package.json version $PKG"
+            exit 1
+          fi
+          echo "tag v$TAG matches package version $PKG"
+
       - run: pnpm --filter @vitrina/widget build
       - run: pnpm --filter @vitrina/widget test
       - name: Publish (OIDC provenance)
         working-directory: packages/widget
+        # No NODE_AUTH_TOKEN and no OTP: OIDC trusted publishing exchanges the
+        # workflow's id-token for a short-lived npm credential. This is what
+        # removes the 2FA one-time-password prompt from the release path.
         run: npm publish --provenance --access public
