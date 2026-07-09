@@ -18,6 +18,10 @@ export interface WidgetStrings {
   error: string;
   sending: string;
   poweredBy: string;
+  /** Inline label on a message whose send failed. */
+  notSent: string;
+  /** Button that re-sends a failed message with its original client id. */
+  retry: string;
 }
 
 export type StringKey = keyof WidgetStrings;
@@ -34,6 +38,8 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     error: 'No se pudo enviar. Reintenta.',
     sending: 'Enviando…',
     poweredBy: 'con tecnología de Vitrina',
+    notSent: 'No se envió',
+    retry: 'Reintentar',
   },
   en: {
     launcherLabel: 'Open chat',
@@ -46,6 +52,8 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     error: 'Could not send. Retry.',
     sending: 'Sending…',
     poweredBy: 'powered by Vitrina',
+    notSent: 'Not sent',
+    retry: 'Retry',
   },
 };
 

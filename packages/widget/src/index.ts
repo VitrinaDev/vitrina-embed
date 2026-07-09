@@ -17,7 +17,14 @@
 import { resolveConfig } from './config';
 import { makeT } from './i18n';
 import { createTokenStore } from './token-store';
-import { VitrinaTransport, mergeMessages, type WidgetMessageDto } from './transport';
+import {
+  VitrinaTransport,
+  latestServerCursor,
+  localIdFor,
+  mergeMessages,
+  type MessageStatus,
+  type WidgetMessage,
+} from './transport';
 import type { WidgetConfig, WidgetInstance } from './types';
 import { createWidgetUI } from './ui';
 
@@ -34,17 +41,6 @@ function newClientMessageId(): string {
   return `cm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/** The cursor is the newest server createdAt (ISO8601) — never a message id. */
-function latestCursor(messages: WidgetMessageDto[]): string | undefined {
-  let max: string | undefined;
-  for (const m of messages) {
-    if (typeof m.createdAt === 'string' && (max === undefined || m.createdAt > max)) {
-      max = m.createdAt;
-    }
-  }
-  return max;
-}
-
 export function init(config: WidgetConfig): WidgetInstance {
   // Throws the same message as the original stub on a missing publicKey/apiBaseUrl.
   const resolved = resolveConfig(config);
@@ -56,7 +52,7 @@ export function init(config: WidgetConfig): WidgetInstance {
   );
 
   let vehicleId: string | null = resolved.vehicleId;
-  let messages: WidgetMessageDto[] = [];
+  let messages: WidgetMessage[] = [];
   let cursor: string | undefined;
   let destroyed = false;
   let bootstrapped = false;
@@ -73,19 +69,61 @@ export function init(config: WidgetConfig): WidgetInstance {
       onSend: (text, honeypot) => {
         void sendFlow(text, honeypot);
       },
+      onRetry: (clientMessageId) => {
+        void retryFlow(clientMessageId);
+      },
     },
   });
   ui.mount();
 
-  /** Pull server history (from the current cursor), reconcile, and repaint. */
+  /**
+   * Timestamp for a local echo. Never bare `Date.now()`: a visitor whose clock
+   * runs slow would sort their brand-new message ABOVE the history they are
+   * looking at. Clamp it past the newest message we hold.
+   */
+  function nextLocalTimestamp(): string {
+    let newest = 0;
+    for (const m of messages) {
+      const t2 = Date.parse(m.createdAt);
+      if (Number.isFinite(t2) && t2 > newest) newest = t2;
+    }
+    return new Date(Math.max(Date.now(), newest + 1)).toISOString();
+  }
+
+  /** Set (or clear) a local echo's status, then repaint. No-op if it is gone. */
+  function setStatus(clientMessageId: string, status: MessageStatus | undefined): void {
+    const localId = localIdFor(clientMessageId);
+    let touched = false;
+    messages = messages.map((m) => {
+      if (String(m.id) !== localId) return m;
+      touched = true;
+      if (status === undefined) {
+        const { status: _drop, ...rest } = m;
+        return rest;
+      }
+      return { ...m, status };
+    });
+    if (touched && !destroyed) ui.renderMessages(messages);
+  }
+
+  /**
+   * Pull server history from the current cursor, reconcile, repaint.
+   *
+   * A FAILED fetch repaints NOTHING. This is the fix for the vanishing message:
+   * the old fetchHistory returned `[]` on every failure, so a 500 looked exactly
+   * like an empty conversation, and the repaint that followed wiped the panel —
+   * including the message the visitor had just typed.
+   */
   async function refreshHistory(): Promise<void> {
     if (destroyed) return;
-    const rows = await transport.fetchHistory(cursor);
-    if (rows.length > 0) {
-      messages = mergeMessages(messages, rows);
-      cursor = latestCursor(messages);
+    const res = await transport.fetchHistory(cursor);
+    if (destroyed) return;
+    if (!res.ok) return;
+    if (res.messages.length > 0) {
+      messages = mergeMessages(messages, res.messages);
+      cursor = latestServerCursor(messages);
     }
-    if (!destroyed) ui.renderMessages(messages);
+    ui.renderMessages(messages);
   }
 
   /** Bootstrap the visitor session ONCE, paint history, open the SSE stream. */
@@ -114,34 +152,80 @@ export function init(config: WidgetConfig): WidgetInstance {
     return bootstrapping;
   }
 
+  /**
+   * Push the visitor's text to the server and reflect the outcome on the
+   * message itself. The echo already exists in `messages` before this runs (or,
+   * on retry, still does), so there is no window in which the text lives only
+   * in a local variable.
+   *
+   * `pending` clears on the 202, NOT on the row coming back. The 202 is the
+   * server's acceptance into a durable queue; the row lands later because the
+   * inbound dispatcher coalesces. Waiting for the row would leave the message
+   * marked pending indefinitely whenever nobody replies — which, with the AI
+   * kill-switch off, is most of the time.
+   */
+  async function deliver(clientMessageId: string, text: string, honeypot: string): Promise<void> {
+    setStatus(clientMessageId, 'pending');
+    ui.setBanner('sending');
+    const res = await transport.send({
+      message: text,
+      honeypot,
+      clientMessageId,
+      vehicleId: vehicleId ?? undefined,
+    });
+    if (destroyed) return;
+    if ('error' in res && res.error) {
+      // The message STAYS on screen, marked failed, with a retry beside it.
+      setStatus(clientMessageId, 'failed');
+      ui.setBanner('error');
+      return;
+    }
+    setStatus(clientMessageId, undefined);
+    ui.setBanner('none');
+    // Pull our own now-accepted inbound. If the row has not been written yet,
+    // the merge keeps the local echo and nothing is lost.
+    await refreshHistory();
+  }
+
   async function sendFlow(text: string, honeypot: string): Promise<void> {
     if (destroyed) return;
-    // Ensure the session (and initial history paint) first, THEN echo — so the
-    // optimistic bubble is not wiped by the session's initial renderMessages.
+    // Ensure the session (and its initial history paint) first, THEN echo — the
+    // bootstrap's own renderMessages must not race the echo we are about to add.
     await ensureSession();
     if (destroyed) return;
     if (!bootstrapped) {
       ui.setBanner('offline');
       return;
     }
-    ui.appendOptimistic(text);
-    ui.setBanner('sending');
-    const res = await transport.send({
-      message: text,
-      honeypot,
-      clientMessageId: newClientMessageId(),
-      // Speculative + inert server-side today (non-strict zod strips it).
-      vehicleId: vehicleId ?? undefined,
-    });
+    const clientMessageId = newClientMessageId();
+    // The echo is a REAL ENTRY in the message list, not a DOM artifact. Every
+    // repaint rebuilds the panel from this array, so nothing can wipe it.
+    messages = [
+      ...messages,
+      {
+        id: localIdFor(clientMessageId),
+        createdAt: nextLocalTimestamp(),
+        content: text,
+        direction: 'inbound',
+        type: 'text',
+        clientMessageId,
+        status: 'pending',
+      },
+    ];
+    ui.renderMessages(messages);
+    await deliver(clientMessageId, text, honeypot);
+  }
+
+  /**
+   * Re-send a failed message with its ORIGINAL client message id. The server
+   * namespaces that id into the inbound dedup key, so a retry of a message that
+   * did in fact land is idempotent — it will not double-post.
+   */
+  async function retryFlow(clientMessageId: string): Promise<void> {
     if (destroyed) return;
-    if ('error' in res && res.error) {
-      ui.setBanner('error');
-      return;
-    }
-    ui.setBanner('none');
-    // No self-poke: pull our own now-persisted inbound; the full render drops
-    // the optimistic echo and shows server truth (review requirement).
-    await refreshHistory();
+    const entry = messages.find((m) => String(m.id) === localIdFor(clientMessageId));
+    if (!entry) return;
+    await deliver(clientMessageId, entry.content, '');
   }
 
   function instanceOpen(): void {
@@ -159,9 +243,10 @@ export function init(config: WidgetConfig): WidgetInstance {
     open: instanceOpen,
     close: instanceClose,
     setVehicle(id: string | null): void {
-      // Inert server-side today, but wired at the API-call layer: the next
-      // send() carries it as a speculative vehicle_id (stripped until the
-      // backend adds the field). SPA route changes call this.
+      // Live server-side: the next send() carries it as `vehicle_id`, which the
+      // webchat ingress persists onto the inbound message's metadata so the
+      // dealer inbox shows which listing the visitor asked about. SPA route
+      // changes call this.
       vehicleId = id;
     },
     destroy(): void {

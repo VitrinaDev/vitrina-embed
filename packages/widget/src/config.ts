@@ -13,6 +13,40 @@ export interface WidgetMessageDto {
   content: string;
   direction: 'inbound' | 'outbound';
   type: string | null;
+  /**
+   * The client id THIS browser minted for this message, echoed back by the
+   * server. Present on inbound rows only. Lets a local echo be reconciled
+   * against the row that eventually represents it — the POST answers 202 before
+   * the row exists, so there is no server id to match on.
+   *
+   * Absent when talking to a server that predates the projection; the local
+   * echo then simply never reconciles and lingers alongside the server row.
+   * Not a concern in practice: the API is single-hosted and ships first.
+   */
+  clientMessageId?: string;
+}
+
+/**
+ * A message's LOCAL send lifecycle. Absent means "server truth" — the row came
+ * back from GET /widget/messages and needs no annotation.
+ *
+ *   pending — submitted, the 202 has not come back yet
+ *   failed  — the send did not reach the server; the visitor can retry
+ *
+ * `pending` clears on the 202, not on the row appearing: the 202 IS the
+ * server's acceptance. The row lands later (the inbound dispatcher coalesces),
+ * and until it does the local entry stays on screen as an ordinary bubble.
+ */
+export type MessageStatus = 'pending' | 'failed';
+
+/**
+ * What the widget keeps in its message list and hands to the UI: a server row,
+ * or a local echo not yet reconciled with one. Local echoes are REAL ENTRIES,
+ * never DOM artifacts — that is the whole point. A repaint rebuilds the list
+ * from this array, so anything not in it is gone.
+ */
+export interface WidgetMessage extends WidgetMessageDto {
+  status?: MessageStatus;
 }
 
 /** `.data` of POST /widget/conversations. */

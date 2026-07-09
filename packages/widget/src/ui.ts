@@ -7,7 +7,7 @@
 // dataset/setAttribute. There is NO innerHTML anywhere, no eval, no remote
 // script/style/asset (the only remote asset is a validated logo <img>).
 
-import type { WidgetMessageDto } from './config';
+import type { WidgetMessage } from './config';
 import type { Translate } from './i18n';
 import { STYLES } from './styles';
 import { resolveAccent, resolvePosition, validateLogoUrl } from './theme';
@@ -22,6 +22,8 @@ export interface WidgetUiCallbacks {
   onRequestOpen(): void;
   /** Close button clicked. */
   onRequestClose(): void;
+  /** Retry a failed send, re-using its ORIGINAL client message id (idempotent). */
+  onRetry(clientMessageId: string): void;
 }
 
 export interface WidgetUiOptions {
@@ -39,10 +41,13 @@ export interface WidgetUi {
   openPanel(): void;
   closePanel(): void;
   isOpen(): boolean;
-  /** Full reconcile from server truth — discards any optimistic echoes. */
-  renderMessages(messages: WidgetMessageDto[]): void;
-  /** Local echo of the visitor's just-sent text, until server truth arrives. */
-  appendOptimistic(text: string): void;
+  /**
+   * Repaint the panel from the caller's message list. The list is the single
+   * source of truth for what is on screen — including the visitor's own not-yet
+   * -persisted messages, which are ENTRIES in it, not DOM artifacts. A repaint
+   * can therefore never lose one.
+   */
+  renderMessages(messages: WidgetMessage[]): void;
   setBanner(state: BannerState): void;
 }
 
@@ -171,7 +176,6 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   // --- state + listeners ---
   const listeners: TrackedListener[] = [];
   let open = false;
-  let welcomeShown = false;
 
   function on(target: EventTarget, type: string, handler: EventListener): void {
     target.addEventListener(type, handler);
@@ -182,21 +186,44 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  function bubble(dir: 'inbound' | 'outbound', content: string, id?: string, optimistic = false): HTMLElement {
+  function bubble(dir: 'inbound' | 'outbound', content: string, id?: string): HTMLElement {
     const el = document.createElement('div');
     el.className = 'vtr-msg';
     el.setAttribute('data-dir', dir);
     if (id !== undefined) el.dataset.id = id;
-    if (optimistic) el.setAttribute('data-optimistic', '1');
     // XSS-safe: content is inserted as text, NEVER parsed as HTML.
     el.textContent = content;
     return el;
   }
 
+  /**
+   * A failed message gets an inline retry control rather than a toast: the
+   * affordance belongs next to the thing that failed, and the visitor should
+   * never have to wonder WHICH message did not go out.
+   *
+   * No listener is attached here. Every repaint rebuilds these nodes, so a
+   * per-button listener would accumulate in the tracked-listener array without
+   * bound. The click is handled by ONE delegated listener on the message list,
+   * which reads `data-retry`.
+   */
+  function retryControl(clientMessageId: string): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'vtr-msg-status';
+    wrap.setAttribute('data-status', 'failed');
+    const label = document.createElement('span');
+    label.textContent = t('notSent');
+    const btn = document.createElement('button');
+    btn.className = 'vtr-retry';
+    btn.type = 'button';
+    btn.textContent = t('retry');
+    btn.dataset.retry = clientMessageId;
+    wrap.append(label, btn);
+    return wrap;
+  }
+
   function renderWelcome(): void {
     const greeting = welcomeMessage ?? t('welcome');
     messagesEl.appendChild(bubble('outbound', greeting));
-    welcomeShown = true;
   }
 
   const ui: WidgetUi = {
@@ -229,28 +256,25 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     isOpen(): boolean {
       return open;
     },
-    renderMessages(messages: WidgetMessageDto[]): void {
-      // Full reconcile: clear everything (including optimistic echoes + welcome)
-      // and render server truth only. DTOs omit client_message_id, so id-dedupe
-      // cannot match an optimistic echo — dropping them wholesale is correct.
+    renderMessages(messages: WidgetMessage[]): void {
+      // Repaint from the caller's list, which INCLUDES the visitor's own
+      // not-yet-persisted messages. This used to clear the panel and render
+      // server rows only, so any local echo was destroyed on every repaint —
+      // and a repaint fires after every send. The echo now survives by
+      // construction, because it is in `messages`.
       messagesEl.replaceChildren();
-      welcomeShown = false;
       if (messages.length === 0) {
         if (open) renderWelcome();
         return;
       }
       for (const m of messages) {
-        messagesEl.appendChild(bubble(m.direction, m.content, String(m.id)));
+        const el = bubble(m.direction, m.content, String(m.id));
+        if (m.status) el.setAttribute('data-status', m.status);
+        messagesEl.appendChild(el);
+        if (m.status === 'failed' && m.clientMessageId) {
+          messagesEl.appendChild(retryControl(m.clientMessageId));
+        }
       }
-      scrollToBottom();
-    },
-    appendOptimistic(text: string): void {
-      // Remove the ephemeral welcome once the visitor actually speaks.
-      if (welcomeShown) {
-        messagesEl.replaceChildren();
-        welcomeShown = false;
-      }
-      messagesEl.appendChild(bubble('inbound', text, undefined, true));
       scrollToBottom();
     },
     setBanner(state: BannerState): void {
@@ -269,6 +293,15 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   // Wire interactions.
   on(launcher, 'click', () => callbacks.onRequestOpen());
   on(closeBtn, 'click', () => callbacks.onRequestClose());
+
+  // ONE delegated listener for every retry button, present and future. Retry
+  // buttons are rebuilt on each repaint, so binding per-button would grow the
+  // tracked-listener array without bound.
+  on(messagesEl, 'click', (e) => {
+    const target = e.target as HTMLElement | null;
+    const clientMessageId = target?.dataset?.retry;
+    if (clientMessageId) callbacks.onRetry(clientMessageId);
+  });
 
   function submit(): void {
     const text = input.value.trim();

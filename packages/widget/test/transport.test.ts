@@ -220,7 +220,7 @@ describe('VitrinaTransport.fetchHistory', () => {
     const since = '2026-07-01T00:00:00.000Z';
     const out = await t.fetchHistory(since);
 
-    expect(out).toEqual(messages);
+    expect(out).toEqual({ ok: true, messages });
     const [url, init] = lastCall();
     expect(url).toBe(`${BASE}/widget/messages?since=${encodeURIComponent(since)}&siteKey=${PK}`);
     expect(init.method).toBe('GET');
@@ -242,22 +242,35 @@ describe('VitrinaTransport.fetchHistory', () => {
     expect(lastCall()[0]).toBe(`${BASE}/widget/messages?siteKey=${PK}`);
   });
 
-  it('treats conversation:null + [] as an empty history, not an error', async () => {
+  it('treats conversation:null + [] as an EMPTY history (ok:true), not an error', async () => {
     const store = memStore('vt_1');
     fetchMock.mockResolvedValueOnce(jsonRes(200, { messages: [], conversation: null }));
     const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, store);
-    await expect(t.fetchHistory()).resolves.toEqual([]);
+    await expect(t.fetchHistory()).resolves.toEqual({ ok: true, messages: [] });
   });
 
-  it('returns [] (no throw) on 401 when re-bootstrap also fails, and on network error', async () => {
+  // THE BUG THIS SIGNATURE EXISTS TO PREVENT. fetchHistory used to answer `[]`
+  // for a 500, a dead network, and an empty conversation alike. The widget
+  // could not tell them apart, so it repainted the panel from nothing — and the
+  // message the visitor had just typed disappeared while the UI said "sent".
+  // A failure is now structurally distinguishable from an empty success.
+  it('reports failure (ok:false) — never an empty list — on 401-then-failed-rebootstrap and on network error', async () => {
     const store = memStore('vt_1');
     const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, store);
     fetchMock
       .mockResolvedValueOnce(emptyRes(401)) // history 401
       .mockResolvedValueOnce(emptyRes(500)); // freshBootstrap fails
-    await expect(t.fetchHistory()).resolves.toEqual([]);
+    await expect(t.fetchHistory()).resolves.toEqual({ ok: false, status: 401 });
+
     fetchMock.mockRejectedValueOnce(new TypeError('offline'));
-    await expect(t.fetchHistory()).resolves.toEqual([]);
+    await expect(t.fetchHistory()).resolves.toEqual({ ok: false, status: null });
+  });
+
+  it('reports failure on a 500 (the refetch-after-send case)', async () => {
+    const store = memStore('vt_1');
+    const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, store);
+    fetchMock.mockResolvedValueOnce(emptyRes(500));
+    await expect(t.fetchHistory()).resolves.toEqual({ ok: false, status: 500 });
   });
 });
 

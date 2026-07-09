@@ -16,11 +16,12 @@ import type {
   BootstrapResult,
   HistoryResult,
   SendResult,
+  WidgetMessage,
   WidgetMessageDto,
 } from './config';
 import type { TokenStore } from './token-store';
 
-export type { WidgetMessageDto } from './config';
+export type { WidgetMessage, WidgetMessageDto, MessageStatus } from './config';
 
 /** Input to send(): the visitor's message + optional identity/idempotency. */
 export interface SendInput {
@@ -32,15 +33,27 @@ export interface SendInput {
   /** Hidden honeypot value. Always sent (empty string for a real human). */
   honeypot?: string;
   /**
-   * Speculative vehicle context. sendWidgetMessageBodySchema is a NON-strict
-   * z.object, so `vehicle_id` is silently STRIPPED server-side today (no
-   * round-trip) — wired at the API-call layer per review, inert until the
-   * backend adds the field. Do NOT assert a server round-trip on this.
+   * The vehicle the visitor is looking at, as an opaque id from the dealer's
+   * public /stock. The webchat ingress persists it onto the inbound message's
+   * metadata, so the dealer inbox shows which listing was being asked about.
+   * There is no round-trip: it never comes back on the read DTO.
    */
   vehicleId?: string | null;
 }
 
 export type SendOutcome = SendResult | { error: true; status: number | null };
+
+/**
+ * The result of a history read. DISCRIMINATED, and that is the whole point: the
+ * old signature returned `[]` on every failure, so a 500 was indistinguishable
+ * from an empty conversation. The caller repainted from an empty list while
+ * reporting success — which is exactly how a visitor's own message vanished off
+ * their screen. A caller must now decide what to do about `ok: false`, and the
+ * only correct answer is "do not repaint".
+ */
+export type HistoryOutcome =
+  | { ok: true; messages: WidgetMessageDto[] }
+  | { ok: false; status: number | null };
 
 /** A parsed SSE frame (comment-only frames are dropped before this). */
 export interface SseFrame {
@@ -106,19 +119,49 @@ export function parseSseFrame(raw: string): SseFrame | null {
 }
 
 /**
- * Merge two message lists: dedupe STRICTLY by DTO.id (incoming = server truth
- * wins), then sort createdAt-ascending. Absorbs the since-boundary overlap (the
- * INCLUSIVE `gte` re-returns the boundary row) and the publish-before-persist
- * race. Client-side optimistic entries carry no server id and are dropped by the
- * caller BEFORE a full render — this only reconciles server rows.
+ * Synthetic id for a LOCAL echo — a message the visitor has sent that no server
+ * row represents yet. Namespaced so it can never collide with a server id, and
+ * derived from the client message id so the entry is addressable for a status
+ * update or a retry without an extra index.
+ */
+const LOCAL_ID_PREFIX = 'local:';
+
+export const localIdFor = (clientMessageId: string): string =>
+  `${LOCAL_ID_PREFIX}${clientMessageId}`;
+
+export const isLocalId = (id: string | number): boolean =>
+  typeof id === 'string' && id.startsWith(LOCAL_ID_PREFIX);
+
+/**
+ * Merge server rows into the widget's message list.
+ *
+ * Two reconciliation rules, in order:
+ *
+ *  1. A server row that carries a `clientMessageId` SUPERSEDES the local echo
+ *     with that id — the echo is removed and the row takes its place. This is
+ *     the only way to match them: POST /widget/messages answers 202 before the
+ *     row exists, so the browser never learns the server id, and matching on
+ *     content would break the moment a visitor sends "hola" twice.
+ *  2. Everything else dedupes strictly by id, incoming winning. That absorbs
+ *     the INCLUSIVE `since` boundary row and the publish-before-persist race.
+ *
+ * A local echo that matches nothing STAYS. It is not a rendering artifact to be
+ * swept up; it is a message the visitor sent, and it remains on screen until a
+ * server row claims it. Server rows never carry a local `status`.
  */
 export function mergeMessages(
-  existing: WidgetMessageDto[],
+  existing: WidgetMessage[],
   incoming: WidgetMessageDto[],
-): WidgetMessageDto[] {
-  const byId = new Map<string, WidgetMessageDto>();
+): WidgetMessage[] {
+  const byId = new Map<string, WidgetMessage>();
   for (const m of existing) byId.set(String(m.id), m);
-  for (const m of incoming) byId.set(String(m.id), m);
+  for (const row of incoming) {
+    // Rule 1: the row supersedes its own local echo.
+    if (row.clientMessageId) byId.delete(localIdFor(row.clientMessageId));
+    // Rule 2: server truth, with any local status stripped.
+    const { ...serverRow } = row;
+    byId.set(String(row.id), serverRow);
+  }
   const merged = [...byId.values()];
   merged.sort((a, b) => {
     const ta = Date.parse(a.createdAt);
@@ -127,6 +170,25 @@ export function mergeMessages(
     return String(a.id).localeCompare(String(b.id));
   });
   return merged;
+}
+
+/**
+ * The newest SERVER `createdAt` — the widget's `since` cursor. Local echoes are
+ * excluded on purpose: their timestamp comes from the visitor's clock, and a
+ * clock running fast would push the cursor past messages the server has not
+ * handed us yet, which the next catch-up read would then skip forever.
+ */
+export function latestServerCursor(
+  messages: WidgetMessage[],
+): string | undefined {
+  let max: string | undefined;
+  for (const m of messages) {
+    if (isLocalId(m.id)) continue;
+    if (typeof m.createdAt === 'string' && (max === undefined || m.createdAt > max)) {
+      max = m.createdAt;
+    }
+  }
+  return max;
 }
 
 export interface TransportConfig {
@@ -275,7 +337,7 @@ export class VitrinaTransport {
     if (input.email) body.email = input.email;
     if (input.phone) body.phone = input.phone;
     if (input.clientMessageId) body.client_message_id = input.clientMessageId;
-    // Speculative + inert server-side (non-strict zod strips it). No round-trip.
+    // Persisted onto the inbound row's metadata by the webchat ingress.
     if (input.vehicleId) body.vehicle_id = input.vehicleId;
     const payload = JSON.stringify(body);
 
@@ -305,10 +367,14 @@ export class VitrinaTransport {
    * Read-my-history — the AUTHORITATIVE data path. `since` MUST be ISO8601
    * (widgetMessagesQuerySchema is z.string().datetime() — a message id would
    * 400); the INCLUSIVE gte re-returns the boundary row, so the caller dedupes
-   * by id. conversation:null + [] is an empty session, NOT an error. Returns []
-   * on 401/network after one bounded re-bootstrap attempt.
+   * by id. Retries once through a re-bootstrap on 401.
+   *
+   * Returns a DISCRIMINATED outcome. `{ok:true, messages:[]}` is an empty
+   * session; `{ok:false}` is a failure. These used to be the same value — a
+   * bare `[]` — and the caller repainted the panel from it, erasing whatever
+   * the visitor had on screen. Never conflate them again.
    */
-  async fetchHistory(since?: string): Promise<WidgetMessageDto[]> {
+  async fetchHistory(since?: string): Promise<HistoryOutcome> {
     const qs = since ? `?since=${encodeURIComponent(since)}` : '';
     const path = `/widget/messages${qs}`;
     let res = await this.call<HistoryResult>(path, {
@@ -324,8 +390,8 @@ export class VitrinaTransport {
         });
       }
     }
-    if (res.ok) return res.data?.messages ?? [];
-    return [];
+    if (res.ok) return { ok: true, messages: res.data?.messages ?? [] };
+    return { ok: false, status: res.status };
   }
 
   /**

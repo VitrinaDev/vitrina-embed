@@ -90,7 +90,23 @@ export const STYLES = `
   align-self: flex-start; background: var(--vtr-bubble-out); color: var(--vtr-text);
   border-bottom-left-radius: 4px;
 }
-.vtr-msg[data-optimistic="1"] { opacity: 0.6; }
+/* A message the visitor sent that the server has not yet accepted. Dimmed, not
+   hidden — it is a real message, and it stays on screen whatever happens. */
+.vtr-msg[data-status="pending"] { opacity: 0.6; }
+.vtr-msg[data-status="failed"] { opacity: 0.6; border: 1px solid #b91c1c; }
+
+/* Inline retry, rendered directly beneath the message that failed so the
+   visitor never has to guess which one did not go out. */
+.vtr-msg-status {
+  align-self: flex-end; display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: #b91c1c; margin-top: -4px;
+}
+.vtr-retry {
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  font: inherit; font-size: 11px; font-weight: 600;
+  color: #b91c1c; text-decoration: underline;
+}
+.vtr-retry:focus-visible { outline: 2px solid #b91c1c; outline-offset: 2px; }
 
 .vtr-banner {
   padding: 8px 16px; font-size: 12px; text-align: center;
