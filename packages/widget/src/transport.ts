@@ -163,6 +163,27 @@ export class VitrinaTransport {
   }
 
   /**
+   * Build a /widget/* URL carrying `?siteKey=<pk_>` alongside the Authorization
+   * bearer.
+   *
+   * Every call below is a non-simple cross-origin request (custom headers +
+   * JSON content-type), so the browser fires a CORS preflight first — and a
+   * preflight sends NO Authorization header (Fetch spec). The server can
+   * therefore only learn WHICH key is calling, and hence which origins it may
+   * admit, from the query string. Omit this and the preflight is denied, the
+   * browser never sends the real request, and the widget is dead on every
+   * cross-origin site.
+   *
+   * Putting the key in the URL leaks nothing: `pk_` is a PUBLISHABLE key that
+   * already sits in this page's HTML source. Its security is the server-side
+   * origin lock (requirePublishableOrigin), never secrecy.
+   */
+  private url(path: string): string {
+    const sep = path.includes('?') ? '&' : '?';
+    return `${this.apiBaseUrl}${path}${sep}siteKey=${encodeURIComponent(this.publicKey)}`;
+  }
+
+  /**
    * Single fetch primitive. Unwraps the `ok()` envelope's `.data`. Never throws:
    * a network exception → {ok:false,status:null}; a non-2xx → {ok:false,status};
    * a JSON parse failure → {ok:false,status}. NO credentials:'include'.
@@ -177,7 +198,7 @@ export class VitrinaTransport {
     });
     let res: Response;
     try {
-      res = await fetch(`${this.apiBaseUrl}${path}`, {
+      res = await fetch(this.url(path), {
         method: opts.method,
         headers,
         ...(opts.body !== undefined ? { body: opts.body } : {}),
@@ -378,7 +399,7 @@ export class VitrinaTransport {
       while (!closed) {
         let res: Response;
         try {
-          res = await fetch(`${this.apiBaseUrl}/widget/stream`, {
+          res = await fetch(this.url('/widget/stream'), {
             method: 'GET',
             headers: this.authHeaders({ withVisitor: true, json: false }),
             signal: ac.signal,

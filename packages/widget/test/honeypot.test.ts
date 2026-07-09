@@ -61,7 +61,7 @@ beforeEach(() => {
   fetchMock = vi.fn((url: string, opts?: RequestInit) => {
     const u = String(url);
     const method = opts?.method ?? 'GET';
-    if (u.endsWith('/widget/conversations')) {
+    if (u.includes('/widget/conversations')) {
       return Promise.resolve(
         jsonRes(200, { visitorToken: 'vt_srv', conversationExternalId: 'web:a', expiresAt: 'x' }),
       );
@@ -69,12 +69,12 @@ beforeEach(() => {
     if (u.includes('/widget/messages') && method === 'GET') {
       return Promise.resolve(jsonRes(200, { messages: [], conversation: null }));
     }
-    if (u.endsWith('/widget/messages') && method === 'POST') {
+    if (u.includes('/widget/messages') && method === 'POST') {
       return Promise.resolve(
         jsonRes(202, { status: 'accepted', visitorToken: 'vt_srv', conversationExternalId: 'web:a' }),
       );
     }
-    if (u.endsWith('/widget/stream')) {
+    if (u.includes('/widget/stream')) {
       return Promise.resolve(openStreamRes(opts?.signal ?? undefined));
     }
     return Promise.resolve(emptyRes(404));
@@ -135,7 +135,7 @@ describe('honeypot always submitted', () => {
     const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, store);
     return t.send({ message: 'hola' }).then(() => {
       const post = fetchMock.mock.calls.find(
-        ([u, o]) => String(u).endsWith('/widget/messages') && (o as RequestInit)?.method === 'POST',
+        ([u, o]) => String(u).includes('/widget/messages') && (o as RequestInit)?.method === 'POST',
       )!;
       const body = JSON.parse((post[1] as RequestInit).body as string);
       expect(body).toHaveProperty('hp_website', '');
@@ -157,12 +157,12 @@ describe('honeypot always submitted', () => {
 
     await vi.waitFor(() => {
       const post = fetchMock.mock.calls.find(
-        ([u, o]) => String(u).endsWith('/widget/messages') && (o as RequestInit)?.method === 'POST',
+        ([u, o]) => String(u).includes('/widget/messages') && (o as RequestInit)?.method === 'POST',
       );
       expect(post).toBeTruthy();
     });
     const post = fetchMock.mock.calls.find(
-      ([u, o]) => String(u).endsWith('/widget/messages') && (o as RequestInit)?.method === 'POST',
+      ([u, o]) => String(u).includes('/widget/messages') && (o as RequestInit)?.method === 'POST',
     )!;
     const body = JSON.parse((post[1] as RequestInit).body as string);
     // The trap value reaches the server verbatim so it can be rejected there.

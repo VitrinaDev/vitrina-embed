@@ -75,7 +75,7 @@ describe('VitrinaTransport.bootstrap', () => {
 
     expect(res?.visitorToken).toBe('vt_new');
     const [url, init] = callAt(0);
-    expect(url).toBe(`${BASE}/widget/conversations`);
+    expect(url).toBe(`${BASE}/widget/conversations?siteKey=${PK}`);
     expect(init.method).toBe('POST');
     expect(init.body).toBe('{}');
     const headers = init.headers as Record<string, string>;
@@ -138,7 +138,7 @@ describe('VitrinaTransport.send', () => {
 
     expect(res).toMatchObject({ status: 'accepted' });
     const [url, init] = lastCall();
-    expect(url).toBe(`${BASE}/widget/messages`);
+    expect(url).toBe(`${BASE}/widget/messages?siteKey=${PK}`);
     expect(init.method).toBe('POST');
     const body = JSON.parse(init.body as string);
     expect(body).toEqual({ message: 'hola', hp_website: '', client_message_id: 'cm_1' });
@@ -222,7 +222,7 @@ describe('VitrinaTransport.fetchHistory', () => {
 
     expect(out).toEqual(messages);
     const [url, init] = lastCall();
-    expect(url).toBe(`${BASE}/widget/messages?since=${encodeURIComponent(since)}`);
+    expect(url).toBe(`${BASE}/widget/messages?since=${encodeURIComponent(since)}&siteKey=${PK}`);
     expect(init.method).toBe('GET');
     expect(init.body).toBeUndefined();
     const headers = init.headers as Record<string, string>;
@@ -238,7 +238,8 @@ describe('VitrinaTransport.fetchHistory', () => {
     fetchMock.mockResolvedValueOnce(jsonRes(200, { messages: [], conversation: null }));
     const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, store);
     await t.fetchHistory();
-    expect(lastCall()[0]).toBe(`${BASE}/widget/messages`);
+    // No `since` cursor => siteKey is the only query member.
+    expect(lastCall()[0]).toBe(`${BASE}/widget/messages?siteKey=${PK}`);
   });
 
   it('treats conversation:null + [] as an empty history, not an error', async () => {
@@ -288,5 +289,47 @@ describe('mergeMessages', () => {
     };
     const merged = mergeMessages([row], [row]);
     expect(merged).toHaveLength(1);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Regression: EVERY /widget/* request must carry ?siteKey=<pk_>.
+//
+// A cross-origin widget request is non-simple (custom headers + JSON body), so
+// the browser preflights it — and a preflight sends NO Authorization header.
+// The server can only resolve which key is calling, and therefore which origins
+// it may admit, from the query string. Ship without this and the preflight is
+// denied, the real request never leaves the browser, and the widget is dead on
+// every dealer site. 0.1.0 shipped exactly that way.
+// ---------------------------------------------------------------------------
+describe('siteKey is present on every request', () => {
+  it('appends ?siteKey= to bootstrap, send and history', async () => {
+    const store = memStore('vt_existing');
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonRes(200, {
+          visitorToken: 'vt_a',
+          conversationExternalId: 'web:v1',
+          status: 'accepted',
+          messages: [],
+          conversation: null,
+        }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const t = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, store);
+    await t.bootstrap();
+    await t.send({ message: 'hola' });
+    await t.fetchHistory();
+
+    const urls = fetchMock.mock.calls.map((c) => String((c as unknown as unknown[])[0]));
+    expect(urls.length).toBeGreaterThanOrEqual(3);
+    for (const u of urls) {
+      expect(u).toContain(`siteKey=${PK}`);
+      // exactly one '?' — siteKey is a real query member on every path shape
+      expect(u.split('?').length).toBe(2);
+    }
   });
 });

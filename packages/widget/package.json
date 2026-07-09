@@ -1,7 +1,7 @@
 {
   "name": "@vitrina/widget",
-  "version": "0.1.0",
-  "description": "Vitrina embeddable chat widget for dealer websites — shadow-DOM UI, real-time SSE, publishable origin-locked key.",
+  "version": "0.1.1",
+  "description": "Vitrina embeddable chat widget for dealer websites \u2014 shadow-DOM UI, real-time SSE, publishable origin-locked key.",
   "type": "module",
   "license": "MIT",
   "sideEffects": false,

@@ -70,7 +70,7 @@ beforeEach(() => {
   fetchMock = vi.fn((url: string, opts?: RequestInit) => {
     const u = String(url);
     const method = opts?.method ?? 'GET';
-    if (u.endsWith('/widget/conversations')) {
+    if (u.includes('/widget/conversations')) {
       return Promise.resolve(
         jsonRes(200, { visitorToken: 'vt_srv', conversationExternalId: 'web:a', expiresAt: 'x' }),
       );
@@ -83,14 +83,14 @@ beforeEach(() => {
         }),
       );
     }
-    if (u.endsWith('/widget/messages') && method === 'POST') {
+    if (u.includes('/widget/messages') && method === 'POST') {
       // Simulate persistence: the visitor's own inbound now shows in history.
       state.history = [...state.history, makeInboundFromBody(opts?.body as string)];
       return Promise.resolve(
         jsonRes(202, { status: 'accepted', visitorToken: 'vt_srv', conversationExternalId: 'web:a' }),
       );
     }
-    if (u.endsWith('/widget/stream')) {
+    if (u.includes('/widget/stream')) {
       const signal = opts?.signal ?? undefined;
       if (signal) state.streamSignals.push(signal);
       return Promise.resolve(openStreamRes(signal ?? undefined));
@@ -174,12 +174,12 @@ describe('init() send flow', () => {
     // The POST fired with a pure snake_case body + empty honeypot.
     await vi.waitFor(() => {
       const post = fetchMock.mock.calls.find(
-        ([u, o]) => String(u).endsWith('/widget/messages') && (o as RequestInit)?.method === 'POST',
+        ([u, o]) => String(u).includes('/widget/messages') && (o as RequestInit)?.method === 'POST',
       );
       expect(post).toBeTruthy();
     });
     const post = fetchMock.mock.calls.find(
-      ([u, o]) => String(u).endsWith('/widget/messages') && (o as RequestInit)?.method === 'POST',
+      ([u, o]) => String(u).includes('/widget/messages') && (o as RequestInit)?.method === 'POST',
     )!;
     const body = JSON.parse((post[1] as RequestInit).body as string);
     expect(body.message).toBe('hola mundo');
@@ -223,7 +223,7 @@ describe('init() resume + setVehicle + destroy', () => {
     w.open();
     // The bootstrap POST presented the seeded token (session resume, not fresh).
     await vi.waitFor(() => {
-      const boot = fetchMock.mock.calls.find(([u]) => String(u).endsWith('/widget/conversations'));
+      const boot = fetchMock.mock.calls.find(([u]) => String(u).includes('/widget/conversations'));
       expect(boot).toBeTruthy();
       const headers = (boot![1] as RequestInit).headers as Record<string, string>;
       expect(headers['X-Vitrina-Visitor']).toBe('vt_seed');
@@ -243,7 +243,7 @@ describe('init() resume + setVehicle + destroy', () => {
 
     await vi.waitFor(() => {
       const post = fetchMock.mock.calls.find(
-        ([u, o]) => String(u).endsWith('/widget/messages') && (o as RequestInit)?.method === 'POST',
+        ([u, o]) => String(u).includes('/widget/messages') && (o as RequestInit)?.method === 'POST',
       );
       expect(post).toBeTruthy();
       const body = JSON.parse((post![1] as RequestInit).body as string);
@@ -267,7 +267,7 @@ describe('init() resume + setVehicle + destroy', () => {
 
   it('degrades gracefully (no throw) when bootstrap 401/403s repeatedly', async () => {
     fetchMock.mockImplementation((url: string) => {
-      if (String(url).endsWith('/widget/conversations')) return Promise.resolve(emptyRes(403));
+      if (String(url).includes('/widget/conversations')) return Promise.resolve(emptyRes(403));
       return Promise.resolve(emptyRes(403));
     });
     const w = init({ publicKey: PK, apiBaseUrl: BASE });

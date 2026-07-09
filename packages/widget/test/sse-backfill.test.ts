@@ -89,7 +89,7 @@ describe('openStream reconnect backfill', () => {
     const cursorA = '2026-07-01T00:00:05.000Z';
     let streamCount = 0;
     fetchMock.mockImplementation((url: string, opts?: RequestInit) => {
-      if (!String(url).endsWith('/widget/stream')) return Promise.resolve(emptyRes(404));
+      if (!String(url).includes('/widget/stream')) return Promise.resolve(emptyRes(404));
       streamCount += 1;
       if (streamCount === 1) {
         // First connection: advance the cursor via an id-ONLY frame (no
@@ -119,7 +119,7 @@ describe('openStream reconnect backfill', () => {
 
   it('does NOT backfill on the FIRST connect (history was already painted on bootstrap)', async () => {
     fetchMock.mockImplementation((url: string, opts?: RequestInit) => {
-      if (!String(url).endsWith('/widget/stream')) return Promise.resolve(emptyRes(404));
+      if (!String(url).includes('/widget/stream')) return Promise.resolve(emptyRes(404));
       // Single connection that just stays open — no reconnect ever happens.
       return Promise.resolve(openStreamRes(opts?.signal ?? undefined));
     });

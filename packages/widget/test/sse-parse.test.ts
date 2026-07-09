@@ -134,14 +134,14 @@ describe('VitrinaTransport.openStream', () => {
     const store = memStore('vt_stale');
     let streamCalls = 0;
     fetchMock.mockImplementation((url: string, init: RequestInit) => {
-      if (url.endsWith('/widget/stream')) {
+      if (url.includes('/widget/stream')) {
         streamCalls += 1;
         if (streamCalls === 1) return Promise.resolve(emptyRes(401));
         return Promise.resolve(
           streamRes(['id: t1\nevent: message.created\ndata: {}\n\n'], init.signal ?? undefined),
         );
       }
-      if (url.endsWith('/widget/conversations')) {
+      if (url.includes('/widget/conversations')) {
         return Promise.resolve(
           jsonRes(200, { visitorToken: 'vt_new', conversationExternalId: 'web:z', expiresAt: 'x' }),
         );
@@ -156,7 +156,7 @@ describe('VitrinaTransport.openStream', () => {
     await vi.waitFor(() => expect(seen).toContain('t1'));
     // The recovery bootstrap POSTed /widget/conversations and refreshed the token.
     expect(store.get()).toBe('vt_new');
-    expect(fetchMock.mock.calls.some(([u]) => (u as string).endsWith('/widget/conversations'))).toBe(true);
+    expect(fetchMock.mock.calls.some(([u]) => (u as string).includes('/widget/conversations'))).toBe(true);
 
     close();
   });
