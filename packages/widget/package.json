@@ -1,8 +1,10 @@
 {
   "name": "@vitrinadev/widget",
-  "version": "0.0.0",
-  "description": "Vitrina embeddable chat widget for dealer websites.",
+  "version": "0.1.0",
+  "description": "Vitrina embeddable chat widget for dealer websites — shadow-DOM UI, real-time SSE, publishable origin-locked key.",
   "type": "module",
+  "license": "UNLICENSED",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,6 +18,23 @@
   "files": [
     "dist"
   ],
+  "keywords": [
+    "vitrina",
+    "chat",
+    "widget",
+    "embed",
+    "chat-widget",
+    "shadow-dom",
+    "sse",
+    "dealer",
+    "automotive",
+    "livechat"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VitrinaDev/vitrina-embed.git",
+    "directory": "packages/widget"
+  },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
   },
