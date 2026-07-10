@@ -35,6 +35,7 @@ export const STYLES = `
 .vtr-root[data-pos="bl"] { left: 20px; }
 
 .vtr-launcher {
+  position: relative;
   width: 56px; height: 56px; border-radius: 50%;
   background: var(--vtr-accent); color: #fff;
   border: none; cursor: pointer;
@@ -47,6 +48,17 @@ export const STYLES = `
 .vtr-launcher:focus-visible { outline: 3px solid rgba(0,0,0,0.35); outline-offset: 2px; }
 .vtr-launcher svg { width: 26px; height: 26px; fill: currentColor; }
 .vtr-launcher[hidden] { display: none; }
+
+/* Unread badge on the launcher. No sound, no browser notification, no favicon
+   dot, no title flashing — a count is a signal; the rest is an interruption. */
+.vtr-badge {
+  position: absolute; top: -2px; right: -2px;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  border-radius: 10px; background: #dc2626; color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 20px; text-align: center;
+  box-shadow: 0 0 0 2px var(--vtr-surface);
+}
+.vtr-badge[hidden] { display: none; }
 
 .vtr-panel {
   position: absolute; bottom: 0;
@@ -90,7 +102,85 @@ export const STYLES = `
   align-self: flex-start; background: var(--vtr-bubble-out); color: var(--vtr-text);
   border-bottom-left-radius: 4px;
 }
-.vtr-msg[data-optimistic="1"] { opacity: 0.6; }
+/* Rendered markdown inside an outbound bubble (see markdown.ts for the subset).
+   Lists reset their default indent/margins so a bubble does not gain a gutter;
+   pre-wrap on the bubble means block elements need no extra separators.
+   NOTE: this file is one big template literal — no backticks in these comments. */
+.vtr-msg .vtr-list { margin: 4px 0; padding-left: 20px; }
+.vtr-msg .vtr-list li { margin: 2px 0; }
+.vtr-msg .vtr-link { color: inherit; text-decoration: underline; }
+.vtr-msg .vtr-link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.vtr-msg .vtr-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em; padding: 1px 4px; border-radius: 4px;
+  background: rgba(0,0,0,0.07);
+}
+@media (prefers-color-scheme: dark) {
+  .vtr-msg .vtr-code { background: rgba(255,255,255,0.12); }
+}
+.vtr-msg strong { font-weight: 650; }
+
+/* A message the visitor sent that the server has not yet accepted. Dimmed, not
+   hidden — it is a real message, and it stays on screen whatever happens. */
+.vtr-msg[data-status="pending"] { opacity: 0.6; }
+.vtr-msg[data-status="failed"] { opacity: 0.6; border: 1px solid #b91c1c; }
+
+/* Inline retry, rendered directly beneath the message that failed so the
+   visitor never has to guess which one did not go out. */
+.vtr-msg-status {
+  align-self: flex-end; display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: #b91c1c; margin-top: -4px;
+}
+.vtr-retry {
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  font: inherit; font-size: 11px; font-weight: 600;
+  color: #b91c1c; text-decoration: underline;
+}
+.vtr-retry:focus-visible { outline: 2px solid #b91c1c; outline-offset: 2px; }
+
+/* Vehicle card, rendered INSIDE an outbound bubble beneath the AI's prose. */
+.vtr-card {
+  margin-top: 8px; border: 1px solid var(--vtr-border); border-radius: 10px;
+  overflow: hidden; background: var(--vtr-surface);
+}
+.vtr-card-img { display: block; width: 100%; height: 132px; object-fit: cover; background: var(--vtr-bubble-out); }
+.vtr-card-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.vtr-card-title { font-size: 13px; font-weight: 600; color: var(--vtr-text); }
+.vtr-card-price { font-size: 13px; color: var(--vtr-text); }
+.vtr-card-link { font-size: 12px; font-weight: 600; color: var(--vtr-accent); text-decoration: none; margin-top: 4px; }
+.vtr-card-link:hover { text-decoration: underline; }
+.vtr-card-link:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+
+/* Centered system line ("an advisor joined"). Not a bubble: it has no author,
+   no direction, and it names nobody. */
+.vtr-system {
+  align-self: center; max-width: 90%;
+  padding: 2px 10px; margin: 2px 0;
+  font-size: 11.5px; text-align: center;
+  color: var(--vtr-muted);
+}
+
+/* Typing indicator: three pulsing dots, no name. The visitor is never told
+   whether the AI or a person is composing. */
+.vtr-typing {
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 16px 8px;
+}
+.vtr-typing[hidden] { display: none; }
+.vtr-typing-dot {
+  width: 6px; height: 6px; border-radius: 999px;
+  background: var(--vtr-muted);
+  animation: vtr-typing-pulse 1.2s infinite ease-in-out;
+}
+.vtr-typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.vtr-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes vtr-typing-pulse {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vtr-typing-dot { animation: none; opacity: 0.6; }
+}
 
 .vtr-banner {
   padding: 8px 16px; font-size: 12px; text-align: center;

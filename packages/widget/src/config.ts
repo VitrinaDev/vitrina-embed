@@ -13,6 +13,55 @@ export interface WidgetMessageDto {
   content: string;
   direction: 'inbound' | 'outbound';
   type: string | null;
+  /**
+   * The client id THIS browser minted for this message, echoed back by the
+   * server. Present on inbound rows only. Lets a local echo be reconciled
+   * against the row that eventually represents it — the POST answers 202 before
+   * the row exists, so there is no server id to match on.
+   *
+   * Absent when talking to a server that predates the projection; the local
+   * echo then simply never reconciles and lingers alongside the server row.
+   * Not a concern in practice: the API is single-hosted and ships first.
+   */
+  clientMessageId?: string;
+  /**
+   * A vehicle card, on rows whose `type` is `stock_card`. The server projects
+   * exactly these five fields — never the raw message metadata.
+   *
+   * The row's `content` always holds the AI's prose, so a widget that does not
+   * recognise the type renders that instead. The card is an enhancement of a
+   * message that already reads correctly without it.
+   */
+  stockCard?: {
+    vehicleId: string;
+    title: string;
+    price: string | null;
+    thumbnailUrl: string | null;
+    listingUrl: string | null;
+  };
+}
+
+/**
+ * A message's LOCAL send lifecycle. Absent means "server truth" — the row came
+ * back from GET /widget/messages and needs no annotation.
+ *
+ *   pending — submitted, the 202 has not come back yet
+ *   failed  — the send did not reach the server; the visitor can retry
+ *
+ * `pending` clears on the 202, not on the row appearing: the 202 IS the
+ * server's acceptance. The row lands later (the inbound dispatcher coalesces),
+ * and until it does the local entry stays on screen as an ordinary bubble.
+ */
+export type MessageStatus = 'pending' | 'failed';
+
+/**
+ * What the widget keeps in its message list and hands to the UI: a server row,
+ * or a local echo not yet reconciled with one. Local echoes are REAL ENTRIES,
+ * never DOM artifacts — that is the whole point. A repaint rebuilds the list
+ * from this array, so anything not in it is gone.
+ */
+export interface WidgetMessage extends WidgetMessageDto {
+  status?: MessageStatus;
 }
 
 /** `.data` of POST /widget/conversations. */
@@ -85,4 +134,23 @@ export function resolveConfig(config: WidgetConfig): ResolvedConfig {
     theme: { ...theme, position: theme.position ?? 'br' },
     welcomeMessage: config.welcomeMessage ?? null,
   };
+}
+
+/**
+ * A centered, anonymous system line in the transcript — "an advisor joined the
+ * conversation". NOT a message: it has no author, no direction, and no server
+ * row behind it.
+ *
+ * LIVE ONLY. It does not replay on reload, by design. Persisting it would mean
+ * admitting `sender_type = 'system'` rows to the browser-safe DTO, which would
+ * invert that strict allowlist from opt-in to opt-out (ADR 0035 ¶2). The line is
+ * a courtesy, not history — and the visitor loses nothing on reload, because the
+ * advisor's actual replies are still there.
+ */
+export interface WidgetNotice {
+  /** Synthetic, namespaced so it can never collide with a message id. */
+  id: string;
+  /** ISO8601 — sorts the notice into the transcript where it happened. */
+  at: string;
+  kind: 'handoff_human';
 }

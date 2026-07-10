@@ -15,9 +15,23 @@ export interface WidgetStrings {
   close: string;
   welcome: string;
   offline: string;
+  /** The realtime stream dropped and a backoff is running. */
+  reconnecting: string;
   error: string;
   sending: string;
   poweredBy: string;
+  /** Inline label on a message whose send failed. */
+  notSent: string;
+  /** Button that re-sends a failed message with its original client id. */
+  retry: string;
+  /** Suffix in the launcher's aria-label when replies are waiting. */
+  unread: string;
+  /** Screen-reader label for the typing indicator. Names nobody. */
+  typing: string;
+  /** Centered system line when a person takes over. Names nobody. */
+  advisorJoined: string;
+  /** Link on a vehicle card, when the listing has a URL. */
+  viewVehicle: string;
 }
 
 export type StringKey = keyof WidgetStrings;
@@ -31,9 +45,16 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     close: 'Cerrar',
     welcome: 'Hola, ¿en qué te puedo ayudar?',
     offline: 'Sin conexión, reintentando…',
+    reconnecting: 'Reconectando…',
     error: 'No se pudo enviar. Reintenta.',
     sending: 'Enviando…',
     poweredBy: 'con tecnología de Vitrina',
+    notSent: 'No se envió',
+    retry: 'Reintentar',
+    unread: 'mensajes sin leer',
+    typing: 'Escribiendo una respuesta…',
+    advisorJoined: 'Un asesor se unió a la conversación',
+    viewVehicle: 'Ver el vehículo',
   },
   en: {
     launcherLabel: 'Open chat',
@@ -43,9 +64,16 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     close: 'Close',
     welcome: 'Hi, how can I help?',
     offline: 'Offline, reconnecting…',
+    reconnecting: 'Reconnecting…',
     error: 'Could not send. Retry.',
     sending: 'Sending…',
     poweredBy: 'powered by Vitrina',
+    notSent: 'Not sent',
+    retry: 'Retry',
+    unread: 'unread messages',
+    typing: 'Typing a reply…',
+    advisorJoined: 'An advisor joined the conversation',
+    viewVehicle: 'View the vehicle',
   },
 };
 

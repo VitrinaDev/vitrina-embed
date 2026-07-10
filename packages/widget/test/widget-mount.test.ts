@@ -49,7 +49,7 @@ let state: MockState;
 let fetchMock: ReturnType<typeof vi.fn>;
 
 function makeInboundFromBody(bodyJson: string): WidgetMessageDto {
-  const body = JSON.parse(bodyJson) as { message: string };
+  const body = JSON.parse(bodyJson) as { message: string; client_message_id?: string };
   state.seq += 1;
   return {
     id: `srv_${state.seq}`,
@@ -57,6 +57,11 @@ function makeInboundFromBody(bodyJson: string): WidgetMessageDto {
     content: body.message,
     direction: 'inbound',
     type: 'text',
+    // The real server echoes the visitor's own client id back on inbound rows
+    // (stripped of its `web:<visitorId>:` namespace). The widget reconciles its
+    // local echo against it — so the fake must do it too, or these tests pass
+    // against a server that does not exist.
+    ...(body.client_message_id ? { clientMessageId: body.client_message_id } : {}),
   };
 }
 
@@ -187,11 +192,15 @@ describe('init() send flow', () => {
     expect(body.client_message_id).toBeTruthy();
     expect(Object.keys(body)).not.toContain('clientMessageId');
 
-    // Server truth rendered (via textContent) after the post-send refetch.
+    // Server truth rendered (via textContent) after the post-send refetch. The
+    // local echo reconciled against the server row by client message id, so
+    // there is exactly ONE bubble — not a duplicate — and it carries no status.
     await vi.waitFor(() => {
-      const bubbles = shadow.querySelectorAll('.vtr-msg[data-dir="inbound"]:not([data-optimistic])');
+      const bubbles = shadow.querySelectorAll('.vtr-msg[data-dir="inbound"]');
       expect(bubbles.length).toBe(1);
       expect(bubbles[0].textContent).toBe('hola mundo');
+      expect(bubbles[0].getAttribute('data-status')).toBeNull();
+      expect(bubbles[0].getAttribute('data-id')).toBe('srv_1');
     });
     w.destroy();
   });
@@ -207,7 +216,7 @@ describe('init() send flow', () => {
     form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
     await vi.waitFor(() => {
-      const bubble = shadow.querySelector('.vtr-msg[data-dir="inbound"]:not([data-optimistic])');
+      const bubble = shadow.querySelector('.vtr-msg[data-dir="inbound"][data-id^="srv_"]');
       expect(bubble?.textContent).toBe(payload);
     });
     // The injected <img> was NOT parsed into a real element anywhere in the shadow.

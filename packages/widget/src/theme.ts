@@ -51,12 +51,15 @@ export function resolveAccent(input: string | undefined | null): string {
 }
 
 /**
- * Validate a logo URL: it must parse and use http/https only. Returns the
- * normalized href, or `null` (omit the logo entirely — no broken <img>, no
- * javascript: URI). A strict dealer CSP may still block the image at load time;
- * that is acceptable degradation (the title/alt text shows instead).
+ * Validate ANY URL that will reach the DOM: it must parse as absolute and use
+ * http/https only. Returns the normalized href, or `null`.
+ *
+ * The single gate for every URL the widget renders — a logo `<img src>`, a
+ * markdown link `<a href>`. `javascript:`, `data:`, `vbscript:`, and every
+ * other scheme are rejected here, once, rather than in each call site.
+ * Relative URLs do not parse and are rejected too; a reply must link absolutely.
  */
-export function validateLogoUrl(input: string | undefined | null): string | null {
+export function validateHttpUrl(input: string | undefined | null): string | null {
   if (typeof input !== 'string' || input.trim() === '') return null;
   try {
     const url = new URL(input.trim());
@@ -66,6 +69,14 @@ export function validateLogoUrl(input: string | undefined | null): string | null
     return null;
   }
 }
+
+/**
+ * Validate a logo URL. Returns the normalized href, or `null` (omit the logo
+ * entirely — no broken <img>, no javascript: URI). A strict dealer CSP may still
+ * block the image at load time; that is acceptable degradation (the title/alt
+ * text shows instead).
+ */
+export const validateLogoUrl = validateHttpUrl;
 
 /** Corner placement -> the data-pos attribute value. Defaults to 'br'. */
 export function resolvePosition(pos: 'br' | 'bl' | undefined): 'br' | 'bl' {
