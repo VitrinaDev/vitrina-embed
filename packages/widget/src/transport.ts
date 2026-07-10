@@ -82,6 +82,28 @@ export interface StreamHandlers {
   onInvalidation(cursor?: string): void;
   /** Connection state transitions. Fires only on CHANGE, never repeated. */
   onState?(state: StreamState): void;
+  /**
+   * Someone on the dealer's side is composing a reply. AUTHORLESS: the event
+   * carries no name and no bot-vs-human flag, and the widget must not invent
+   * one. `ttlMs` is how long the indicator may stay up without a further event,
+   * so a producer that crashes cannot leave a permanent lie on screen.
+   */
+  onTyping?(ttlMs: number): void;
+}
+
+/** Fallback when a typing event arrives with a missing or absurd TTL. */
+const DEFAULT_TYPING_TTL_MS = 6_000;
+const MAX_TYPING_TTL_MS = 30_000;
+
+/** Parse an SSE `data:` payload without ever throwing on garbage. */
+function parseEventData(data: string | undefined): Record<string, unknown> | null {
+  if (!data) return null;
+  try {
+    const parsed: unknown = JSON.parse(data);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
 }
 
 type Ok<T> = { ok: true; data: T };
@@ -424,7 +446,7 @@ export class VitrinaTransport {
    * backoff. Returns a close() that aborts the in-flight fetch + reader.
    */
   openStream(handlers: StreamHandlers): () => void {
-    const { onInvalidation, onState } = handlers;
+    const { onInvalidation, onState, onTyping } = handlers;
     const ac = new AbortController();
     let closed = false;
     let attempt = 0;
@@ -485,6 +507,25 @@ export class VitrinaTransport {
             buffer = buffer.slice(idx + 2);
             const frame = parseSseFrame(raw);
             if (!frame) continue;
+            // Someone on the dealer's side is composing. Authorless by contract:
+            // we are told THAT a reply is coming, never by whom. A garbage or
+            // absurd TTL degrades to the default rather than pinning the
+            // indicator on screen forever.
+            if (frame.event === 'agent.typing') {
+              const data = parseEventData(frame.data);
+              const raw = data?.ttlMs;
+              const ttlMs =
+                typeof raw === 'number' && Number.isFinite(raw) && raw > 0
+                  ? Math.min(raw, MAX_TYPING_TTL_MS)
+                  : DEFAULT_TYPING_TTL_MS;
+              try {
+                onTyping?.(ttlMs);
+              } catch {
+                /* a UI callback must never break the stream loop */
+              }
+              continue;
+            }
+
             // FORWARD COMPATIBILITY (ADR 0035 ¶4). This widget is installed on
             // dealer sites we cannot force-upgrade, so it WILL one day receive
             // event types that did not exist when it was built. Anything

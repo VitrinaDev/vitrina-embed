@@ -26,6 +26,8 @@ export interface WidgetStrings {
   retry: string;
   /** Suffix in the launcher's aria-label when replies are waiting. */
   unread: string;
+  /** Screen-reader label for the typing indicator. Names nobody. */
+  typing: string;
 }
 
 export type StringKey = keyof WidgetStrings;
@@ -46,6 +48,7 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     notSent: 'No se envió',
     retry: 'Reintentar',
     unread: 'mensajes sin leer',
+    typing: 'Escribiendo una respuesta…',
   },
   en: {
     launcherLabel: 'Open chat',
@@ -62,6 +65,7 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     notSent: 'Not sent',
     retry: 'Retry',
     unread: 'unread messages',
+    typing: 'Typing a reply…',
   },
 };
 

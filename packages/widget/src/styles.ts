@@ -138,6 +138,28 @@ export const STYLES = `
 }
 .vtr-retry:focus-visible { outline: 2px solid #b91c1c; outline-offset: 2px; }
 
+/* Typing indicator: three pulsing dots, no name. The visitor is never told
+   whether the AI or a person is composing. */
+.vtr-typing {
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 16px 8px;
+}
+.vtr-typing[hidden] { display: none; }
+.vtr-typing-dot {
+  width: 6px; height: 6px; border-radius: 999px;
+  background: var(--vtr-muted);
+  animation: vtr-typing-pulse 1.2s infinite ease-in-out;
+}
+.vtr-typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.vtr-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes vtr-typing-pulse {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vtr-typing-dot { animation: none; opacity: 0.6; }
+}
+
 .vtr-banner {
   padding: 8px 16px; font-size: 12px; text-align: center;
   color: var(--vtr-muted); border-top: 1px solid var(--vtr-border);

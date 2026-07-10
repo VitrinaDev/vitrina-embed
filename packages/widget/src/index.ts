@@ -60,6 +60,30 @@ export function init(config: WidgetConfig): WidgetInstance {
   let closeStream: (() => void) | null = null;
   let panelOpen = false;
   let unread = 0;
+  let typingTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Show or hide the "a reply is being composed" indicator.
+   *
+   * The event carries its own TTL and we honour it: a producer that dies
+   * mid-turn (a worker OOM, a salesperson closing the tab) never gets to leave
+   * a permanent lie on the visitor's screen. The indicator also clears the
+   * moment a reply actually lands, whichever comes first.
+   */
+  function setTyping(active: boolean, ttlMs?: number): void {
+    if (destroyed) return;
+    if (typingTimer) {
+      clearTimeout(typingTimer);
+      typingTimer = null;
+    }
+    ui.setTyping(active);
+    if (active && ttlMs) {
+      typingTimer = setTimeout(() => {
+        typingTimer = null;
+        if (!destroyed) ui.setTyping(false);
+      }, ttlMs);
+    }
+  }
 
   // The banner has ONE slot but TWO independent sources: how the connection is
   // doing, and how the last send went. They used to overwrite each other — a
@@ -163,6 +187,10 @@ export function init(config: WidgetConfig): WidgetInstance {
       messages = mergeMessages(messages, res.messages);
       cursor = latestServerCursor(messages);
 
+      // The reply landed. Whoever was composing has finished, whatever the
+      // typing event's TTL said.
+      if (arrived > 0) setTyping(false);
+
       if (arrived > 0 && !panelOpen) {
         unread += arrived;
         ui.setUnread(unread);
@@ -197,6 +225,8 @@ export function init(config: WidgetConfig): WidgetInstance {
           if (state === 'reconnecting') setConnection('reconnecting');
           else if (state === 'open') setConnection('ok');
         },
+        // Authorless by contract. We are told a reply is coming, never by whom.
+        onTyping: (ttlMs) => setTyping(true, ttlMs),
       });
     })();
     // Allow a retry if this bootstrap attempt failed (bootstrapped stays false).
@@ -311,6 +341,10 @@ export function init(config: WidgetConfig): WidgetInstance {
     destroy(): void {
       if (destroyed) return;
       destroyed = true;
+      if (typingTimer) {
+        clearTimeout(typingTimer);
+        typingTimer = null;
+      }
       if (closeStream) {
         closeStream();
         closeStream = null;

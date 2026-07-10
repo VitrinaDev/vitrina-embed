@@ -53,6 +53,8 @@ export interface WidgetUi {
   setBanner(state: BannerState): void;
   /** Unread replies waiting behind a closed panel. 0 hides the badge. */
   setUnread(count: number): void;
+  /** Someone is composing a reply. The widget never says who. */
+  setTyping(active: boolean): void;
 }
 
 interface TrackedListener {
@@ -162,6 +164,21 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   const messagesEl = document.createElement('div');
   messagesEl.className = 'vtr-messages';
 
+  // Typing indicator. A SIBLING of the message list, not an entry in it: it is
+  // not a message, it must not survive a repaint, and it must never be mistaken
+  // for one. Three animated dots and no name — the visitor is never told
+  // whether the AI or a person is composing (ADR 0035 ¶1).
+  const typingEl = document.createElement('div');
+  typingEl.className = 'vtr-typing';
+  typingEl.hidden = true;
+  typingEl.setAttribute('role', 'status');
+  typingEl.setAttribute('aria-label', t('typing'));
+  for (let i = 0; i < 3; i += 1) {
+    const dot = document.createElement('span');
+    dot.className = 'vtr-typing-dot';
+    typingEl.appendChild(dot);
+  }
+
   const banner = document.createElement('div');
   banner.className = 'vtr-banner';
   banner.hidden = true;
@@ -190,7 +207,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   footer.className = 'vtr-footer';
   footer.textContent = t('poweredBy');
 
-  panel.append(header, messagesEl, banner, form, footer);
+  panel.append(header, messagesEl, typingEl, banner, form, footer);
   root.append(launcher, panel);
   shadow.appendChild(root);
 
@@ -315,6 +332,10 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       banner.hidden = false;
       banner.setAttribute('data-state', state);
       banner.textContent = BANNER_STRING[state] ? t(BANNER_STRING[state]) : '';
+    },
+    setTyping(active: boolean): void {
+      typingEl.hidden = !active;
+      if (active) scrollToBottom();
     },
     setUnread(count: number): void {
       const n = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
