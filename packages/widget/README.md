@@ -34,7 +34,15 @@ npm install @vitrina/widget
     apiBaseUrl: 'https://api.vitrinadev.com/api/v1',
   };
 </script>
-<script src="https://unpkg.com/@vitrina/widget/dist/loader.global.js" defer></script>
+<script src="https://api.vitrinadev.com/widget.js" defer></script>
+```
+
+The loader is served by the same host the widget talks to, so a
+Content-Security-Policy only ever needs one Vitrina origin:
+
+```
+script-src https://api.vitrinadev.com;
+connect-src https://api.vitrinadev.com;
 ```
 
 See "Usage — `<script>` loader" below for the full config.
@@ -83,8 +91,14 @@ script, and it auto-initializes:
     welcomeMessage: 'Hola, ¿en qué te puedo ayudar?',
   };
 </script>
-<script src="https://your-cdn/loader.global.js" defer></script>
+<script src="https://api.vitrinadev.com/widget.js" defer></script>
 ```
+
+`https://api.vitrinadev.com/widget.js` always serves the current release. The
+URL is deliberately unversioned so a dealer never edits their HTML to receive a
+fix; it is cached for five minutes and revalidated with an ETag. Pin a specific
+version instead — `https://cdn.jsdelivr.net/npm/@vitrina/widget@0.2.0/dist/loader.global.js`
+— only if you have a reason to hold one back.
 
 The `window.vitrinaChat` object is exactly the config table below. After load, the
 live handle is stashed on `window.vitrinaChatInstance`, so the host page can call
