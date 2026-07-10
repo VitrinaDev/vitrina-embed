@@ -89,6 +89,11 @@ export interface StreamHandlers {
    * so a producer that crashes cannot leave a permanent lie on screen.
    */
   onTyping?(ttlMs: number): void;
+  /**
+   * The conversation moved between the AI and a person. `to: 'human'` means
+   * someone joined. ANONYMOUS: there is no name here and there never will be.
+   */
+  onHandoff?(to: 'human' | 'bot'): void;
 }
 
 /** Fallback when a typing event arrives with a missing or absurd TTL. */
@@ -446,7 +451,7 @@ export class VitrinaTransport {
    * backoff. Returns a close() that aborts the in-flight fetch + reader.
    */
   openStream(handlers: StreamHandlers): () => void {
-    const { onInvalidation, onState, onTyping } = handlers;
+    const { onInvalidation, onState, onTyping, onHandoff } = handlers;
     const ac = new AbortController();
     let closed = false;
     let attempt = 0;
@@ -522,6 +527,21 @@ export class VitrinaTransport {
                 onTyping?.(ttlMs);
               } catch {
                 /* a UI callback must never break the stream loop */
+              }
+              continue;
+            }
+
+            // A person joined the conversation, or it went back to the AI.
+            // Anonymous: `to` is a direction, never an identity.
+            if (frame.event === 'conversation.handoff') {
+              const data = parseEventData(frame.data);
+              const to = data?.to;
+              if (to === 'human' || to === 'bot') {
+                try {
+                  onHandoff?.(to);
+                } catch {
+                  /* a UI callback must never break the stream loop */
+                }
               }
               continue;
             }

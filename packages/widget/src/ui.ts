@@ -8,7 +8,7 @@
 // innerHTML anywhere, no eval, no remote script/style/asset (the only remote
 // assets are a validated logo <img> and validated http(s) link targets).
 
-import type { WidgetMessage } from './config';
+import type { WidgetMessage, WidgetNotice } from './config';
 import type { StringKey, Translate } from './i18n';
 import { renderMarkdown } from './markdown';
 import { STYLES } from './styles';
@@ -49,7 +49,7 @@ export interface WidgetUi {
    * -persisted messages, which are ENTRIES in it, not DOM artifacts. A repaint
    * can therefore never lose one.
    */
-  renderMessages(messages: WidgetMessage[]): void;
+  renderMessages(messages: WidgetMessage[], notices?: WidgetNotice[]): void;
   setBanner(state: BannerState): void;
   /** Unread replies waiting behind a closed panel. 0 hides the badge. */
   setUnread(count: number): void;
@@ -267,6 +267,21 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     return wrap;
   }
 
+  /**
+   * A centered system line. NOT a bubble: no author, no direction, no avatar.
+   * It says that a person joined; it never says which person. A workspace
+   * member's name must never reach an anonymous browser on a third-party origin,
+   * and adding an opt-in operator name later is far easier than un-leaking one.
+   */
+  function systemLine(text: string, id: string): HTMLElement {
+    const el = document.createElement('div');
+    el.className = 'vtr-system';
+    el.dataset.id = id;
+    el.setAttribute('role', 'status');
+    el.textContent = text;
+    return el;
+  }
+
   function renderWelcome(): void {
     const greeting = welcomeMessage ?? t('welcome');
     messagesEl.appendChild(bubble('outbound', greeting));
@@ -302,25 +317,42 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     isOpen(): boolean {
       return open;
     },
-    renderMessages(messages: WidgetMessage[]): void {
+    renderMessages(messages: WidgetMessage[], notices: WidgetNotice[] = []): void {
       // Repaint from the caller's list, which INCLUDES the visitor's own
       // not-yet-persisted messages. This used to clear the panel and render
       // server rows only, so any local echo was destroyed on every repaint —
       // and a repaint fires after every send. The echo now survives by
       // construction, because it is in `messages`.
       messagesEl.replaceChildren();
-      if (messages.length === 0) {
+      if (messages.length === 0 && notices.length === 0) {
         if (open) renderWelcome();
         return;
       }
-      for (const m of messages) {
-        const el = bubble(m.direction, m.content, String(m.id));
-        if (m.status) el.setAttribute('data-status', m.status);
-        messagesEl.appendChild(el);
-        if (m.status === 'failed' && m.clientMessageId) {
-          messagesEl.appendChild(retryControl(m.clientMessageId));
-        }
-      }
+      // Interleave notices into the transcript by timestamp, so "an advisor
+      // joined" appears where it happened rather than pinned to the bottom.
+      const items: Array<{ at: string; render: () => void }> = [
+        ...messages.map((m) => ({
+          at: m.createdAt,
+          render: () => {
+            const el = bubble(m.direction, m.content, String(m.id));
+            if (m.status) el.setAttribute('data-status', m.status);
+            messagesEl.appendChild(el);
+            if (m.status === 'failed' && m.clientMessageId) {
+              messagesEl.appendChild(retryControl(m.clientMessageId));
+            }
+          },
+        })),
+        ...notices.map((n) => ({
+          at: n.at,
+          render: () => messagesEl.appendChild(systemLine(t('advisorJoined'), n.id)),
+        })),
+      ];
+      items.sort((a, b) => {
+        const ta = Date.parse(a.at);
+        const tb = Date.parse(b.at);
+        return Number.isFinite(ta) && Number.isFinite(tb) ? ta - tb : 0;
+      });
+      for (const item of items) item.render();
       scrollToBottom();
     },
     setBanner(state: BannerState): void {

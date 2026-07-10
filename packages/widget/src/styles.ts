@@ -138,6 +138,15 @@ export const STYLES = `
 }
 .vtr-retry:focus-visible { outline: 2px solid #b91c1c; outline-offset: 2px; }
 
+/* Centered system line ("an advisor joined"). Not a bubble: it has no author,
+   no direction, and it names nobody. */
+.vtr-system {
+  align-self: center; max-width: 90%;
+  padding: 2px 10px; margin: 2px 0;
+  font-size: 11.5px; text-align: center;
+  color: var(--vtr-muted);
+}
+
 /* Typing indicator: three pulsing dots, no name. The visitor is never told
    whether the AI or a person is composing. */
 .vtr-typing {

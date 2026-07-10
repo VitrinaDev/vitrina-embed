@@ -28,6 +28,8 @@ export interface WidgetStrings {
   unread: string;
   /** Screen-reader label for the typing indicator. Names nobody. */
   typing: string;
+  /** Centered system line when a person takes over. Names nobody. */
+  advisorJoined: string;
 }
 
 export type StringKey = keyof WidgetStrings;
@@ -49,6 +51,7 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     retry: 'Reintentar',
     unread: 'mensajes sin leer',
     typing: 'Escribiendo una respuesta…',
+    advisorJoined: 'Un asesor se unió a la conversación',
   },
   en: {
     launcherLabel: 'Open chat',
@@ -66,6 +69,7 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     retry: 'Retry',
     unread: 'unread messages',
     typing: 'Typing a reply…',
+    advisorJoined: 'An advisor joined the conversation',
   },
 };
 

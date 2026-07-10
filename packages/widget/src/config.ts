@@ -120,3 +120,22 @@ export function resolveConfig(config: WidgetConfig): ResolvedConfig {
     welcomeMessage: config.welcomeMessage ?? null,
   };
 }
+
+/**
+ * A centered, anonymous system line in the transcript — "an advisor joined the
+ * conversation". NOT a message: it has no author, no direction, and no server
+ * row behind it.
+ *
+ * LIVE ONLY. It does not replay on reload, by design. Persisting it would mean
+ * admitting `sender_type = 'system'` rows to the browser-safe DTO, which would
+ * invert that strict allowlist from opt-in to opt-out (ADR 0035 ¶2). The line is
+ * a courtesy, not history — and the visitor loses nothing on reload, because the
+ * advisor's actual replies are still there.
+ */
+export interface WidgetNotice {
+  /** Synthetic, namespaced so it can never collide with a message id. */
+  id: string;
+  /** ISO8601 — sorts the notice into the transcript where it happened. */
+  at: string;
+  kind: 'handoff_human';
+}

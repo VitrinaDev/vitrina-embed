@@ -335,3 +335,50 @@ describe('the widget shows and clears the typing indicator', () => {
     w.destroy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// X4 — the visitor is told once when a person joins.
+// ---------------------------------------------------------------------------
+describe('openStream surfaces conversation.handoff', () => {
+  it('reports the direction, and nothing else', async () => {
+    const t = openWith([
+      'event: conversation.handoff\ndata: {"type":"conversation.handoff","at":"2026-07-09T12:00:00.000Z","to":"human"}\n\n',
+    ]);
+    const onHandoff = vi.fn();
+    const close = t.openStream({ onInvalidation: () => {}, onHandoff });
+
+    await vi.advanceTimersByTimeAsync(50);
+    expect(onHandoff).toHaveBeenCalledTimes(1);
+    expect(onHandoff).toHaveBeenCalledWith('human');
+
+    close();
+  });
+
+  it('ignores a handoff with a missing or nonsense direction', async () => {
+    const t = openWith([
+      'event: conversation.handoff\ndata: {}\n\n',
+      'event: conversation.handoff\ndata: {"to":"martian"}\n\n',
+      'event: conversation.handoff\ndata: not-json\n\n',
+    ]);
+    const onHandoff = vi.fn();
+    const close = t.openStream({ onInvalidation: () => {}, onHandoff });
+
+    await vi.advanceTimersByTimeAsync(50);
+    expect(onHandoff).not.toHaveBeenCalled();
+
+    close();
+  });
+
+  it('a handoff never triggers a refetch and never moves the cursor', async () => {
+    const t = openWith([
+      'event: conversation.handoff\nid: 2030-01-01T00:00:00.000Z\ndata: {"to":"human"}\n\n',
+    ]);
+    const onInvalidation = vi.fn();
+    const close = t.openStream({ onInvalidation, onHandoff: () => {} });
+
+    await vi.advanceTimersByTimeAsync(50);
+    expect(onInvalidation).not.toHaveBeenCalled();
+
+    close();
+  });
+});

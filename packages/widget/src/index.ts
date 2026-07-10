@@ -25,6 +25,7 @@ import {
   type MessageStatus,
   type WidgetMessage,
 } from './transport';
+import type { WidgetNotice } from './config';
 import type { WidgetConfig, WidgetInstance } from './types';
 import { createWidgetUI } from './ui';
 
@@ -61,6 +62,9 @@ export function init(config: WidgetConfig): WidgetInstance {
   let panelOpen = false;
   let unread = 0;
   let typingTimer: ReturnType<typeof setTimeout> | null = null;
+  // Live-only transcript notices ("an advisor joined"). Never persisted, never
+  // replayed on reload — see WidgetNotice.
+  let notices: WidgetNotice[] = [];
 
   /**
    * Show or hide the "a reply is being composed" indicator.
@@ -155,7 +159,7 @@ export function init(config: WidgetConfig): WidgetInstance {
       }
       return { ...m, status };
     });
-    if (touched && !destroyed) ui.renderMessages(messages);
+    if (touched && !destroyed) ui.renderMessages(messages, notices);
   }
 
   /**
@@ -196,7 +200,7 @@ export function init(config: WidgetConfig): WidgetInstance {
         ui.setUnread(unread);
       }
     }
-    ui.renderMessages(messages);
+    ui.renderMessages(messages, notices);
   }
 
   /** Bootstrap the visitor session ONCE, paint history, open the SSE stream. */
@@ -227,6 +231,7 @@ export function init(config: WidgetConfig): WidgetInstance {
         },
         // Authorless by contract. We are told a reply is coming, never by whom.
         onTyping: (ttlMs) => setTyping(true, ttlMs),
+        onHandoff: (to) => announceHandoff(to),
       });
     })();
     // Allow a retry if this bootstrap attempt failed (bootstrapped stays false).
@@ -296,7 +301,7 @@ export function init(config: WidgetConfig): WidgetInstance {
         status: 'pending',
       },
     ];
-    ui.renderMessages(messages);
+    ui.renderMessages(messages, notices);
     await deliver(clientMessageId, text, honeypot);
   }
 
@@ -310,6 +315,24 @@ export function init(config: WidgetConfig): WidgetInstance {
     const entry = messages.find((m) => String(m.id) === localIdFor(clientMessageId));
     if (!entry) return;
     await deliver(clientMessageId, entry.content, '');
+  }
+
+  /**
+   * A person joined the conversation. Say so ONCE, in a centered line that names
+   * nobody, and never say the reverse: telling the visitor "the AI is back"
+   * would keep score of who is on the other end, which is exactly what the
+   * authorless contract exists to prevent. The `to: 'bot'` event is still
+   * received and ignored — the server publishes the honest projection of the
+   * handler transition; the widget decides what a visitor should see.
+   */
+  function announceHandoff(to: 'human' | 'bot'): void {
+    if (destroyed || to !== 'human') return;
+    if (notices.some((n) => n.kind === 'handoff_human')) return;
+    notices = [
+      ...notices,
+      { id: `notice:handoff:${Date.now()}`, at: new Date().toISOString(), kind: 'handoff_human' },
+    ];
+    ui.renderMessages(messages, notices);
   }
 
   function instanceOpen(): void {
@@ -351,6 +374,7 @@ export function init(config: WidgetConfig): WidgetInstance {
       }
       ui.destroy();
       messages = [];
+      notices = [];
     },
   };
 }
