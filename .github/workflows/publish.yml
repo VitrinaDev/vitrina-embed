@@ -28,11 +28,15 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # Node 24 BUNDLES npm 11.x, which is what OIDC trusted publishing
+          # needs. Do NOT `npm install -g npm@latest` on top of a bundled npm:
+          # the in-place upgrade leaves a half-written tree and `npm publish
+          # --provenance` dies with `Cannot find module 'sigstore'` (seen on
+          # this workflow's first real run, node 22 + npm 11.6).
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-      # Node's bundled npm is too old for OIDC on scoped packages.
-      - name: Upgrade npm
-        run: npm install -g npm@latest
+      - name: Show npm version (must be >= 11.5.1 for OIDC)
+        run: npm --version
       - run: pnpm install --frozen-lockfile
 
       # The tag is the ONLY thing that triggers a release, so it must agree with
