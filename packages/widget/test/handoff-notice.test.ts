@@ -240,3 +240,121 @@ describe('X4: the visitor is told once when a person joins', () => {
     w.destroy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// X10 — the AI shows the car it is talking about.
+//
+// The card ENHANCES the prose; it never replaces it. A widget that does not
+// recognise the type — or a server that declined to project the card — renders
+// the message that was always there. Never a blank bubble.
+// ---------------------------------------------------------------------------
+describe('X10: stock cards', () => {
+  const prose = 'Sí, tenemos el Corolla 2020 por $12.990.000.';
+  const cardRow = (stockCard?: unknown, type = 'stock_card') => [
+    {
+      id: 'srv_card',
+      createdAt: '2026-07-01T00:00:00.000Z',
+      content: prose,
+      direction: 'outbound',
+      type,
+      ...(stockCard ? { stockCard } : {}),
+    },
+  ];
+
+  const FULL_CARD = {
+    vehicleId: 'veh-1',
+    title: 'Toyota Corolla 2020',
+    price: '$12.990.000',
+    thumbnailUrl: 'https://cdn.dealer.cl/1.jpg',
+    listingUrl: 'https://dealer.cl/stock/veh-1',
+  };
+
+  it('renders a photo, a title, a price and a link — beneath the prose', async () => {
+    history = cardRow(FULL_CARD) as never;
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
+    w.open();
+
+    await vi.waitFor(() => {
+      expect(shadowOf().querySelector('.vtr-card')).toBeTruthy();
+    });
+    const bubble = shadowOf().querySelector('.vtr-msg[data-id="srv_card"]') as HTMLElement;
+    // The prose is still there — the card did not replace the message.
+    expect(bubble.textContent).toContain('Corolla 2020 por $12.990.000');
+
+    const card = bubble.querySelector('.vtr-card') as HTMLElement;
+    expect(card.dataset.vehicleId).toBe('veh-1');
+    expect((card.querySelector('.vtr-card-img') as HTMLImageElement).src).toBe(
+      'https://cdn.dealer.cl/1.jpg',
+    );
+    expect(card.querySelector('.vtr-card-title')!.textContent).toBe('Toyota Corolla 2020');
+    expect(card.querySelector('.vtr-card-price')!.textContent).toBe('$12.990.000');
+
+    const link = card.querySelector('.vtr-card-link') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('https://dealer.cl/stock/veh-1');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.getAttribute('target')).toBe('_blank');
+
+    w.destroy();
+  });
+
+  it('renders the card without a link when the listing has none', async () => {
+    history = cardRow({ ...FULL_CARD, listingUrl: null }) as never;
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
+    w.open();
+
+    await vi.waitFor(() => expect(shadowOf().querySelector('.vtr-card')).toBeTruthy());
+    expect(shadowOf().querySelector('.vtr-card-link')).toBeNull();
+    expect(shadowOf().querySelector('.vtr-card-title')!.textContent).toBe('Toyota Corolla 2020');
+
+    w.destroy();
+  });
+
+  it('renders the card without a photo or a price when they are absent', async () => {
+    history = cardRow({ ...FULL_CARD, thumbnailUrl: null, price: null }) as never;
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
+    w.open();
+
+    await vi.waitFor(() => expect(shadowOf().querySelector('.vtr-card')).toBeTruthy());
+    expect(shadowOf().querySelector('.vtr-card-img')).toBeNull();
+    expect(shadowOf().querySelector('.vtr-card-price')).toBeNull();
+
+    w.destroy();
+  });
+
+  it('DEGRADES to prose when the server sent no card', async () => {
+    // A half-written card the server refused to project. The row is still a
+    // message and still reads correctly.
+    history = cardRow(undefined) as never;
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
+    w.open();
+
+    await vi.waitFor(() => {
+      expect(shadowOf().querySelector('.vtr-msg[data-id="srv_card"]')).toBeTruthy();
+    });
+    expect(shadowOf().querySelector('.vtr-card')).toBeNull();
+    const bubble = shadowOf().querySelector('.vtr-msg[data-id="srv_card"]') as HTMLElement;
+    expect(bubble.textContent).toContain('Corolla 2020');
+    // NOT a blank bubble.
+    expect(bubble.textContent!.trim().length).toBeGreaterThan(10);
+
+    w.destroy();
+  });
+
+  it('DEGRADES to prose on a message type it has never heard of', async () => {
+    // Old widget, new server. This is the property that lets us ship server-side
+    // message types without waiting for dealers to upgrade a script tag.
+    history = cardRow(FULL_CARD, 'some_future_type') as never;
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
+    w.open();
+
+    await vi.waitFor(() => {
+      expect(shadowOf().querySelector('.vtr-msg[data-id="srv_card"]')).toBeTruthy();
+    });
+    expect(shadowOf().querySelector('.vtr-card')).toBeNull();
+    expect(shadowOf().querySelector('.vtr-msg[data-id="srv_card"]')!.textContent).toContain(
+      'Corolla 2020',
+    );
+
+    w.destroy();
+  });
+});

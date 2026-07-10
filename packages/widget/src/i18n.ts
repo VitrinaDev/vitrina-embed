@@ -30,6 +30,8 @@ export interface WidgetStrings {
   typing: string;
   /** Centered system line when a person takes over. Names nobody. */
   advisorJoined: string;
+  /** Link on a vehicle card, when the listing has a URL. */
+  viewVehicle: string;
 }
 
 export type StringKey = keyof WidgetStrings;
@@ -52,6 +54,7 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     unread: 'mensajes sin leer',
     typing: 'Escribiendo una respuesta…',
     advisorJoined: 'Un asesor se unió a la conversación',
+    viewVehicle: 'Ver el vehículo',
   },
   en: {
     launcherLabel: 'Open chat',
@@ -70,6 +73,7 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     unread: 'unread messages',
     typing: 'Typing a reply…',
     advisorJoined: 'An advisor joined the conversation',
+    viewVehicle: 'View the vehicle',
   },
 };
 

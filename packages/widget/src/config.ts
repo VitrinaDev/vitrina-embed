@@ -24,6 +24,21 @@ export interface WidgetMessageDto {
    * Not a concern in practice: the API is single-hosted and ships first.
    */
   clientMessageId?: string;
+  /**
+   * A vehicle card, on rows whose `type` is `stock_card`. The server projects
+   * exactly these five fields — never the raw message metadata.
+   *
+   * The row's `content` always holds the AI's prose, so a widget that does not
+   * recognise the type renders that instead. The card is an enhancement of a
+   * message that already reads correctly without it.
+   */
+  stockCard?: {
+    vehicleId: string;
+    title: string;
+    price: string | null;
+    thumbnailUrl: string | null;
+    listingUrl: string | null;
+  };
 }
 
 /**

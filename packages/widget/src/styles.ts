@@ -138,6 +138,19 @@ export const STYLES = `
 }
 .vtr-retry:focus-visible { outline: 2px solid #b91c1c; outline-offset: 2px; }
 
+/* Vehicle card, rendered INSIDE an outbound bubble beneath the AI's prose. */
+.vtr-card {
+  margin-top: 8px; border: 1px solid var(--vtr-border); border-radius: 10px;
+  overflow: hidden; background: var(--vtr-surface);
+}
+.vtr-card-img { display: block; width: 100%; height: 132px; object-fit: cover; background: var(--vtr-bubble-out); }
+.vtr-card-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.vtr-card-title { font-size: 13px; font-weight: 600; color: var(--vtr-text); }
+.vtr-card-price { font-size: 13px; color: var(--vtr-text); }
+.vtr-card-link { font-size: 12px; font-weight: 600; color: var(--vtr-accent); text-decoration: none; margin-top: 4px; }
+.vtr-card-link:hover { text-decoration: underline; }
+.vtr-card-link:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+
 /* Centered system line ("an advisor joined"). Not a bubble: it has no author,
    no direction, and it names nobody. */
 .vtr-system {

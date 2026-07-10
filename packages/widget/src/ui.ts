@@ -224,6 +224,60 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  /**
+   * A vehicle card: photo, title, price, and a link when the listing has one.
+   * The moat — Intercom cannot show a car, and the widget already knows which
+   * car the visitor is looking at.
+   *
+   * Built from DOM nodes like everything else here. The image and link URLs were
+   * validated server-side AND are validated again through validateHttpUrl: a
+   * card with a hostile URL renders without it rather than not at all.
+   */
+  function stockCard(card: NonNullable<WidgetMessage['stockCard']>): HTMLElement {
+    const el = document.createElement('div');
+    el.className = 'vtr-card';
+    el.dataset.vehicleId = card.vehicleId;
+
+    const thumb = validateLogoUrl(card.thumbnailUrl);
+    if (thumb) {
+      const img = document.createElement('img');
+      img.className = 'vtr-card-img';
+      img.src = thumb;
+      img.alt = '';
+      img.loading = 'lazy';
+      el.appendChild(img);
+    }
+
+    const body = document.createElement('div');
+    body.className = 'vtr-card-body';
+
+    const title = document.createElement('div');
+    title.className = 'vtr-card-title';
+    title.textContent = card.title;
+    body.appendChild(title);
+
+    if (card.price) {
+      const price = document.createElement('div');
+      price.className = 'vtr-card-price';
+      price.textContent = card.price;
+      body.appendChild(price);
+    }
+
+    const href = validateLogoUrl(card.listingUrl);
+    if (href) {
+      const link = document.createElement('a');
+      link.className = 'vtr-card-link';
+      link.href = href;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = t('viewVehicle');
+      body.appendChild(link);
+    }
+
+    el.appendChild(body);
+    return el;
+  }
+
   function bubble(dir: 'inbound' | 'outbound', content: string, id?: string): HTMLElement {
     const el = document.createElement('div');
     el.className = 'vtr-msg';
@@ -336,6 +390,12 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
           render: () => {
             const el = bubble(m.direction, m.content, String(m.id));
             if (m.status) el.setAttribute('data-status', m.status);
+            // The card ENHANCES the prose; it never replaces it. A row whose
+            // type we do not recognise, or whose card the server declined to
+            // project, is simply the reply it always was — never a blank bubble.
+            if (m.type === 'stock_card' && m.stockCard) {
+              el.appendChild(stockCard(m.stockCard));
+            }
             messagesEl.appendChild(el);
             if (m.status === 'failed' && m.clientMessageId) {
               messagesEl.appendChild(retryControl(m.clientMessageId));
