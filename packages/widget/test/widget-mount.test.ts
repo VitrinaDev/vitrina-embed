@@ -219,8 +219,13 @@ describe('init() send flow', () => {
       const bubble = shadow.querySelector('.vtr-msg[data-dir="inbound"][data-id^="srv_"]');
       expect(bubble?.textContent).toBe(payload);
     });
-    // The injected <img> was NOT parsed into a real element anywhere in the shadow.
-    expect(shadow.querySelector('img')).toBeNull();
+    // The injected <img> was NOT parsed into a real element. Scoped to the
+    // transcript — the header carries a (hidden, src-less) logo <img> of our
+    // own since ADR 0046, so "no <img> in the whole shadow root" is no longer
+    // the same claim. What matters is that nothing from MESSAGE CONTENT ever
+    // becomes an element, and that the payload's own attributes exist nowhere.
+    expect(shadow.querySelectorAll('.vtr-messages img').length).toBe(0);
+    expect(shadow.querySelector('img[src="x"]')).toBeNull();
     w.destroy();
   });
 });

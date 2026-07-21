@@ -9,11 +9,11 @@
 // assets are a validated logo <img> and validated http(s) link targets).
 
 import type { WidgetMessage, WidgetNotice } from './config';
-import type { StringKey, Translate } from './i18n';
+import { makeT, type StringKey, type Translate } from './i18n';
 import { renderMarkdown } from './markdown';
 import { STYLES } from './styles';
 import { resolveAccent, resolvePosition, validateLogoUrl } from './theme';
-import type { WidgetTheme } from './types';
+import type { WidgetLocale, WidgetTheme } from './types';
 
 export type BannerState = 'none' | 'offline' | 'reconnecting' | 'error' | 'sending';
 
@@ -33,6 +33,14 @@ export interface WidgetUiOptions {
   theme: WidgetTheme;
   welcomeMessage: string | null;
   callbacks: WidgetUiCallbacks;
+  /**
+   * Mount invisibly, awaiting `reveal()`. Used ONLY when the appearance is
+   * coming from the server and we have no cached copy to paint with — showing a
+   * default-black launcher that snaps to the dealer's brand colour a moment
+   * later looks broken on their own site. The caller guarantees a reveal on a
+   * timer regardless of the network, so this can never hide the widget.
+   */
+  hidden?: boolean;
 }
 
 export interface WidgetUi {
@@ -55,6 +63,20 @@ export interface WidgetUi {
   setUnread(count: number): void;
   /** Someone is composing a reply. The widget never says who. */
   setTyping(active: boolean): void;
+  /**
+   * Re-theme a MOUNTED widget (ADR 0046) — accent, corner, header logo. Every
+   * value goes through the same sanitizers as the initial paint; an unusable
+   * one falls back to the default rather than being skipped, so the widget can
+   * never be left half-themed.
+   */
+  applyTheme(theme: WidgetTheme): void;
+  /** Swap the pre-conversation greeting, repainting it if it is on screen. */
+  setWelcomeMessage(message: string | null): void;
+  /** Swap the chrome language, re-rendering every static string in place. */
+  setLocale(locale: WidgetLocale): void;
+  /** Show a widget mounted with `hidden`. Idempotent, and safe to call when it
+   *  was never hidden in the first place. */
+  reveal(): void;
 }
 
 interface TrackedListener {
@@ -91,7 +113,11 @@ function chatIcon(): SVGElement {
  * destroy() removes the host node and every tracked listener.
  */
 export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
-  const { t, theme, welcomeMessage, callbacks } = opts;
+  const { theme, callbacks } = opts;
+  // Both are MUTABLE: the server-resolved appearance (ADR 0046) can land after
+  // mount and must be able to change the language and the greeting in place.
+  let t: Translate = opts.t;
+  let welcomeMessage: string | null = opts.welcomeMessage;
 
   const host = document.createElement('div');
   // Defensive light-DOM styles: the shadow root protects everything INSIDE it,
@@ -101,7 +127,6 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   host.style.setProperty('position', 'fixed', 'important');
   host.style.setProperty('z-index', '2147483000', 'important');
   host.style.setProperty('bottom', '0', 'important');
-  host.style.setProperty(resolvePosition(theme.position) === 'bl' ? 'left' : 'right', '0', 'important');
   host.style.setProperty('width', '0', 'important');
   host.style.setProperty('height', '0', 'important');
   host.style.setProperty('visibility', 'visible', 'important');
@@ -115,8 +140,23 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
 
   const root = document.createElement('div');
   root.className = 'vtr-root';
-  root.setAttribute('data-pos', resolvePosition(theme.position));
+
+  /**
+   * Pin the corner in BOTH places that care: the shadow root (which draws the
+   * launcher + panel) and the light-DOM host (which is pinned defensively
+   * against host-page CSS). The unused side must be REMOVED, not left at 0 —
+   * flipping br→bl while `right: 0 !important` still applies would stretch the
+   * host across the viewport and swallow clicks on the page underneath.
+   */
+  function applyPosition(pos: WidgetTheme['position']): void {
+    const resolved = resolvePosition(pos);
+    root.setAttribute('data-pos', resolved);
+    host.style.removeProperty(resolved === 'bl' ? 'right' : 'left');
+    host.style.setProperty(resolved === 'bl' ? 'left' : 'right', '0', 'important');
+  }
+  applyPosition(theme.position);
   root.style.setProperty('--vtr-accent', resolveAccent(theme.accent));
+  if (opts.hidden) root.style.setProperty('visibility', 'hidden');
 
   // --- Launcher ---
   const launcher = document.createElement('button');
@@ -143,14 +183,30 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
 
   const header = document.createElement('div');
   header.className = 'vtr-header';
-  const logoHref = validateLogoUrl(theme.logoUrl);
-  if (logoHref) {
-    const logo = document.createElement('img');
-    logo.className = 'vtr-logo';
-    logo.src = logoHref;
-    logo.alt = '';
-    header.appendChild(logo);
+  // Always in the DOM, hidden until there is a URL worth loading. Created up
+  // front (rather than inserted on demand) so a logo arriving with the
+  // server-resolved config lands in the right slot without re-ordering the
+  // header — and so `hidden` + no `src` means no request and nothing drawn.
+  const logo = document.createElement('img');
+  logo.className = 'vtr-logo';
+  logo.alt = '';
+  logo.hidden = true;
+
+  /** Point the header logo at `url`, or hide it. Re-validated every time: this
+   *  runs again for every server-resolved config, not just the first paint. */
+  function applyLogo(url: string | undefined): void {
+    const href = validateLogoUrl(url);
+    if (href) {
+      logo.src = href;
+      logo.hidden = false;
+      return;
+    }
+    logo.hidden = true;
+    logo.removeAttribute('src');
   }
+  applyLogo(theme.logoUrl);
+  header.appendChild(logo);
+
   const title = document.createElement('span');
   title.className = 'vtr-title';
   title.textContent = t('title');
@@ -214,6 +270,11 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   // --- state + listeners ---
   const listeners: TrackedListener[] = [];
   let open = false;
+  // Remembered so a locale swap can re-derive anything already on screen. Both
+  // are already implied by the DOM, but reading them back out of it would mean
+  // parsing our own rendered strings.
+  let bannerState: BannerState = 'none';
+  let unreadCount = 0;
 
   function on(target: EventTarget, type: string, handler: EventListener): void {
     target.addEventListener(type, handler);
@@ -336,9 +397,26 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     return el;
   }
 
+  /**
+   * The pre-conversation greeting. Tagged `data-welcome` so it can be found
+   * and rewritten in place when the server-resolved greeting (or language)
+   * arrives after the panel is already open — it is an ephemeral bubble with no
+   * message behind it, so a repaint from the message list would not restore it.
+   */
   function renderWelcome(): void {
     const greeting = welcomeMessage ?? t('welcome');
-    messagesEl.appendChild(bubble('outbound', greeting));
+    const el = bubble('outbound', greeting);
+    el.dataset.welcome = '1';
+    messagesEl.appendChild(el);
+  }
+
+  /** Rewrite the greeting bubble if (and only if) it is currently on screen. */
+  function repaintWelcome(): void {
+    const existing = messagesEl.querySelector('[data-welcome]');
+    if (!existing) return;
+    const el = bubble('outbound', welcomeMessage ?? t('welcome'));
+    el.dataset.welcome = '1';
+    existing.replaceWith(el);
   }
 
   const ui: WidgetUi = {
@@ -416,6 +494,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       scrollToBottom();
     },
     setBanner(state: BannerState): void {
+      bannerState = state;
       if (state === 'none') {
         banner.hidden = true;
         banner.removeAttribute('data-state');
@@ -425,12 +504,50 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       banner.setAttribute('data-state', state);
       banner.textContent = BANNER_STRING[state] ? t(BANNER_STRING[state]) : '';
     },
+    applyTheme(next: WidgetTheme): void {
+      applyPosition(next.position);
+      // resolveAccent falls back to the default on an unusable value, so a
+      // hostile or malformed colour leaves a coherent widget rather than one
+      // wearing half of two themes.
+      root.style.setProperty('--vtr-accent', resolveAccent(next.accent));
+      applyLogo(next.logoUrl);
+    },
+    setWelcomeMessage(message: string | null): void {
+      if (message === welcomeMessage) return;
+      welcomeMessage = message;
+      repaintWelcome();
+    },
+    setLocale(locale: WidgetLocale): void {
+      t = makeT(locale);
+      // Every string painted ONCE at construction has to be repainted here, or
+      // the panel ends up half-translated. The message list is server data and
+      // is never translated; the greeting is, because it may be ours.
+      launcher.setAttribute('aria-label', t('launcherLabel'));
+      panel.setAttribute('aria-label', t('title'));
+      title.textContent = t('title');
+      closeBtn.setAttribute('aria-label', t('close'));
+      typingEl.setAttribute('aria-label', t('typing'));
+      input.placeholder = t('placeholder');
+      input.setAttribute('aria-label', t('placeholder'));
+      sendBtn.textContent = t('send');
+      footer.textContent = t('poweredBy');
+      // Re-derive anything currently rendered from a string: the unread count
+      // is folded into the launcher's aria-label, and a visible banner would
+      // otherwise keep the old language until its next state change.
+      ui.setUnread(unreadCount);
+      if (bannerState !== 'none') ui.setBanner(bannerState);
+      repaintWelcome();
+    },
+    reveal(): void {
+      root.style.removeProperty('visibility');
+    },
     setTyping(active: boolean): void {
       typingEl.hidden = !active;
       if (active) scrollToBottom();
     },
     setUnread(count: number): void {
       const n = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+      unreadCount = n;
       if (n === 0) {
         badge.hidden = true;
         badge.textContent = '';

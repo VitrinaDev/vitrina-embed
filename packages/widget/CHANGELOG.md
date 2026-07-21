@@ -1,5 +1,51 @@
 # @vitrina/widget
 
+## 0.3.0
+
+The widget asks Vitrina what it should look like.
+
+### Appearance can finally change after install
+
+Until now the only way to theme the widget was the `window.vitrinaChat` object
+pasted into the dealer's HTML. Changing the bubble's colour meant asking every
+dealer to edit their own site — so in practice nobody's widget ever changed, and
+the appearance a dealer picked on install day was the appearance they had
+forever.
+
+`init()` now fetches `GET /widget/config`, which resolves colour, corner, logo,
+greeting and language from the dealer's own Vitrina settings. A dealer restyles
+their bubble in **Configuración › Conexiones › Web chat** and every installed
+copy picks it up within about a minute. The install snippet is down to
+`publicKey` + `apiBaseUrl`.
+
+**Anything set inline still wins.** That is deliberate and it is what makes this
+a non-event for existing sites: every widget installed before 0.3.0 carries a
+fully-populated inline config, so none of them change by a pixel. An inline
+value is now a per-site override rather than the only way to set anything.
+
+**It fails open.** A network error, an older API with no such route, a malformed
+answer — the widget renders with the inline/default theme and works normally. A
+dealer's chat must never be worse off for our having asked a cosmetic question.
+
+**It does not flash.** The last good answer is cached in `localStorage`, so a
+repeat visitor's first paint is already correct with no network wait. Only a
+first-ever visit to a site that pinned nothing inline can be blind, and there the
+launcher is held back until the answer lands — for at most 1.2s, on a timer that
+runs regardless of the network, so a hung request can never leave a dealer's site
+without a chat button.
+
+Opt out entirely with `remoteConfig: false`.
+
+### Other
+
+- The panel header's logo element is now always present (hidden, `src`-less)
+  rather than conditionally inserted, so a logo arriving with the served config
+  lands in the right slot without re-ordering the header.
+- A `br` → `bl` change now clears the old side on the light-DOM host element.
+  Leaving `right: 0 !important` behind while adding `left: 0` would have
+  stretched the host across the viewport and swallowed clicks on the page under
+  it.
+
 ## 0.2.0
 
 The reliability floor. Everything below is either a bug a visitor could see, or

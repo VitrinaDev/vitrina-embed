@@ -58,6 +58,8 @@ const widget = init({
   publicKey: 'pk_live_xxx',
   apiBaseUrl: 'https://api.vitrinadev.com/api/v1',
   vehicleId: 'veh_123',            // optional: pre-attach the inquiry to a vehicle
+  // Appearance is managed in Vitrina and fetched at load. Set any of these only
+  // to OVERRIDE it for this site — an inline value always wins.
   locale: 'es',                    // optional: 'es' | 'en' (auto-detected otherwise)
   theme: { accent: '#2563eb', position: 'br', logoUrl: 'https://…/logo.png' },
   welcomeMessage: 'Hola, ¿en qué te puedo ayudar?',
@@ -84,7 +86,22 @@ script, and it auto-initializes:
   window.vitrinaChat = {
     publicKey: 'pk_live_xxx',
     apiBaseUrl: 'https://api.vitrinadev.com/api/v1',
-    // optional:
+  };
+</script>
+<script src="https://api.vitrinadev.com/widget.js" defer></script>
+```
+
+That is the whole install. Appearance — colour, corner, logo, greeting,
+language — is managed in Vitrina (**Configuración › Conexiones › Web chat**) and
+fetched at load, so changing it never means editing this page again. You can
+still pin any of it inline, and an inline value always wins:
+
+```html
+<script>
+  window.vitrinaChat = {
+    publicKey: 'pk_live_xxx',
+    apiBaseUrl: 'https://api.vitrinadev.com/api/v1',
+    // optional, all overrides of what Vitrina serves:
     vehicleId: 'veh_123',
     locale: 'es',
     theme: { accent: '#2563eb', position: 'br', logoUrl: 'https://…/logo.png' },
@@ -97,7 +114,7 @@ script, and it auto-initializes:
 `https://api.vitrinadev.com/widget.js` always serves the current release. The
 URL is deliberately unversioned so a dealer never edits their HTML to receive a
 fix; it is cached for five minutes and revalidated with an ETag. Pin a specific
-version instead — `https://cdn.jsdelivr.net/npm/@vitrina/widget@0.2.0/dist/loader.global.js`
+version instead — `https://cdn.jsdelivr.net/npm/@vitrina/widget@0.3.0/dist/loader.global.js`
 — only if you have a reason to hold one back.
 
 The `window.vitrinaChat` object is exactly the config table below. After load, the
@@ -121,9 +138,30 @@ is idempotent against a double-load, and never throws into the host page.
 | `theme.position` | `'br' \| 'bl'`                | no       | `'br'`             | Launcher corner: bottom-right or bottom-left.                               |
 | `theme.logoUrl`  | `string` (http/https URL)     | no       | —                  | Optional logo in the panel header. Non-http(s) URLs are ignored.            |
 | `welcomeMessage` | `string`                      | no       | localized greeting | Greeting shown before the visitor sends the first message.                  |
+| `remoteConfig`   | `boolean`                     | no       | `true`             | Fetch appearance from Vitrina at load. `false` = fully self-contained.      |
 
 Message content is **never** parsed as HTML — every bubble is written via
 `textContent`, so it is XSS-safe by construction.
+
+### Where appearance comes from
+
+`locale`, `theme.*` and `welcomeMessage` are resolved **server-side** from the
+dealer's own Vitrina settings and fetched once at load (`GET /widget/config`).
+That is what lets a dealer restyle their bubble from the admin UI and have
+already-installed widgets pick it up — within about a minute — instead of asking
+every site owner to re-paste a snippet.
+
+Three things worth knowing:
+
+- **Anything you set inline wins.** A widget installed before this existed
+  carries a full inline config and therefore renders exactly as it always has.
+  Treat inline values as per-site overrides.
+- **It fails open.** A network error, an older API without the route, a
+  malformed answer — the widget renders with your inline/default theme and
+  works normally. The request is never on the critical path.
+- **It is cached** in `localStorage` (last known good) and by the browser
+  (60s, ETag-revalidated), so repeat visits paint the right colours with no
+  network wait. Pass `remoteConfig: false` to opt out of the fetch entirely.
 
 ---
 

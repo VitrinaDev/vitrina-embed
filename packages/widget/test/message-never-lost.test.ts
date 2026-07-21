@@ -471,7 +471,11 @@ describe('X2: outbound markdown renders; outbound HTML does not', () => {
       const bubble = shadow.querySelector('.vtr-msg[data-dir="outbound"][data-id="srv_1"]');
       expect(bubble?.textContent).toBe(payload);
     });
-    expect(shadow.querySelector('img')).toBeNull();
+    // Scoped to the transcript: the panel header owns a (hidden, src-less)
+    // logo <img> of ours since ADR 0046. The claim under test is that nothing
+    // from a REPLY's content is ever parsed into an element.
+    expect(shadow.querySelectorAll('.vtr-messages img').length).toBe(0);
+    expect(shadow.querySelector('img[src="x"]')).toBeNull();
 
     w.destroy();
   });
