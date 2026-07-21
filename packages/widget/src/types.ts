@@ -29,6 +29,19 @@ export interface WidgetConfig {
   theme?: WidgetTheme;
   /** Greeting shown before the visitor sends the first message. */
   welcomeMessage?: string;
+  /**
+   * Fetch the dealer's appearance from Vitrina at init (default `true`).
+   *
+   * With it on, `theme` / `welcomeMessage` / `locale` can be managed from the
+   * Vitrina admin UI and reach this widget without anyone editing this page —
+   * which is the point. Anything set HERE still wins, so these fields remain
+   * per-site overrides rather than being taken away.
+   *
+   * Set `false` to keep the widget entirely self-contained (one fewer request,
+   * and immunity from a remote change). A site that pins every field inline is
+   * already unaffected by the fetch; this is for opting out of it entirely.
+   */
+  remoteConfig?: boolean;
 }
 
 /** Handle returned by init(), so the host can control the widget. */

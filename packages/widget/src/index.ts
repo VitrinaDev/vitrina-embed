@@ -14,8 +14,9 @@
 // the dealer inbox; replies simply start arriving over the same SSE→refetch path
 // once José enables AI later — no widget change needed.
 
-import { resolveConfig } from './config';
+import { hasInlineAppearance, resolveConfig } from './config';
 import { makeT } from './i18n';
+import { createRemoteConfigCache } from './remote-config';
 import { createTokenStore } from './token-store';
 import {
   VitrinaTransport,
@@ -42,9 +43,30 @@ function newClientMessageId(): string {
   return `cm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * How long the launcher may stay invisible waiting for the server-resolved
+ * appearance (ADR 0046) before we give up and paint with what we have.
+ *
+ * This timer is scheduled UNCONDITIONALLY, not as an error path: a fetch that
+ * hangs forever, a proxy that swallows the response, a tab throttled in the
+ * background — none of them may leave a dealer's site with no chat button.
+ */
+const REVEAL_TIMEOUT_MS = 1_200;
+
 export function init(config: WidgetConfig): WidgetInstance {
+  // The server-resolved appearance (ADR 0046), layered UNDER anything the
+  // dealer pinned inline. Read the last-known-good copy synchronously so a
+  // repeat visitor's first paint is already correct; the live fetch below
+  // corrects it (and refreshes the cache) within the same pageview.
+  const remoteEnabled = config?.remoteConfig !== false;
+  const cache =
+    remoteEnabled && config?.publicKey
+      ? createRemoteConfigCache(config.publicKey)
+      : null;
+  const cached = cache?.read() ?? null;
+
   // Throws the same message as the original stub on a missing publicKey/apiBaseUrl.
-  const resolved = resolveConfig(config);
+  let resolved = resolveConfig(config, cached);
   const t = makeT(resolved.locale);
   const tokens = createTokenStore(resolved.publicKey);
   const transport = new VitrinaTransport(
@@ -115,10 +137,18 @@ export function init(config: WidgetConfig): WidgetInstance {
     paintBanner();
   };
 
+  // Hold the launcher back ONLY when we are genuinely flying blind: the server
+  // owns the appearance, we have no cached copy, and this page pinned nothing
+  // inline. Every widget installed before ADR 0046 fails that last test, so
+  // they all mount instantly, exactly as they always have.
+  const awaitingFirstConfig =
+    remoteEnabled && !cached && !hasInlineAppearance(config);
+
   const ui = createWidgetUI({
     t,
     theme: resolved.theme,
     welcomeMessage: resolved.welcomeMessage,
+    hidden: awaitingFirstConfig,
     callbacks: {
       onRequestOpen: () => instanceOpen(),
       onRequestClose: () => instanceClose(),
@@ -131,6 +161,40 @@ export function init(config: WidgetConfig): WidgetInstance {
     },
   });
   ui.mount();
+
+  // --- Server-resolved appearance (ADR 0046) --------------------------------
+  let revealTimer: ReturnType<typeof setTimeout> | null = null;
+  const reveal = (): void => {
+    if (revealTimer) {
+      clearTimeout(revealTimer);
+      revealTimer = null;
+    }
+    if (!destroyed) ui.reveal();
+  };
+  if (awaitingFirstConfig) {
+    revealTimer = setTimeout(reveal, REVEAL_TIMEOUT_MS);
+  }
+  if (remoteEnabled) {
+    void transport
+      .fetchConfig()
+      .then((remote) => {
+        if (destroyed) return;
+        if (remote) {
+          cache?.write(remote);
+          resolved = resolveConfig(config, remote);
+          // Locale first: the greeting repaint inside setWelcomeMessage should
+          // land in the language we are switching to, not the one we are
+          // leaving.
+          ui.setLocale(resolved.locale);
+          ui.applyTheme(resolved.theme);
+          ui.setWelcomeMessage(resolved.welcomeMessage);
+        }
+      })
+      .catch(() => {
+        /* fetchConfig never rejects; belt-and-suspenders */
+      })
+      .finally(reveal);
+  }
 
   /**
    * Timestamp for a local echo. Never bare `Date.now()`: a visitor whose clock
@@ -367,6 +431,10 @@ export function init(config: WidgetConfig): WidgetInstance {
       if (typingTimer) {
         clearTimeout(typingTimer);
         typingTimer = null;
+      }
+      if (revealTimer) {
+        clearTimeout(revealTimer);
+        revealTimer = null;
       }
       if (closeStream) {
         closeStream();

@@ -102,6 +102,20 @@ export interface ResolvedConfig {
   welcomeMessage: string | null;
 }
 
+/**
+ * `.data` of `GET /widget/config` — the dealer's appearance, resolved
+ * server-side from their own settings (Vitrina ADR 0046).
+ *
+ * Every field is optional and the server OMITS anything unset, which is the
+ * whole contract: this object is layered UNDER the dealer's inline config, so a
+ * present-but-empty key would silently clobber something they set by hand.
+ */
+export interface RemoteWidgetConfig {
+  theme?: WidgetTheme;
+  welcomeMessage?: string | null;
+  locale?: WidgetLocale;
+}
+
 const INIT_ERROR = '[vitrina-widget] init() requires { publicKey, apiBaseUrl }.';
 
 /** navigator.language heuristic → 'en' only when it clearly starts with 'en'. */
@@ -115,24 +129,65 @@ function detectLocale(): WidgetLocale {
 }
 
 /**
+ * Drop `undefined` values so an explicitly-undefined inline key cannot win a
+ * spread against a real server value. `{ accent: undefined }` is a perfectly
+ * ordinary thing for a host app to produce (`accent: props.brandColor`), and it
+ * means "I have nothing to say", not "blank it".
+ */
+function defined<T extends object>(source: T | undefined): Partial<T> {
+  if (!source) return {};
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(source)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out as Partial<T>;
+}
+
+/**
+ * True when the dealer pinned ANY appearance inline. Used to decide whether we
+ * are relying on the server for the first paint (see index.ts): a site that
+ * already says what it looks like must never be held back waiting for us.
+ */
+export function hasInlineAppearance(config: WidgetConfig): boolean {
+  const theme = defined(config?.theme);
+  return (
+    Object.keys(theme).length > 0 ||
+    config?.welcomeMessage !== undefined ||
+    config?.locale !== undefined
+  );
+}
+
+/**
  * Validate + normalize the public config into the internal shape. Throws the
  * SAME message as the original stub on a missing publicKey/apiBaseUrl (the only
  * hard failure — everything else has a sane default).
+ *
+ * `remote` is the server-resolved appearance (ADR 0046), layered UNDERNEATH the
+ * dealer's inline config. INLINE WINS, and that ordering is the reason this can
+ * ship at all: every widget installed before the endpoint existed carries a
+ * fully-populated inline config, so none of them change appearance by a single
+ * pixel. An inline value is an intentional per-site override; the server answer
+ * is the default for everyone who did not write one.
  */
-export function resolveConfig(config: WidgetConfig): ResolvedConfig {
+export function resolveConfig(
+  config: WidgetConfig,
+  remote?: RemoteWidgetConfig | null,
+): ResolvedConfig {
   if (!config?.publicKey || !config?.apiBaseUrl) {
     throw new Error(INIT_ERROR);
   }
   const apiBaseUrl = config.apiBaseUrl.replace(/\/+$/, '');
-  const locale: WidgetLocale = config.locale ?? detectLocale();
-  const theme = config.theme ?? {};
+  const locale: WidgetLocale =
+    config.locale ?? remote?.locale ?? detectLocale();
+  const theme = { ...defined(remote?.theme), ...defined(config.theme) };
+  const welcome = config.welcomeMessage ?? remote?.welcomeMessage ?? null;
   return {
     publicKey: config.publicKey,
     apiBaseUrl,
     vehicleId: config.vehicleId ?? null,
     locale,
     theme: { ...theme, position: theme.position ?? 'br' },
-    welcomeMessage: config.welcomeMessage ?? null,
+    welcomeMessage: welcome,
   };
 }
 

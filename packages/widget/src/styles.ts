@@ -78,6 +78,10 @@ export const STYLES = `
   padding: 14px 16px; background: var(--vtr-accent); color: #fff;
 }
 .vtr-logo { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; background: rgba(255,255,255,0.15); }
+/* The logo element is always in the DOM so a server-resolved one (ADR 0046) can
+   land without re-ordering the header. Explicit rather than relying on the UA
+   [hidden] rule, which any future display declaration here would silently beat. */
+.vtr-logo[hidden] { display: none; }
 .vtr-title { font-weight: 600; font-size: 15px; flex: 1; margin: 0; }
 .vtr-close {
   background: transparent; border: none; color: #fff; cursor: pointer;

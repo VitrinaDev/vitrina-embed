@@ -15,10 +15,12 @@
 import type {
   BootstrapResult,
   HistoryResult,
+  RemoteWidgetConfig,
   SendResult,
   WidgetMessage,
   WidgetMessageDto,
 } from './config';
+import { coerceRemoteConfig } from './remote-config';
 import type { TokenStore } from './token-store';
 
 export type { WidgetMessage, WidgetMessageDto, MessageStatus } from './config';
@@ -368,6 +370,27 @@ export class VitrinaTransport {
       return res.data;
     }
     return null;
+  }
+
+  /**
+   * Fetch the dealer's server-resolved appearance (Vitrina ADR 0046).
+   *
+   * FAILS OPEN, always: a network error, a 4xx from an older API that has no
+   * such route, a garbage body — all return `null`, and the caller keeps the
+   * inline/default theme it already painted with. A dealer's chat widget must
+   * never be worse off for our having asked a cosmetic question.
+   *
+   * Carries no visitor token: the launcher needs its colour before the visitor
+   * has any identity at all, and the payload is public branding that already
+   * sits in the page around it.
+   */
+  async fetchConfig(): Promise<RemoteWidgetConfig | null> {
+    const res = await this.call<unknown>('/widget/config', {
+      method: 'GET',
+      withVisitor: false,
+    });
+    if (!res.ok) return null;
+    return coerceRemoteConfig(res.data);
   }
 
   /**
