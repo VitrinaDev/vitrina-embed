@@ -140,8 +140,11 @@ is idempotent against a double-load, and never throws into the host page.
 | `welcomeMessage` | `string`                      | no       | localized greeting | Greeting shown before the visitor sends the first message.                  |
 | `remoteConfig`   | `boolean`                     | no       | `true`             | Fetch appearance from Vitrina at load. `false` = fully self-contained.      |
 
-Message content is **never** parsed as HTML — every bubble is written via
-`textContent`, so it is XSS-safe by construction.
+Message content is **never** parsed as HTML. A visitor's own text is written with
+`textContent`; a reply goes through a safe-subset markdown renderer that
+*constructs* DOM nodes and never produces an HTML string. There is no
+`innerHTML` in the package, so an injected `<img onerror=…>` in a reply is a
+text node, not an element — XSS-safe by construction rather than by escaping.
 
 ### Where appearance comes from
 
@@ -180,6 +183,27 @@ Three things worth knowing:
 - **Honeypot.** The composer includes a hidden `hp_website` field (visually hidden
   off-screen, never `display:none`) that is always submitted — empty for a human,
   a spam signal when a bot fills it.
+
+---
+
+## Reliability
+
+Things the widget guarantees, because a dealer's chat failing quietly is worse
+than it failing loudly:
+
+- **A visitor's message is never lost.** The optimistic bubble is a real entry in
+  the message list, not a DOM artifact, so no repaint can destroy it. A failed
+  send leaves it on screen marked *not sent*, with an inline retry that re-uses
+  the original client message id — so retrying a message that did land is
+  idempotent rather than a double-post.
+- **A failed history fetch repaints nothing.** A 500 is distinguishable from an
+  empty conversation, so an error can never blank the panel.
+- **The connection tells the truth.** Offline, reconnecting, sending and failed
+  are separate signals with an explicit precedence, so a successful send can't
+  wipe an offline notice that is still true.
+- **Nothing thrown reaches the host page.** Every transport method returns a
+  typed outcome; `init()` throws only on a missing `publicKey`/`apiBaseUrl`, and
+  the `<script>` loader catches even that.
 
 ---
 
