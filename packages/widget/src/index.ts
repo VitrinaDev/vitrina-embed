@@ -14,6 +14,8 @@
 // the dealer inbox; replies simply start arriving over the same SSE→refetch path
 // once José enables AI later — no widget change needed.
 
+import { createBookingController, type BookingController } from './booking-controller';
+import { createBookingStore } from './booking-store';
 import { hasInlineAppearance, resolveConfig } from './config';
 import { makeT } from './i18n';
 import { createRemoteConfigCache } from './remote-config';
@@ -75,6 +77,7 @@ export function init(config: WidgetConfig): WidgetInstance {
   );
 
   let vehicleId: string | null = resolved.vehicleId;
+  let vehicleLabel: string | null = resolved.vehicleLabel;
   let messages: WidgetMessage[] = [];
   let cursor: string | undefined;
   let destroyed = false;
@@ -144,8 +147,56 @@ export function init(config: WidgetConfig): WidgetInstance {
   const awaitingFirstConfig =
     remoteEnabled && !cached && !hasInlineAppearance(config);
 
+  // --- Booking (S15-21) -----------------------------------------------------
+  //
+  // The controller is created LAZILY, the first time the server says this
+  // tenant takes bookings. A tenant with the agenda off never constructs a
+  // keyring, never mounts a chip, and never reaches a single booking code path
+  // — it gets the widget it has always had.
+  let booking: BookingController | null = null;
+  let bookingEnabled = false;
+
+  function ensureBookingController(): BookingController {
+    if (!booking) {
+      booking = createBookingController({
+        transport,
+        store: createBookingStore(resolved.publicKey),
+        getVehicle: () => ({ id: vehicleId, label: vehicleLabel }),
+        getLocale: () => resolved.locale,
+        onRender: (state) => {
+          if (!destroyed) ui.renderBooking(state);
+        },
+        onChip: (info) => {
+          if (!destroyed) ui.setVisitCount(info);
+        },
+        onChatFallback: (draftKey) => {
+          if (destroyed) return;
+          // The escape hatch is not a dead end and not a waitlist row nobody
+          // watches: it drops the visitor into the conversation with the words
+          // already typed, where a human can actually act.
+          ui.closeBooking();
+          ui.focusComposer(makeT(resolved.locale)(draftKey));
+        },
+        onClose: () => {
+          if (!destroyed) ui.closeBooking();
+        },
+      });
+    }
+    return booking;
+  }
+
+  /** Reflect the tenant's booking gate. Idempotent, and safe in both directions. */
+  function applyBookingGate(enabled: boolean): void {
+    if (destroyed || enabled === bookingEnabled) return;
+    bookingEnabled = enabled;
+    ui.setBookingEnabled(enabled);
+    if (enabled) ensureBookingController().refreshChip();
+    else ui.closeBooking();
+  }
+
   const ui = createWidgetUI({
     t,
+    locale: resolved.locale,
     theme: resolved.theme,
     welcomeMessage: resolved.welcomeMessage,
     hidden: awaitingFirstConfig,
@@ -158,9 +209,43 @@ export function init(config: WidgetConfig): WidgetInstance {
       onRetry: (clientMessageId) => {
         void retryFlow(clientMessageId);
       },
+      onBookingOpen: () => {
+        if (!bookingEnabled) return;
+        ui.openBooking();
+        ensureBookingController().openBooking();
+      },
+      onVisitsOpen: () => {
+        if (!bookingEnabled) return;
+        ui.openBooking();
+        ensureBookingController().openVisits();
+      },
+      // Bound through a getter so the controller can be created after the UI:
+      // the overlay is only built on the first setBookingEnabled(true), which
+      // is always after this point.
+      booking: {
+        onClose: () => ensureBookingController().callbacks.onClose(),
+        onBack: () => ensureBookingController().callbacks.onBack(),
+        onPrevMonth: () => ensureBookingController().callbacks.onPrevMonth(),
+        onNextMonth: () => ensureBookingController().callbacks.onNextMonth(),
+        onPickDay: (day) => ensureBookingController().callbacks.onPickDay(day),
+        onPickSlot: (startsAt) => ensureBookingController().callbacks.onPickSlot(startsAt),
+        onFormChange: (patch) => ensureBookingController().callbacks.onFormChange(patch),
+        onSubmitForm: () => ensureBookingController().callbacks.onSubmitForm(),
+        onConfirm: () => ensureBookingController().callbacks.onConfirm(),
+        onDone: () => ensureBookingController().callbacks.onDone(),
+        onAskCancel: (ref) => ensureBookingController().callbacks.onAskCancel(ref),
+        onKeepVisit: () => ensureBookingController().callbacks.onKeepVisit(),
+        onConfirmCancel: () => ensureBookingController().callbacks.onConfirmCancel(),
+        onBookAgain: () => ensureBookingController().callbacks.onBookAgain(),
+        onChatFallback: (key) => ensureBookingController().callbacks.onChatFallback(key),
+        onRetry: () => ensureBookingController().callbacks.onRetry(),
+      },
     },
   });
   ui.mount();
+  // A repeat visitor's cached config already knows the answer, so the chip is
+  // there on the first paint rather than popping in a round trip later.
+  if (resolved.bookingEnabled) applyBookingGate(true);
 
   // --- Server-resolved appearance (ADR 0046) --------------------------------
   let revealTimer: ReturnType<typeof setTimeout> | null = null;
@@ -188,6 +273,10 @@ export function init(config: WidgetConfig): WidgetInstance {
           ui.setLocale(resolved.locale);
           ui.applyTheme(resolved.theme);
           ui.setWelcomeMessage(resolved.welcomeMessage);
+          // The gate is server-owned and can move in both directions: a dealer
+          // who switches booking off mid-session gets the chip taken away
+          // rather than a chip that opens a 404.
+          applyBookingGate(resolved.bookingEnabled);
         }
       })
       .catch(() => {
@@ -418,16 +507,24 @@ export function init(config: WidgetConfig): WidgetInstance {
   return {
     open: instanceOpen,
     close: instanceClose,
-    setVehicle(id: string | null): void {
+    setVehicle(id: string | null, label?: string | null): void {
       // Live server-side: the next send() carries it as `vehicle_id`, which the
       // webchat ingress persists onto the inbound message's metadata so the
       // dealer inbox shows which listing the visitor asked about. SPA route
-      // changes call this.
+      // changes call this. A booking made afterwards attaches the same id.
       vehicleId = id;
+      // A route change to another car must not leave the OLD car's title on the
+      // booking summary. No id ⇒ no label, ever.
+      if (label !== undefined) vehicleLabel = label;
+      else if (id === null) vehicleLabel = null;
     },
     destroy(): void {
       if (destroyed) return;
       destroyed = true;
+      if (booking) {
+        booking.destroy();
+        booking = null;
+      }
       if (typingTimer) {
         clearTimeout(typingTimer);
         typingTimer = null;

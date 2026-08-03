@@ -90,6 +90,78 @@ export interface Envelope<T> {
   meta?: Record<string, unknown>;
 }
 
+// --- Booking DTOs (mirror vitrina-app/src/api/schemas/widget-appointment.ts) --
+
+/**
+ * One candidate slot on the appointment ledger.
+ *
+ * `label` is the server's LOCAL wall-clock rendering ("2026-08-12 10:00") in the
+ * dealership's timezone, and `labelLong` the long es-CL form. Both are load
+ * bearing: they let the widget show the dealer's own clock without doing a
+ * single timezone conversion in a browser that may be anywhere on earth.
+ *
+ * `available` arrives only with `?include_taken=1`, and only from a server new
+ * enough to send it. ABSENT means "this list is available-only" — the widget
+ * then renders no dimmed grid rather than inventing one.
+ */
+export interface AvailabilitySlot {
+  startsAt: string;
+  endsAt: string;
+  label: string;
+  labelLong: string;
+  available?: boolean;
+}
+
+/** `.data` of GET /widget/appointments/availability. */
+export interface AvailabilityResult {
+  configured: boolean;
+  /** IANA zone of the dealership, or null when they have no schedule yet. */
+  timezone: string | null;
+  slots: AvailabilitySlot[];
+  /**
+   * Last instant the dealer's agenda reaches (`booking_horizon_days` from now).
+   * ABSENT on an older server — the widget then never disables month navigation
+   * and simply renders honest empty months.
+   */
+  horizonEnd?: string;
+  bookingHorizonDays?: number;
+}
+
+/**
+ * The browser-safe appointment projection — a strict server-side allowlist, not
+ * the raw ledger row. `displayId` is the dealer's own `A-<n>` reference, which
+ * is what they read back over the phone; the widget never invents another one.
+ */
+export interface WidgetAppointmentDto {
+  displayId: string;
+  status: string;
+  startsAt: string;
+  endsAt: string;
+  vehicleId: string | null;
+  customerName: string;
+  notes: string | null;
+}
+
+/**
+ * `.data` of POST /widget/appointments (201).
+ *
+ * `managementToken` (`bkt_…`) is returned EXACTLY ONCE and is a capability: it
+ * is the only thing that can read or cancel this booking. It is never logged,
+ * never rendered, and never leaves the booking keyring.
+ */
+export interface BookingResult {
+  appointment: WidgetAppointmentDto;
+  managementToken: string;
+}
+
+/** Why the ledger refused a booking. Carried in `error.details.reason`. */
+export type BookFailureReason =
+  | 'blocked'
+  | 'slot_taken'
+  | 'vehicle_taken'
+  | 'not_configured'
+  | 'invalid';
+
 // --- Resolved config --------------------------------------------------------
 
 export interface ResolvedConfig {
@@ -97,9 +169,19 @@ export interface ResolvedConfig {
   /** Normalized: no trailing slash. Endpoints are `${apiBaseUrl}/widget/*`. */
   apiBaseUrl: string;
   vehicleId: string | null;
+  /** Host-supplied vehicle title; null unless the page passed one. */
+  vehicleLabel: string | null;
   locale: WidgetLocale;
   theme: Required<Pick<WidgetTheme, 'position'>> & WidgetTheme;
   welcomeMessage: string | null;
+  /**
+   * Whether this tenant takes bookings from the widget. SERVER-ONLY, and false
+   * unless `GET /widget/config` said otherwise: a dealer's page cannot turn on
+   * a feature their Vitrina tenant has not enabled, and the booking routes 404
+   * (fail closed) when it is off. False ⇒ no chip and no booking code path is
+   * reachable, which is exactly today's widget.
+   */
+  bookingEnabled: boolean;
 }
 
 /**
@@ -114,6 +196,14 @@ export interface RemoteWidgetConfig {
   theme?: WidgetTheme;
   welcomeMessage?: string | null;
   locale?: WidgetLocale;
+  /**
+   * The tenant takes bookings from the widget (`webchat.booking_enabled`).
+   *
+   * Present ONLY as an explicit `true`, never as `false` — the DTO omits every
+   * unset field, and this one is no exception. Absent therefore means "off",
+   * which is also the default.
+   */
+  bookingEnabled?: true;
 }
 
 const INIT_ERROR = '[vitrina-widget] init() requires { publicKey, apiBaseUrl }.';
@@ -185,9 +275,13 @@ export function resolveConfig(
     publicKey: config.publicKey,
     apiBaseUrl,
     vehicleId: config.vehicleId ?? null,
+    vehicleLabel: config.vehicleLabel ?? null,
     locale,
     theme: { ...theme, position: theme.position ?? 'br' },
     welcomeMessage: welcome,
+    // Deliberately NOT layered with an inline override: a booking surface that
+    // calls routes the tenant has switched off would only ever paint a 404.
+    bookingEnabled: remote?.bookingEnabled === true,
   };
 }
 

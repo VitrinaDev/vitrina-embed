@@ -52,6 +52,12 @@ export function coerceRemoteConfig(input: unknown): RemoteWidgetConfig | null {
     out.welcomeMessage = raw.welcomeMessage;
   }
   if (raw.locale === 'es' || raw.locale === 'en') out.locale = raw.locale;
+  // Booking gate. Only an explicit `true` survives — the server omits the field
+  // when the tenant has bookings off, so `false`, `'true'`, `1` and everything
+  // else are all "off". This coercion is also the localStorage read path, so
+  // without the line the flag would round-trip out of the cache as undefined
+  // and the chip would flicker off on every repeat pageview.
+  if (raw.bookingEnabled === true) out.bookingEnabled = true;
 
   return out;
 }

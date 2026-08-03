@@ -8,15 +8,28 @@
 //   GET  /widget/messages?since=<ISO>            -> {data:{messages[],conversation|null}}
 //   GET  /widget/stream         SSE (fetch-read) -> invalidation pokes (no text)
 //
+// Booking (api/schemas/widget-appointment.ts), gated per tenant — every route
+// 404s when the tenant has bookings off, which is why nothing here is fatal:
+//   GET    /widget/appointments/availability?from&to  -> {data:{configured,timezone,slots}}
+//   POST   /widget/appointments   snake_case body     -> 201 {data:{appointment,managementToken}}
+//   GET    /widget/appointments/:token                -> {data:<appointment>}
+//   DELETE /widget/appointments/:token                -> {data:<cancelled appointment>}
+//
 // Auth on EVERY call: Authorization: Bearer <pk_...>. Visitor-scoped calls add
 // X-Vitrina-Visitor: <vt_...>. NEVER credentials:'include' and NEVER any header
-// outside the fixed CORS allow-list (Authorization, Content-Type, X-Vitrina-Visitor).
+// outside the fixed CORS allow-list (Authorization, Content-Type, X-Vitrina-Visitor)
+// — booking needs no new header, which is the reason it fits on this pipeline.
 
 import type {
+  AvailabilityResult,
+  AvailabilitySlot,
+  BookFailureReason,
+  BookingResult,
   BootstrapResult,
   HistoryResult,
   RemoteWidgetConfig,
   SendResult,
+  WidgetAppointmentDto,
   WidgetMessage,
   WidgetMessageDto,
 } from './config';
@@ -24,6 +37,13 @@ import { coerceRemoteConfig } from './remote-config';
 import type { TokenStore } from './token-store';
 
 export type { WidgetMessage, WidgetMessageDto, MessageStatus } from './config';
+export type {
+  AvailabilityResult,
+  AvailabilitySlot,
+  BookFailureReason,
+  BookingResult,
+  WidgetAppointmentDto,
+} from './config';
 
 /** Input to send(): the visitor's message + optional identity/idempotency. */
 export interface SendInput {
@@ -114,8 +134,67 @@ function parseEventData(data: string | undefined): Record<string, unknown> | nul
 }
 
 type Ok<T> = { ok: true; data: T };
-type Fail = { ok: false; status: number | null };
+/**
+ * `reason` is populated ONLY for calls that opt into reading the error body
+ * (booking). It is the ledger's machine-readable refusal from
+ * `error.details.reason` — never the free-text English message, which is not a
+ * contract and must never be string-matched.
+ */
+type Fail = { ok: false; status: number | null; reason?: BookFailureReason };
 type CallResult<T> = Ok<T> | Fail;
+
+/** The never-throw envelope every transport method answers with. */
+export type TransportResult<T> = CallResult<T>;
+
+const BOOK_FAILURE_REASONS: readonly string[] = [
+  'blocked',
+  'slot_taken',
+  'vehicle_taken',
+  'not_configured',
+  'invalid',
+];
+
+/** Pull `error.details.reason` out of a refusal body, or undefined. */
+function refusalReason(json: unknown): BookFailureReason | undefined {
+  const err = (json as { error?: { details?: { reason?: unknown } } } | null)?.error;
+  const reason = err?.details?.reason;
+  return typeof reason === 'string' && BOOK_FAILURE_REASONS.includes(reason)
+    ? (reason as BookFailureReason)
+    : undefined;
+}
+
+/** Coerce one wire slot, dropping anything without a usable time range. */
+function coerceSlot(input: unknown): AvailabilitySlot | null {
+  if (!input || typeof input !== 'object') return null;
+  const raw = input as Record<string, unknown>;
+  if (typeof raw.startsAt !== 'string' || typeof raw.endsAt !== 'string') return null;
+  const slot: AvailabilitySlot = {
+    startsAt: raw.startsAt,
+    endsAt: raw.endsAt,
+    label: typeof raw.label === 'string' ? raw.label : '',
+    labelLong: typeof raw.labelLong === 'string' ? raw.labelLong : '',
+  };
+  // ABSENT stays absent: it is how the widget knows the server did not answer
+  // the include_taken question, and therefore must not paint a dimmed grid.
+  if (typeof raw.available === 'boolean') slot.available = raw.available;
+  return slot;
+}
+
+/** Coerce one wire appointment, or null when the shape is unusable. */
+function coerceAppointment(input: unknown): WidgetAppointmentDto | null {
+  if (!input || typeof input !== 'object') return null;
+  const raw = input as Record<string, unknown>;
+  if (typeof raw.displayId !== 'string' || typeof raw.startsAt !== 'string') return null;
+  return {
+    displayId: raw.displayId,
+    status: typeof raw.status === 'string' ? raw.status : 'scheduled',
+    startsAt: raw.startsAt,
+    endsAt: typeof raw.endsAt === 'string' ? raw.endsAt : raw.startsAt,
+    vehicleId: typeof raw.vehicleId === 'string' ? raw.vehicleId : null,
+    customerName: typeof raw.customerName === 'string' ? raw.customerName : '',
+    notes: typeof raw.notes === 'string' ? raw.notes : null,
+  };
+}
 
 /**
  * Parse ONE raw SSE frame (the text between `\n\n` boundaries) into its fields.
@@ -299,13 +378,25 @@ export class VitrinaTransport {
    * Single fetch primitive. Unwraps the `ok()` envelope's `.data`. Never throws:
    * a network exception → {ok:false,status:null}; a non-2xx → {ok:false,status};
    * a JSON parse failure → {ok:false,status}. NO credentials:'include'.
+   *
+   * `captureError` additionally reads the refusal body for its machine-readable
+   * `details.reason`. Off by default — reading a body we are going to discard is
+   * pointless work on every ordinary failure, and only booking has a refusal the
+   * visitor needs different words for.
    */
   private async call<T>(
     path: string,
-    opts: { method: 'GET' | 'POST'; body?: string; withVisitor: boolean },
+    opts: {
+      method: 'GET' | 'POST' | 'DELETE';
+      body?: string;
+      withVisitor: boolean;
+      captureError?: boolean;
+    },
   ): Promise<CallResult<T>> {
     const headers = this.authHeaders({
       withVisitor: opts.withVisitor,
+      // DELETE carries no body, so it carries no Content-Type either — one
+      // fewer header for the preflight allow-list to have to admit.
       json: opts.method === 'POST',
     });
     let res: Response;
@@ -318,7 +409,17 @@ export class VitrinaTransport {
     } catch {
       return { ok: false, status: null };
     }
-    if (!res.ok) return { ok: false, status: res.status };
+    if (!res.ok) {
+      if (opts.captureError) {
+        try {
+          const reason = refusalReason(await res.json());
+          if (reason) return { ok: false, status: res.status, reason };
+        } catch {
+          /* no body, or not JSON — the status is all we get */
+        }
+      }
+      return { ok: false, status: res.status };
+    }
     let json: unknown;
     try {
       json = await res.json();
@@ -463,6 +564,134 @@ export class VitrinaTransport {
     }
     if (res.ok) return { ok: true, messages: res.data?.messages ?? [] };
     return { ok: false, status: res.status };
+  }
+
+  // --- Booking (S15-21) -----------------------------------------------------
+  //
+  // None of these carry X-Vitrina-Visitor and none of them retry through
+  // freshBootstrap. A booking is NOT visitor-scoped: it is authorised by the
+  // publishable key plus the origin lock, and it deliberately has no
+  // conversation, lead or contact behind it — booking without ever writing a
+  // message is the entire feature. Coupling them to the visitor session would
+  // invent a dependency the server does not have, and a 401 here means the key
+  // or origin is wrong, which re-minting a visitor token cannot fix.
+
+  /**
+   * Open slots in a window. `from`/`to` are ISO8601 WITH OFFSET; the server
+   * silently clamps `to` to the dealer's booking horizon, so asking for a month
+   * beyond it is honest rather than an error.
+   *
+   * `includeTaken` asks for the unavailable candidates too, so the grid can show
+   * a taken hour dimmed instead of making the agenda look emptier than it is.
+   * An older server ignores the parameter and answers available-only — which the
+   * caller detects by `available` being absent, not by a version check.
+   */
+  async fetchAvailability(params: {
+    from: string;
+    to: string;
+    vehicleId?: string | null;
+    includeTaken?: boolean;
+  }): Promise<CallResult<AvailabilityResult>> {
+    const qs = new URLSearchParams();
+    qs.set('from', params.from);
+    qs.set('to', params.to);
+    if (params.vehicleId) qs.set('vehicle_id', params.vehicleId);
+    if (params.includeTaken) qs.set('include_taken', '1');
+    const res = await this.call<unknown>(
+      `/widget/appointments/availability?${qs.toString()}`,
+      { method: 'GET', withVisitor: false },
+    );
+    if (!res.ok) return res;
+    const raw = (res.data ?? {}) as Record<string, unknown>;
+    const out: AvailabilityResult = {
+      configured: raw.configured === true,
+      timezone: typeof raw.timezone === 'string' ? raw.timezone : null,
+      slots: Array.isArray(raw.slots)
+        ? raw.slots.map(coerceSlot).filter((s): s is AvailabilitySlot => s !== null)
+        : [],
+    };
+    // Accept either casing. The chat DTOs are camelCase, but this pair is a
+    // late addition to a schedule engine that speaks snake_case internally, and
+    // a widget that guesses wrong would silently lose the horizon and re-enable
+    // navigation into months it cannot answer for.
+    const horizonEnd = raw.horizonEnd ?? raw.horizon_end;
+    if (typeof horizonEnd === 'string') out.horizonEnd = horizonEnd;
+    const days = raw.bookingHorizonDays ?? raw.booking_horizon_days;
+    if (typeof days === 'number' && Number.isFinite(days)) out.bookingHorizonDays = days;
+    return { ok: true, data: out };
+  }
+
+  /**
+   * Book the tenant's default test-drive slot. `consent: true` is ALWAYS sent —
+   * the visitor ticked a box on a public form collecting a Chilean phone number,
+   * and a decorative checkbox would be worse than no checkbox.
+   *
+   * A refusal is a 400 carrying `details.reason`; the caller branches on that
+   * and never on the message.
+   */
+  async bookAppointment(input: {
+    startsAt: string;
+    endsAt: string;
+    name: string;
+    phone?: string;
+    email?: string;
+    vehicleId?: string | null;
+    notes?: string;
+  }): Promise<CallResult<BookingResult>> {
+    const body: Record<string, unknown> = {
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      name: input.name,
+      consent: true,
+    };
+    if (input.phone) body.phone = input.phone;
+    if (input.email) body.email = input.email;
+    if (input.vehicleId) body.vehicle_id = input.vehicleId;
+    if (input.notes) body.notes = input.notes;
+
+    const res = await this.call<unknown>('/widget/appointments', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      withVisitor: false,
+      captureError: true,
+    });
+    if (!res.ok) return res;
+    const raw = (res.data ?? {}) as Record<string, unknown>;
+    const appointment = coerceAppointment(raw.appointment);
+    const token = raw.managementToken;
+    if (!appointment || typeof token !== 'string' || token === '') {
+      // A 201 we cannot read is a failure, not a booking. Reporting success
+      // here would tell the visitor their visit is confirmed while dropping the
+      // only token that could ever cancel it.
+      return { ok: false, status: 201 };
+    }
+    return { ok: true, data: { appointment, managementToken: token } };
+  }
+
+  /**
+   * Read one booking back by its management token. 404 is the ONLY miss signal
+   * (unknown token, wrong tenant, too-short string) — there is no enumeration
+   * oracle here, and the caller uses it to drop a dead key from its keyring.
+   */
+  async fetchBooking(token: string): Promise<CallResult<WidgetAppointmentDto>> {
+    const res = await this.call<unknown>(
+      `/widget/appointments/${encodeURIComponent(token)}`,
+      { method: 'GET', withVisitor: false },
+    );
+    if (!res.ok) return res;
+    const appointment = coerceAppointment(res.data);
+    return appointment ? { ok: true, data: appointment } : { ok: false, status: 200 };
+  }
+
+  /** Cancel a booking. Idempotent server-side; answers the cancelled DTO. */
+  async cancelBooking(token: string): Promise<CallResult<WidgetAppointmentDto>> {
+    const res = await this.call<unknown>(
+      `/widget/appointments/${encodeURIComponent(token)}`,
+      { method: 'DELETE', withVisitor: false },
+    );
+    if (!res.ok) return res;
+    const appointment = coerceAppointment(res.data);
+    return appointment ? { ok: true, data: appointment } : { ok: false, status: 200 };
   }
 
   /**

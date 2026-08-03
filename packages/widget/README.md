@@ -133,12 +133,31 @@ is idempotent against a double-load, and never throws into the host page.
 | `publicKey`      | `string`                      | **yes**  | —                  | Publishable widget key (`pk_…`), origin-locked. Safe to ship in page source. |
 | `apiBaseUrl`     | `string`                      | **yes**  | —                  | Vitrina API base, e.g. `https://<host>/api/v1`. Trailing slash is trimmed.  |
 | `vehicleId`      | `string`                      | no       | `null`             | Pre-attach the inquiry to a vehicle (the `id` from `/stock`).               |
+| `vehicleLabel`   | `string`                      | no       | `null`             | Display title for `vehicleId`, e.g. `Toyota Yaris 2021`. Shown on the booking summary only when BOTH are set. |
 | `locale`         | `'es' \| 'en'`                | no       | auto (`navigator`) | Widget chrome language. Falls back to `es` (Chilean market default).        |
 | `theme.accent`   | `string` (CSS color)          | no       | `#111827`          | Brand accent for the launcher + inbound bubbles. Sanitized; bad values fall back. |
 | `theme.position` | `'br' \| 'bl'`                | no       | `'br'`             | Launcher corner: bottom-right or bottom-left.                               |
 | `theme.logoUrl`  | `string` (http/https URL)     | no       | —                  | Optional logo in the panel header. Non-http(s) URLs are ignored.            |
 | `welcomeMessage` | `string`                      | no       | localized greeting | Greeting shown before the visitor sends the first message.                  |
 | `remoteConfig`   | `boolean`                     | no       | `true`             | Fetch appearance from Vitrina at load. `false` = fully self-contained.      |
+
+### Booking ("Agendar visita")
+
+There is no option for this. Booking is **server-gated per tenant**: `GET
+/widget/config` answers `bookingEnabled` and nothing on the page can turn it on,
+because the booking routes 404 for a tenant that has it off. When it is on, a
+chip appears over the composer and opens a `fecha → hora → datos → resumen`
+overlay laid over the panel; the conversation underneath is never destroyed.
+
+A confirmed booking is kept in `localStorage` under
+`vtr:widget:<pk_>:bookings` as a list of management tokens, which is how a
+returning visitor sees and cancels their own visit with no account. Those
+tokens are capabilities — the widget never renders one, never logs one, and
+drops any the server stops resolving.
+
+Set `vehicleLabel` alongside `vehicleId` if you want the car named on the
+booking summary; without a label the widget shows no vehicle line at all rather
+than an empty card.
 
 Message content is **never** parsed as HTML. A visitor's own text is written with
 `textContent`; a reply goes through a safe-subset markdown renderer that

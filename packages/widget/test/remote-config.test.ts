@@ -14,7 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { coerceRemoteConfig } from '../src/remote-config';
+import { coerceRemoteConfig, createRemoteConfigCache } from '../src/remote-config';
 import { hasInlineAppearance, resolveConfig } from '../src/config';
 import { init } from '../src/index';
 
@@ -210,6 +210,81 @@ describe('coerceRemoteConfig', () => {
   it('returns null for a non-object', () => {
     expect(coerceRemoteConfig(null)).toBeNull();
     expect(coerceRemoteConfig('nope')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The booking gate rides this same coercion, and the coercion DROPS unknown
+// keys by design. A field that is not named here is silently discarded — which
+// is exactly what happened to `bookingEnabled` before this block existed: the
+// server sent it, the widget threw it away, and the chip never appeared.
+// ---------------------------------------------------------------------------
+describe('coerceRemoteConfig carries the booking gate', () => {
+  it('keeps an explicit true', () => {
+    expect(coerceRemoteConfig({ bookingEnabled: true })).toEqual({ bookingEnabled: true });
+  });
+
+  it('keeps it alongside everything else the server sends', () => {
+    expect(coerceRemoteConfig({ ...SERVED, bookingEnabled: true })).toEqual({
+      ...SERVED,
+      bookingEnabled: true,
+    });
+  });
+
+  it('treats anything that is not an explicit true as off', () => {
+    // The DTO omits the field when the tenant has booking off, so `false` never
+    // arrives on the wire — but a hand-edited localStorage entry can say
+    // anything, and every one of these means "no chip".
+    for (const value of [false, 'true', 1, null, {}, []]) {
+      expect(coerceRemoteConfig({ bookingEnabled: value })).toEqual({});
+    }
+  });
+
+  it('survives the localStorage cache round-trip', () => {
+    // The cache is read SYNCHRONOUSLY on the next pageview to paint before the
+    // network answers. If the flag did not round-trip, a repeat visitor's chip
+    // would flicker off on every page load.
+    const cache = createRemoteConfigCache(PK);
+    cache.write({ ...SERVED, bookingEnabled: true });
+    expect(globalThis.localStorage.getItem(CONFIG_KEY)).toContain('bookingEnabled');
+    expect(cache.read()).toEqual({ ...SERVED, bookingEnabled: true });
+  });
+});
+
+describe('resolveConfig carries the booking gate through', () => {
+  it('is false with no server answer at all (every pre-S15-21 install)', () => {
+    expect(resolveConfig({ publicKey: PK, apiBaseUrl: BASE }).bookingEnabled).toBe(false);
+  });
+
+  it('is false when the server omitted the field', () => {
+    expect(resolveConfig({ publicKey: PK, apiBaseUrl: BASE }, SERVED).bookingEnabled).toBe(false);
+  });
+
+  it('is true only when the server said so', () => {
+    expect(
+      resolveConfig({ publicKey: PK, apiBaseUrl: BASE }, { ...SERVED, bookingEnabled: true })
+        .bookingEnabled,
+    ).toBe(true);
+  });
+
+  it('cannot be forced on by the dealer page (the routes would only 404)', () => {
+    const r = resolveConfig(
+      { publicKey: PK, apiBaseUrl: BASE, bookingEnabled: true } as never,
+      SERVED,
+    );
+    expect(r.bookingEnabled).toBe(false);
+  });
+
+  it('carries an inline vehicleLabel, and defaults it to null', () => {
+    expect(resolveConfig({ publicKey: PK, apiBaseUrl: BASE }).vehicleLabel).toBeNull();
+    expect(
+      resolveConfig({
+        publicKey: PK,
+        apiBaseUrl: BASE,
+        vehicleId: 'veh_9',
+        vehicleLabel: 'Toyota Yaris 2021',
+      }).vehicleLabel,
+    ).toBe('Toyota Yaris 2021');
   });
 });
 

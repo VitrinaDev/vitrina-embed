@@ -1,5 +1,44 @@
 # @vitrina/widget
 
+## 0.4.0
+
+A visitor can book a visit without writing a single message.
+
+### Booking, inside the chat (S15-21)
+
+When the dealer switches on **Agendar visita** (Configuración › Conexiones ›
+Web chat), a chip appears over the composer: fecha → hora → datos → resumen →
+confirmación, against the dealership's real calendar (`/widget/appointments*`,
+the same ledger the team and the AI book into). Days without hours are dimmed,
+month navigation stops at the tenant's real booking horizon and says so, and a
+taken hour is shown greyed rather than hidden — the agenda looks real because
+it is. The confirmation hands the visitor a reservation code (`A-n`, the same
+folio the dealer sees) and "Mis visitas" lets the same browser review and
+cancel it — the management token never leaves localStorage and is a
+capability, so it is never rendered or logged.
+
+**Consent is required and recorded.** The form does not submit without the
+checkbox, and the booking carries the timestamped consent.
+
+**The race is handled honestly.** If the hour (or the car) is taken while the
+visitor types, the widget says which of the two happened, refreshes the grid,
+and keeps everything they wrote.
+
+**Tenant off = byte-identical widget.** Without `booking_enabled` there is no
+chip, no tab, no card — nothing to discover.
+
+### Mobile, finally full-screen
+
+Under 480px the panel is now a full-screen sheet (`100dvh`) instead of a
+desktop card floating on a phone. This applies to chat too, booking or not.
+
+### Notes
+
+- Requires vitrina-app ≥ the S15-21/BE-C API for the full experience
+  (horizon, dimmed hours, per-reason refusals); against an older API the flow
+  still completes with an available-only grid and generic copy.
+- Bundle: 11.4 → 23.3 KB gzipped (the flow, its strings and its styles).
+
 ## 0.3.0
 
 The widget asks Vitrina what it should look like.
