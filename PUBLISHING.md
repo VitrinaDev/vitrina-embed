@@ -33,12 +33,13 @@ Setup status:
 - [x] Repo pushed to `github.com/VitrinaDev/vitrina-embed` and made **public**
       (provenance requires it; the widget is browser-shipped client code).
 - [x] Repo → Settings → **Environments** → `npm-publish`, restricted to `v*` **tags**.
-- [ ] **On npmjs.com (only an org owner can do this):** `@vitrina/widget` →
+- [x] **On npmjs.com (only an org owner can do this):** `@vitrina/widget` →
       Settings → **Trusted Publisher** → GitHub Actions →
       organization `VitrinaDev`, repository `vitrina-embed`,
       workflow `publish.yml`, environment `npm-publish`.
 
-Once that last box is ticked, every release is:
+All boxes ticked — proven by the tag-triggered CI publishes of 0.2.0, 0.3.0
+and 0.4.0. Every release is:
 
 ```bash
 # bump packages/widget/package.json version (+ CHANGELOG), commit, then:

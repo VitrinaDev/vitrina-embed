@@ -1,8 +1,9 @@
 # vitrina-embed
 
 The code that runs on **the dealer's own website**, not ours: an embeddable AI
-chat widget that drops into any page and lands the conversation in the dealer's
-Vitrina inbox.
+chat widget that drops into any page, lands the conversation in the dealer's
+Vitrina inbox — and, for tenants that switch it on, books a real visit against
+the dealership's own calendar without the visitor writing a single message.
 
 Published to public npm under the `@vitrina` scope — a dealer's developer
 installs it with no auth, no account, and no build step if they don't want one.
@@ -35,7 +36,7 @@ Full options, the imperative handle (`open()` / `close()` / `setVehicle()` /
 
 | Package | What it is | Status |
 |---|---|---|
-| [`@vitrina/widget`](packages/widget) | The embeddable chat widget: Shadow-DOM launcher + conversation panel, SSE transport, server-resolved theming, and a `<script>` loader for no-build sites. | **shipped** — [![npm](https://img.shields.io/npm/v/@vitrina/widget.svg)](https://www.npmjs.com/package/@vitrina/widget) |
+| [`@vitrina/widget`](packages/widget) | The embeddable chat widget: Shadow-DOM launcher + conversation panel, SSE transport, server-resolved theming, visit booking ("Agendar visita", per-tenant), and a `<script>` loader for no-build sites. | **shipped** — [![npm](https://img.shields.io/npm/v/@vitrina/widget.svg)](https://www.npmjs.com/package/@vitrina/widget) |
 
 Reserved for later, and deliberately not scaffolded until something needs them:
 `@vitrina/react` (headless hooks) and `@vitrina/stock-ui` (themeable stock
@@ -54,9 +55,13 @@ dealer's page ──────┼──► POST /widget/conversations   who is
  (pk_ key +         │
   visitor token)    ├──► POST /widget/messages        the visitor said this
                     │
-                    └──◄  GET /widget/stream          SSE: something changed
-                                 │                          (payload-free)
-                                 └──► GET /widget/messages   ← fetch the text
+                    ├──◄  GET /widget/stream          SSE: something changed
+                    │            │                          (payload-free)
+                    │            └──► GET /widget/messages   ← fetch the text
+                    │
+                    ├──► GET  /widget/appointments/availability   real open hours
+                    ├──► POST /widget/appointments                book the visit
+                    └──► GET|DELETE /widget/appointments/:token   review / cancel
 ```
 
 Three properties are worth knowing before changing anything here:
@@ -73,12 +78,20 @@ Three properties are worth knowing before changing anything here:
 - **AI auto-reply is per-dealer and defaults OFF.** Out of the box the visitor is
   talking to a human through the dealer's inbox. Replies arrive over the same
   SSE→refetch path either way, so turning AI on later needs no widget change.
+- **Booking is server-gated and defaults OFF.** The "Agendar visita" chip exists
+  only when `GET /widget/config` answers `bookingEnabled: true` (Configuración ›
+  Conexiones › Web chat), and the booking routes 404 for a tenant that has it
+  off — nothing on the page can turn it on. Bookings land in the same
+  appointment ledger the team and the AI book into; the visitor's proof is a
+  one-time `bkt_` management token held in `localStorage` (a capability — it is
+  the cancel right, never rendered, never logged).
 
 ### Is the key sitting in the page a problem?
 
 No — that is what it is for. `pk_` is a **publishable** credential: a stateless,
 origin-locked HMAC token granting only `stock:read` + `leads:intake` +
-`widget:chat`, and only on the domains baked into it at mint time. A key lifted
+`widget:chat` + `appointments:intake`, and only on the domains baked into it at
+mint time. A key lifted
 from `dealerA.cl` is inert anywhere else. Its security is the server-side origin
 lock, never secrecy.
 
@@ -95,20 +108,22 @@ back to a default rather than being injected.
 ```bash
 pnpm install
 pnpm -r build        # tsup → dist/index.js (ESM) + dist/loader.global.js (IIFE)
-pnpm -r test         # vitest + happy-dom — 173 tests across 17 files
+pnpm -r test         # vitest + happy-dom — 227 tests across 19 files
 pnpm -r typecheck
 ```
 
 The tests are the contract. They drive a real `init()` against a mocked fetch and
 pin down the things that are expensive to get wrong: a visitor's message is never
 lost on a failed send, a failed history fetch repaints nothing, injected HTML in
-a reply stays a text node, and the config fetch fails open.
+a reply stays a text node, the config fetch fails open, a half-typed booking
+form survives a taken-slot bounce, and a tenant with booking off gets a widget
+byte-identical to one that never heard of it.
 
 ## Releasing
 
 ```bash
 # bump packages/widget/package.json + CHANGELOG.md, commit, then:
-git tag v0.3.1 && git push origin v0.3.1
+git tag v0.4.1 && git push origin v0.4.1
 ```
 
 A `v*` tag triggers `.github/workflows/publish.yml`, which verifies the tag
