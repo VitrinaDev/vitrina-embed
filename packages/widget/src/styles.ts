@@ -16,6 +16,8 @@ export const STYLES = `
   --vtr-border: #e5e7eb;
   --vtr-bubble-in: var(--vtr-accent);
   --vtr-bubble-out: #f3f4f6;
+  --vtr-danger: #b91c1c;
+  --vtr-ok: #15803d;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.4;
 }
@@ -26,6 +28,8 @@ export const STYLES = `
     --vtr-muted: #9ca3af;
     --vtr-border: #374151;
     --vtr-bubble-out: #374151;
+    --vtr-danger: #f87171;
+    --vtr-ok: #4ade80;
   }
 }
 * { box-sizing: border-box; }
@@ -218,5 +222,220 @@ export const STYLES = `
   position: absolute !important; left: -9999px !important; top: auto !important;
   width: 1px !important; height: 1px !important; overflow: hidden !important;
   opacity: 0 !important; pointer-events: none !important;
+}
+
+/* Booking (S15-21). Every colour is an existing --vtr-* custom property, so
+   dark mode came free and the dealer's accent reaches the calendar with no
+   dynamic rule. Nothing below is ever built from user input.
+
+   NOTE: this string ships verbatim to every dealer page — comments here cost
+   real bytes on a real page load, so they stay short. */
+
+/* Entry chips over the composer. Hidden with the composer while the overlay is
+   up: one screen, one thing to do, nothing tabbable behind it. */
+.vtr-actions {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px 12px 0;
+}
+.vtr-actions[hidden] { display: none; }
+.vtr-chip {
+  display: inline-flex; align-items: center; height: 30px; padding: 0 12px;
+  border-radius: 999px; font: inherit; font-size: 12.5px; font-weight: 500;
+  cursor: pointer;
+  background: transparent; color: var(--vtr-accent);
+  border: 1px solid var(--vtr-accent);
+}
+.vtr-chip:hover { background: var(--vtr-bubble-out); }
+.vtr-chip:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+.vtr-chip-visits { color: var(--vtr-muted); border-color: var(--vtr-border); }
+.vtr-chip[hidden] { display: none; }
+.vtr-panel[data-booking] .vtr-composer,
+.vtr-panel[data-booking] .vtr-actions { display: none; }
+
+/* The overlay itself. Covers the panel, does NOT replace it — the transcript is
+   still in the DOM underneath, untouched, and closing is a hidden flip. */
+.vtr-booking {
+  position: absolute; inset: 0; z-index: 1;
+  background: var(--vtr-surface); color: var(--vtr-text);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.vtr-booking[hidden] { display: none; }
+
+.vtr-bk-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 16px; background: var(--vtr-accent); color: #fff;
+}
+.vtr-bk-title { font-weight: 600; font-size: 15px; flex: 1; }
+.vtr-bk-back, .vtr-bk-close {
+  background: transparent; border: none; color: #fff; cursor: pointer;
+  width: 30px; height: 30px; border-radius: 8px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; line-height: 1;
+}
+.vtr-bk-back svg { width: 20px; height: 20px; }
+.vtr-bk-back:hover, .vtr-bk-close:hover { background: rgba(255,255,255,0.18); }
+.vtr-bk-back[hidden] { display: none; }
+
+.vtr-bk-step {
+  padding: 8px 16px 0; font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--vtr-muted);
+}
+.vtr-bk-step[hidden] { display: none; }
+
+.vtr-bk-body {
+  flex: 1; overflow-y: auto; padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.vtr-bk-foot {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 16px 14px; border-top: 1px solid var(--vtr-border);
+}
+.vtr-bk-foot[hidden] { display: none; }
+.vtr-bk-error { font-size: 12px; color: var(--vtr-danger); text-align: center; }
+.vtr-bk-error[hidden] { display: none; }
+.vtr-bk-primary {
+  background: var(--vtr-accent); color: #fff; border: none; cursor: pointer;
+  border-radius: 10px; height: 42px; font: inherit; font-weight: 600; font-size: 14px;
+}
+.vtr-bk-primary:disabled { opacity: 0.45; cursor: default; }
+.vtr-bk-primary[hidden] { display: none; }
+.vtr-bk-secondary {
+  background: transparent; color: var(--vtr-danger); cursor: pointer;
+  border: 1px solid var(--vtr-border); border-radius: 10px; height: 38px;
+  font: inherit; font-weight: 500; font-size: 13px;
+}
+.vtr-bk-secondary:disabled { opacity: 0.5; cursor: default; }
+.vtr-bk-secondary[hidden] { display: none; }
+
+/* Month navigation + the hand-rolled grid (no date library, zero deps). */
+.vtr-bk-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.vtr-bk-month { font-size: 14px; font-weight: 600; text-transform: capitalize; }
+.vtr-bk-navbtn {
+  background: transparent; border: 1px solid var(--vtr-border); border-radius: 8px;
+  color: var(--vtr-text); cursor: pointer; width: 32px; height: 32px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.vtr-bk-navbtn svg { width: 18px; height: 18px; }
+.vtr-bk-navnext svg { transform: rotate(180deg); }
+.vtr-bk-navbtn:disabled { opacity: 0.35; cursor: default; }
+.vtr-bk-week, .vtr-bk-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+}
+.vtr-bk-wd {
+  font-size: 10.5px; text-align: center; color: var(--vtr-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.vtr-bk-pad { display: block; }
+.vtr-bk-day {
+  position: relative; aspect-ratio: 1 / 1; min-height: 34px;
+  background: transparent; border: 1px solid transparent; border-radius: 9px;
+  color: var(--vtr-text); font: inherit; font-size: 13px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+}
+.vtr-bk-day:disabled { color: var(--vtr-muted); opacity: 0.4; cursor: default; }
+.vtr-bk-day:not(:disabled):hover { background: var(--vtr-bubble-out); }
+.vtr-bk-day[aria-current] { border-color: var(--vtr-accent); background: var(--vtr-bubble-out); }
+.vtr-bk-day:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 1px; }
+/* The ember dot: the whole trust device on a thin agenda. */
+.vtr-bk-dot { width: 4px; height: 4px; border-radius: 999px; background: var(--vtr-accent); }
+.vtr-bk-count { font-size: 12px; color: var(--vtr-muted); }
+.vtr-bk-note { font-size: 12px; line-height: 1.5; color: var(--vtr-muted); }
+.vtr-bk-empty { display: flex; flex-direction: column; gap: 6px; }
+.vtr-bk-empty-title { font-size: 13.5px; font-weight: 600; }
+.vtr-bk-warn { font-size: 13px; line-height: 1.5; color: var(--vtr-danger); }
+
+/* Low-tone exit to a human, present at every dead end. */
+.vtr-bk-fallback, .vtr-bk-linkbtn {
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  font: inherit; font-size: 12px; text-align: left;
+  color: var(--vtr-muted); text-decoration: underline;
+}
+.vtr-bk-linkbtn { color: var(--vtr-accent); font-weight: 600; }
+.vtr-bk-fallback:focus-visible, .vtr-bk-linkbtn:focus-visible {
+  outline: 2px solid var(--vtr-accent); outline-offset: 2px;
+}
+
+/* Slot grid. A taken hour is DIMMED, never removed. */
+.vtr-bk-daylabel { font-size: 13.5px; font-weight: 600; text-transform: capitalize; }
+.vtr-bk-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.vtr-bk-slot {
+  height: 36px; border-radius: 9px; cursor: pointer;
+  background: transparent; color: var(--vtr-text);
+  border: 1px solid var(--vtr-border); font: inherit; font-size: 13px;
+}
+.vtr-bk-slot:not(:disabled):hover { border-color: var(--vtr-accent); }
+.vtr-bk-slot[aria-current] { border-color: var(--vtr-accent); background: var(--vtr-bubble-out); }
+.vtr-bk-slot[data-taken] { opacity: 0.38; cursor: default; text-decoration: line-through; }
+.vtr-bk-slot:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 1px; }
+
+/* Form */
+.vtr-bk-form { display: flex; flex-direction: column; gap: 10px; }
+.vtr-bk-label { display: flex; flex-direction: column; gap: 4px; }
+.vtr-bk-label-text { font-size: 12px; color: var(--vtr-muted); }
+.vtr-bk-input {
+  border: 1px solid var(--vtr-border); border-radius: 10px; padding: 9px 11px;
+  font: inherit; font-size: 14px;
+  background: var(--vtr-surface); color: var(--vtr-text);
+}
+.vtr-bk-input:focus { outline: 2px solid var(--vtr-accent); outline-offset: -1px; }
+.vtr-bk-consent {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12.5px; line-height: 1.45; cursor: pointer;
+}
+.vtr-bk-check { width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--vtr-accent); flex: none; }
+
+/* Summary + confirmation */
+.vtr-bk-card {
+  border: 1px solid var(--vtr-border); border-radius: 12px; padding: 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.vtr-bk-when { font-size: 15px; font-weight: 600; text-transform: capitalize; }
+.vtr-bk-when[data-struck] { text-decoration: line-through; color: var(--vtr-muted); }
+.vtr-bk-time { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+.vtr-bk-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.vtr-bk-rowkey { color: var(--vtr-muted); flex: none; }
+.vtr-bk-rowval { text-align: right; }
+.vtr-bk-done svg { width: 44px; height: 44px; color: var(--vtr-ok); }
+.vtr-bk-codelabel {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--vtr-muted);
+}
+/* The dealer's own A-<n>. Mono, because it gets read back over the phone. */
+.vtr-bk-code, .vtr-bk-code-inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 20px; font-weight: 600; letter-spacing: 0.02em;
+}
+.vtr-bk-code-inline { font-size: 12px; font-weight: 500; color: var(--vtr-muted); }
+
+/* Mis visitas */
+.vtr-bk-section {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--vtr-muted); margin-top: 4px;
+}
+.vtr-bk-visit {
+  border: 1px solid var(--vtr-border); border-radius: 12px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.vtr-bk-visit-when { font-size: 13.5px; font-weight: 600; text-transform: capitalize; }
+.vtr-bk-visit-when[data-struck] { text-decoration: line-through; color: var(--vtr-muted); }
+.vtr-bk-visit-meta { display: flex; gap: 8px; align-items: baseline; }
+.vtr-bk-visit-status { font-size: 11.5px; color: var(--vtr-muted); }
+
+/* Mobile. Ships regardless of booking: a 360x520 card floating over a phone is
+   a desktop widget on a screen that has no desktop. 100dvh, never vh — vh
+   measures a viewport the browser chrome is standing in front of. */
+@media (max-width: 480px) {
+  .vtr-panel {
+    /* fixed, not absolute: the panel's offset parent is the 0x0 .vtr-root
+       pinned 20px off the corner, so inset:0 against IT would fill nothing. */
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    max-width: 100%;
+    max-height: 100dvh;
+    border-radius: 0;
+    border: none;
+  }
 }
 `;

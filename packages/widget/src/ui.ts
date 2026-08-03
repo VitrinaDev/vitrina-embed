@@ -8,6 +8,12 @@
 // innerHTML anywhere, no eval, no remote script/style/asset (the only remote
 // assets are a validated logo <img> and validated http(s) link targets).
 
+import {
+  createBookingUi,
+  type BookingCallbacks,
+  type BookingUi,
+  type BookingViewState,
+} from './booking-ui';
 import type { WidgetMessage, WidgetNotice } from './config';
 import { makeT, type StringKey, type Translate } from './i18n';
 import { renderMarkdown } from './markdown';
@@ -26,10 +32,42 @@ export interface WidgetUiCallbacks {
   onRequestClose(): void;
   /** Retry a failed send, re-using its ORIGINAL client message id (idempotent). */
   onRetry(clientMessageId: string): void;
+  /** "Agendar visita" chip. Absent ⇒ no booking surface is ever constructed. */
+  onBookingOpen?(): void;
+  /** "Mis visitas · N" chip. */
+  onVisitsOpen?(): void;
+  /** Everything the booking overlay reports. */
+  booking?: BookingCallbacks;
 }
+
+/**
+ * A booking overlay built without callbacks still has to be coherent — it just
+ * reports nowhere. Cheaper and safer than making every field of
+ * BookingCallbacks optional at the call site.
+ */
+const noopBooking: BookingCallbacks = {
+  onClose: () => {},
+  onBack: () => {},
+  onPrevMonth: () => {},
+  onNextMonth: () => {},
+  onPickDay: () => {},
+  onPickSlot: () => {},
+  onFormChange: () => {},
+  onSubmitForm: () => {},
+  onConfirm: () => {},
+  onDone: () => {},
+  onAskCancel: () => {},
+  onKeepVisit: () => {},
+  onConfirmCancel: () => {},
+  onBookAgain: () => {},
+  onChatFallback: () => {},
+  onRetry: () => {},
+};
 
 export interface WidgetUiOptions {
   t: Translate;
+  /** The locale `t` was built from — the calendar needs it for Intl, not just t. */
+  locale: WidgetLocale;
   theme: WidgetTheme;
   welcomeMessage: string | null;
   callbacks: WidgetUiCallbacks;
@@ -77,6 +115,29 @@ export interface WidgetUi {
   /** Show a widget mounted with `hidden`. Idempotent, and safe to call when it
    *  was never hidden in the first place. */
   reveal(): void;
+
+  // --- Booking (S15-21) -----------------------------------------------------
+  // Every one of these is inert until setBookingEnabled(true). Nothing is even
+  // CONSTRUCTED before then: a tenant without the agenda gets the same DOM the
+  // widget has always produced, node for node.
+
+  /** Show/hide the booking entry over the composer. */
+  setBookingEnabled(enabled: boolean): void;
+  /** Chip presence + the count on "Mis visitas · N". */
+  setVisitCount(info: { hasBookings: boolean; upcoming: number }): void;
+  /** Cover the panel with the booking overlay. The transcript is NOT destroyed. */
+  openBooking(): void;
+  /** Uncover the transcript. A `hidden` flip, never a re-render. */
+  closeBooking(): void;
+  isBookingOpen(): boolean;
+  /** Full repaint of the overlay from the caller's state. */
+  renderBooking(state: BookingViewState): void;
+  /**
+   * Put a draft in the composer and focus it. The escape hatch out of every
+   * booking dead end (empty month, booked on another device) is a human, and
+   * the human is one message away in the panel behind the overlay.
+   */
+  focusComposer(draft?: string): void;
 }
 
 interface TrackedListener {
@@ -117,6 +178,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   // Both are MUTABLE: the server-resolved appearance (ADR 0046) can land after
   // mount and must be able to change the language and the greeting in place.
   let t: Translate = opts.t;
+  let currentLocale: WidgetLocale = opts.locale;
   let welcomeMessage: string | null = opts.welcomeMessage;
 
   const host = document.createElement('div');
@@ -419,6 +481,63 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     existing.replaceWith(el);
   }
 
+  // --- Booking surface (constructed on demand) --------------------------------
+  //
+  // LAZY BY DESIGN. `setBookingEnabled(true)` is the only thing that can bring
+  // any of this into existence, and it is only ever called for a tenant whose
+  // `GET /widget/config` said `bookingEnabled`. Until then the panel's children
+  // are header → messages → typing → banner → composer → footer, exactly as
+  // they have always been — not a hidden chip, not an empty overlay, nothing.
+  let actions: HTMLElement | null = null;
+  let bookBtn: HTMLButtonElement | null = null;
+  let visitsBtn: HTMLButtonElement | null = null;
+  let bookingUi: BookingUi | null = null;
+  let bookingOpen = false;
+  let visitInfo = { hasBookings: false, upcoming: 0 };
+
+  function paintVisitsChip(): void {
+    if (!visitsBtn) return;
+    visitsBtn.hidden = !visitInfo.hasBookings;
+    visitsBtn.textContent =
+      visitInfo.upcoming > 0 ? `${t('myVisits')} · ${visitInfo.upcoming}` : t('myVisits');
+  }
+
+  function ensureBooking(): void {
+    if (actions) return;
+    actions = document.createElement('div');
+    actions.className = 'vtr-actions';
+
+    bookBtn = document.createElement('button');
+    bookBtn.className = 'vtr-chip vtr-chip-book';
+    bookBtn.type = 'button';
+    bookBtn.textContent = t('bookVisit');
+
+    visitsBtn = document.createElement('button');
+    visitsBtn.className = 'vtr-chip vtr-chip-visits';
+    visitsBtn.type = 'button';
+    visitsBtn.hidden = true;
+    visitsBtn.textContent = t('myVisits');
+
+    actions.append(bookBtn, visitsBtn);
+    // Over the composer, under the banner: always in view, never in the way,
+    // and it never covers a single line of the conversation.
+    panel.insertBefore(actions, form);
+
+    bookingUi = createBookingUi({
+      getT: () => t,
+      getLocale: () => currentLocale,
+      // A widget built without booking callbacks still gets a coherent overlay;
+      // it simply reports nowhere. Cheaper than making every field optional.
+      callbacks: callbacks.booking ?? noopBooking,
+      on,
+    });
+    panel.appendChild(bookingUi.root);
+
+    on(bookBtn, 'click', () => callbacks.onBookingOpen?.());
+    on(visitsBtn, 'click', () => callbacks.onVisitsOpen?.());
+    paintVisitsChip();
+  }
+
   const ui: WidgetUi = {
     host,
     shadow,
@@ -517,8 +636,54 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       welcomeMessage = message;
       repaintWelcome();
     },
+    setBookingEnabled(enabled: boolean): void {
+      if (!enabled) {
+        // Never constructed ⇒ nothing to hide. A tenant who never had booking
+        // must not gain a hidden node for having been asked about it.
+        if (!actions) return;
+        actions.hidden = true;
+        ui.closeBooking();
+        return;
+      }
+      ensureBooking();
+      if (actions) actions.hidden = false;
+    },
+    setVisitCount(info: { hasBookings: boolean; upcoming: number }): void {
+      visitInfo = {
+        hasBookings: !!info?.hasBookings,
+        upcoming: Number.isFinite(info?.upcoming) ? Math.max(0, Math.trunc(info.upcoming)) : 0,
+      };
+      paintVisitsChip();
+    },
+    openBooking(): void {
+      ensureBooking();
+      if (!bookingUi) return;
+      bookingOpen = true;
+      bookingUi.root.hidden = false;
+      // The composer and the chips go with it (CSS): while the overlay is up
+      // there is exactly one thing to do, and nothing behind it is tabbable.
+      panel.setAttribute('data-booking', '1');
+    },
+    closeBooking(): void {
+      bookingOpen = false;
+      if (bookingUi) bookingUi.root.hidden = true;
+      panel.removeAttribute('data-booking');
+    },
+    isBookingOpen(): boolean {
+      return bookingOpen;
+    },
+    renderBooking(state: BookingViewState): void {
+      ensureBooking();
+      bookingUi?.render(state);
+    },
+    focusComposer(draft?: string): void {
+      if (draft !== undefined) input.value = draft;
+      input.focus();
+      scrollToBottom();
+    },
     setLocale(locale: WidgetLocale): void {
       t = makeT(locale);
+      currentLocale = locale;
       // Every string painted ONCE at construction has to be repainted here, or
       // the panel ends up half-translated. The message list is server data and
       // is never translated; the greeting is, because it may be ours.
@@ -537,6 +702,12 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       ui.setUnread(unreadCount);
       if (bannerState !== 'none') ui.setBanner(bannerState);
       repaintWelcome();
+      // The booking surface is chrome too: a language swap that left the
+      // calendar in Spanish would be the same half-translated panel this
+      // method exists to prevent.
+      if (bookBtn) bookBtn.textContent = t('bookVisit');
+      paintVisitsChip();
+      bookingUi?.setLocale();
     },
     reveal(): void {
       root.style.removeProperty('visibility');

@@ -25,6 +25,16 @@ export interface WidgetConfig {
   apiBaseUrl: string;
   /** Optional: pre-attach the inquiry to a vehicle (the `id` from /stock). */
   vehicleId?: string;
+  /**
+   * Human-readable name for `vehicleId` — e.g. "Toyota Yaris 2021".
+   *
+   * ONLY used to show which car a visit is being booked for. There is no public
+   * route that can resolve a vehicle id to a title, so the dealer's own page —
+   * which already has the title on screen — is the honest source. Rendered only
+   * when BOTH `vehicleId` and `vehicleLabel` are present; never a placeholder,
+   * never a spinner, never an empty card.
+   */
+  vehicleLabel?: string;
   locale?: WidgetLocale;
   theme?: WidgetTheme;
   /** Greeting shown before the visitor sends the first message. */
@@ -48,7 +58,14 @@ export interface WidgetConfig {
 export interface WidgetInstance {
   open(): void;
   close(): void;
-  /** Point the current conversation at a vehicle (e.g. on SPA route change). */
-  setVehicle(vehicleId: string | null): void;
+  /**
+   * Point the current conversation — and any booking started after it — at a
+   * vehicle (e.g. on SPA route change).
+   *
+   * `label` is the optional display title, mirroring `WidgetConfig.vehicleLabel`.
+   * Passing `null` for the id clears both, so a route change away from a listing
+   * can never leave the previous car's name on a booking summary.
+   */
+  setVehicle(vehicleId: string | null, label?: string | null): void;
   destroy(): void;
 }

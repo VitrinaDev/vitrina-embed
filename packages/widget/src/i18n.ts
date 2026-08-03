@@ -32,11 +32,97 @@ export interface WidgetStrings {
   advisorJoined: string;
   /** Link on a vehicle card, when the listing has a URL. */
   viewVehicle: string;
+
+  // --- Booking (S15-21) -----------------------------------------------------
+  // Tone: es-CL, "tú", never "usted". Copy states facts the visitor can act on;
+  // no screen is ever empty and mute.
+
+  /** Chip over the composer that opens the booking overlay. */
+  bookVisit: string;
+  /** Second chip, present only when this browser holds a booking. */
+  myVisits: string;
+  /** Back arrow's accessible name inside the overlay. */
+  back: string;
+  /** Step counter — rendered as "<stepLabel> 2 <stepOf> 4". */
+  stepLabel: string;
+  stepOf: string;
+  stepDateTitle: string;
+  stepTimeTitle: string;
+  stepFormTitle: string;
+  stepSummaryTitle: string;
+  stepDoneTitle: string;
+  cancelTitle: string;
+  cancelledTitle: string;
+  /** Month navigation, accessible names only. */
+  prevMonth: string;
+  nextMonth: string;
+  /** Counter under the grid: "4 <daysWithSlots>" / "1 <dayWithSlots>". */
+  daysWithSlots: string;
+  dayWithSlots: string;
+  /** Empty month, rendered as "<monthEmpty> agosto". */
+  monthEmpty: string;
+  /** Shown only when the NEXT month is already known to have hours. */
+  nextMonthHint: string;
+  /** Horizon line, rendered as "<horizonNote> 15 de agosto." */
+  horizonNote: string;
+  loading: string;
+  loadFailed: string;
+  /** Low-tone escape hatch on an empty month → drops into the chat. */
+  writeUsCta: string;
+  writeUsDraft: string;
+  /** Low-tone escape hatch on "Mis visitas" → drops into the chat. */
+  otherDeviceQ: string;
+  otherDeviceDraft: string;
+  noTimesForDay: string;
+  /** Accessible name on a slot that is already taken (rendered dimmed). */
+  slotTaken: string;
+  fieldName: string;
+  fieldNamePlaceholder: string;
+  fieldPhone: string;
+  fieldPhonePlaceholder: string;
+  fieldEmail: string;
+  fieldEmailPlaceholder: string;
+  consentLabel: string;
+  privacyNote: string;
+  continueCta: string;
+  summaryYourDetails: string;
+  summaryVehicle: string;
+  /** The trust line: this is the team's real calendar, not a lead form. */
+  trustLine: string;
+  confirmCta: string;
+  confirming: string;
+  /** Label above the A-<n> reference on the confirmation. */
+  bookingCodeLabel: string;
+  saveCodeNote: string;
+  doneCta: string;
+  upcoming: string;
+  history: string;
+  noVisits: string;
+  cancelVisitCta: string;
+  statusScheduled: string;
+  statusCancelled: string;
+  statusCompleted: string;
+  cancelWarning: string;
+  keepVisitCta: string;
+  confirmCancelCta: string;
+  cancelling: string;
+  cancelledNote: string;
+  bookAgainCta: string;
+  /** Refusal copy, one line per machine-readable reason. */
+  errSlotTaken: string;
+  errVehicleTaken: string;
+  errNotConfigured: string;
+  errBookingGeneric: string;
 }
 
 export type StringKey = keyof WidgetStrings;
 
-const STRINGS: Record<WidgetLocale, WidgetStrings> = {
+/**
+ * Exported for the parity test, which asserts es and en carry the SAME key set
+ * with no empty value. A booking screen half-translated into the visitor's
+ * language is worse than one honestly in Spanish.
+ */
+export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
   es: {
     launcherLabel: 'Abrir chat',
     title: 'Conversemos',
@@ -55,6 +141,68 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     typing: 'Escribiendo una respuesta…',
     advisorJoined: 'Un asesor se unió a la conversación',
     viewVehicle: 'Ver el vehículo',
+
+    bookVisit: 'Agendar visita',
+    myVisits: 'Mis visitas',
+    back: 'Volver',
+    stepLabel: 'Paso',
+    stepOf: 'de',
+    stepDateTitle: 'Elige el día',
+    stepTimeTitle: 'Elige la hora',
+    stepFormTitle: 'Tus datos',
+    stepSummaryTitle: 'Revisa y confirma',
+    stepDoneTitle: 'Visita agendada',
+    cancelTitle: 'Cancelar visita',
+    cancelledTitle: 'Visita cancelada',
+    prevMonth: 'Mes anterior',
+    nextMonth: 'Mes siguiente',
+    daysWithSlots: 'días con horas',
+    dayWithSlots: 'día con horas',
+    monthEmpty: 'No hay horas en',
+    nextMonthHint: 'El próximo mes tiene horas disponibles.',
+    horizonNote: 'El concesionario abre su agenda hasta el',
+    loading: 'Cargando la agenda…',
+    loadFailed: 'No pudimos cargar la agenda.',
+    writeUsCta: 'Escríbenos y te avisamos apenas se abran horas',
+    writeUsDraft: 'Hola, quiero agendar una visita. ¿Me avisan cuando haya horas?',
+    otherDeviceQ: '¿Reservaste en otro dispositivo? Escríbenos por acá y lo vemos contigo',
+    otherDeviceDraft: 'Hola, reservé una visita desde otro dispositivo y quiero verla.',
+    noTimesForDay: 'No quedan horas ese día.',
+    slotTaken: 'Hora tomada',
+    fieldName: 'Nombre',
+    fieldNamePlaceholder: 'Tu nombre y apellido',
+    fieldPhone: 'Teléfono',
+    fieldPhonePlaceholder: '+56 9 1234 5678',
+    fieldEmail: 'Email (opcional)',
+    fieldEmailPlaceholder: 'tu@correo.cl',
+    consentLabel: 'Autorizo que me contacten para coordinar esta visita',
+    privacyNote: 'Usamos tus datos solo para coordinar la visita.',
+    continueCta: 'Continuar',
+    summaryYourDetails: 'Tus datos',
+    summaryVehicle: 'Vehículo',
+    trustLine: 'Es la agenda real del equipo.',
+    confirmCta: 'Confirmar visita',
+    confirming: 'Confirmando…',
+    bookingCodeLabel: 'código de reserva',
+    saveCodeNote: 'Guarda el código: te lo pedimos al llegar.',
+    doneCta: 'Listo',
+    upcoming: 'Próximas',
+    history: 'Historial',
+    noVisits: 'Todavía no tienes visitas agendadas.',
+    cancelVisitCta: 'Cancelar visita',
+    statusScheduled: 'Agendada',
+    statusCancelled: 'Cancelada',
+    statusCompleted: 'Completada',
+    cancelWarning: 'Es permanente. La hora se libera para otra persona.',
+    keepVisitCta: 'Mantener la visita',
+    confirmCancelCta: 'Sí, cancelar',
+    cancelling: 'Cancelando…',
+    cancelledNote: 'Liberamos la hora.',
+    bookAgainCta: 'Volver a agendar',
+    errSlotTaken: 'Esa hora se acaba de tomar.',
+    errVehicleTaken: 'Ese auto ya está reservado a esa hora.',
+    errNotConfigured: 'La agenda no está disponible ahora.',
+    errBookingGeneric: 'No pudimos agendar. Reintenta.',
   },
   en: {
     launcherLabel: 'Open chat',
@@ -74,6 +222,68 @@ const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     typing: 'Typing a reply…',
     advisorJoined: 'An advisor joined the conversation',
     viewVehicle: 'View the vehicle',
+
+    bookVisit: 'Book a visit',
+    myVisits: 'My visits',
+    back: 'Back',
+    stepLabel: 'Step',
+    stepOf: 'of',
+    stepDateTitle: 'Pick a day',
+    stepTimeTitle: 'Pick a time',
+    stepFormTitle: 'Your details',
+    stepSummaryTitle: 'Review and confirm',
+    stepDoneTitle: 'Visit booked',
+    cancelTitle: 'Cancel visit',
+    cancelledTitle: 'Visit cancelled',
+    prevMonth: 'Previous month',
+    nextMonth: 'Next month',
+    daysWithSlots: 'days with times',
+    dayWithSlots: 'day with times',
+    monthEmpty: 'No times in',
+    nextMonthHint: 'Next month has times available.',
+    horizonNote: 'This dealership opens its calendar through',
+    loading: 'Loading the calendar…',
+    loadFailed: 'We could not load the calendar.',
+    writeUsCta: 'Message us and we will tell you as soon as times open up',
+    writeUsDraft: 'Hi, I want to book a visit. Can you let me know when times open up?',
+    otherDeviceQ: 'Booked on another device? Message us here and we will sort it out with you',
+    otherDeviceDraft: 'Hi, I booked a visit from another device and I want to see it.',
+    noTimesForDay: 'No times left that day.',
+    slotTaken: 'Taken',
+    fieldName: 'Name',
+    fieldNamePlaceholder: 'Your full name',
+    fieldPhone: 'Phone',
+    fieldPhonePlaceholder: '+56 9 1234 5678',
+    fieldEmail: 'Email (optional)',
+    fieldEmailPlaceholder: 'you@email.com',
+    consentLabel: 'I agree to be contacted to arrange this visit',
+    privacyNote: 'We use your details only to arrange the visit.',
+    continueCta: 'Continue',
+    summaryYourDetails: 'Your details',
+    summaryVehicle: 'Vehicle',
+    trustLine: "This is the team's real calendar.",
+    confirmCta: 'Confirm visit',
+    confirming: 'Confirming…',
+    bookingCodeLabel: 'booking code',
+    saveCodeNote: 'Save the code: we will ask for it when you arrive.',
+    doneCta: 'Done',
+    upcoming: 'Upcoming',
+    history: 'History',
+    noVisits: 'You have no booked visits yet.',
+    cancelVisitCta: 'Cancel visit',
+    statusScheduled: 'Scheduled',
+    statusCancelled: 'Cancelled',
+    statusCompleted: 'Completed',
+    cancelWarning: 'This is permanent. The time is released for someone else.',
+    keepVisitCta: 'Keep the visit',
+    confirmCancelCta: 'Yes, cancel',
+    cancelling: 'Cancelling…',
+    cancelledNote: 'We released the time.',
+    bookAgainCta: 'Book again',
+    errSlotTaken: 'That time was just taken.',
+    errVehicleTaken: 'That car is already booked at that time.',
+    errNotConfigured: 'The calendar is not available right now.',
+    errBookingGeneric: 'We could not book. Retry.',
   },
 };
 
