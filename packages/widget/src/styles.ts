@@ -146,6 +146,14 @@ export const STYLES = `
 }
 .vtr-retry:focus-visible { outline: 2px solid #b91c1c; outline-offset: 2px; }
 
+/* Attachment photos, rendered INSIDE a bubble above the caption. */
+.vtr-media { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.vtr-media:last-child { margin-bottom: 0; }
+.vtr-media-img {
+  display: block; max-width: 100%; border-radius: 10px;
+  background: var(--vtr-bubble-out);
+}
+
 /* Vehicle card, rendered INSIDE an outbound bubble beneath the AI's prose. */
 .vtr-card {
   margin-top: 8px; border: 1px solid var(--vtr-border); border-radius: 10px;

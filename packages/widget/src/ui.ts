@@ -401,6 +401,33 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     return el;
   }
 
+  /**
+   * Attachment images for a media row, ABOVE the prose (the caption reads
+   * under its photo, WhatsApp-style). URLs were filtered server-side and are
+   * validated again here; an unusable URL is skipped rather than rendered
+   * broken. Each image links out to its full-size original.
+   */
+  function mediaImages(urls: string[]): HTMLElement | null {
+    const wrap = document.createElement('div');
+    wrap.className = 'vtr-media';
+    for (const raw of urls) {
+      const href = validateLogoUrl(raw);
+      if (!href) continue;
+      const link = document.createElement('a');
+      link.href = href;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      const img = document.createElement('img');
+      img.className = 'vtr-media-img';
+      img.src = href;
+      img.alt = '';
+      img.loading = 'lazy';
+      link.appendChild(img);
+      wrap.appendChild(link);
+    }
+    return wrap.childElementCount > 0 ? wrap : null;
+  }
+
   function bubble(dir: 'inbound' | 'outbound', content: string, id?: string): HTMLElement {
     const el = document.createElement('div');
     el.className = 'vtr-msg';
@@ -587,6 +614,12 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
           render: () => {
             const el = bubble(m.direction, m.content, String(m.id));
             if (m.status) el.setAttribute('data-status', m.status);
+            // Photos ride ABOVE the caption. A row whose every URL fails
+            // validation is simply its caption — never a blank bubble.
+            if (m.mediaUrls && m.mediaUrls.length > 0) {
+              const media = mediaImages(m.mediaUrls);
+              if (media) el.prepend(media);
+            }
             // The card ENHANCES the prose; it never replaces it. A row whose
             // type we do not recognise, or whose card the server declined to
             // project, is simply the reply it always was — never a blank bubble.
