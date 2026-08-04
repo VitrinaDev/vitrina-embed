@@ -39,6 +39,14 @@ export interface WidgetMessageDto {
     thumbnailUrl: string | null;
     listingUrl: string | null;
   };
+  /**
+   * Attachment URLs on a media row (`type` image/file) — the photos an agent
+   * sent with send_attachment. The server projects only http(s) URLs; the UI
+   * validates again anyway (same belt-and-braces as the stock card) and skips
+   * anything unusable. Absent on text rows and on servers that predate the
+   * projection.
+   */
+  mediaUrls?: string[];
 }
 
 /**
