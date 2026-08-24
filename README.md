@@ -21,7 +21,8 @@ installs it with no auth, no account, and no build step if they don't want one.
 ```
 
 That is the whole install, and it is deliberately the whole install. Colour,
-corner, logo, greeting and language are **not** in there — they are configured in
+corner, logo, greeting, language and the Home/Help tabs are **not** in there —
+they are configured in
 Vitrina (*Configuración › Conexiones › Web chat*) and fetched at load, so the
 dealer restyles their bubble from the admin UI and this page never changes again.
 
@@ -36,7 +37,7 @@ Full options, the imperative handle (`open()` / `close()` / `setVehicle()` /
 
 | Package | What it is | Status |
 |---|---|---|
-| [`@vitrina/widget`](packages/widget) | The embeddable chat widget: Shadow-DOM launcher + conversation panel, SSE transport, server-resolved theming, visit booking ("Agendar visita", per-tenant), and a `<script>` loader for no-build sites. | **shipped** — [![npm](https://img.shields.io/npm/v/@vitrina/widget.svg)](https://www.npmjs.com/package/@vitrina/widget) |
+| [`@vitrina/widget`](packages/widget) | The embeddable chat widget: Shadow-DOM launcher + conversation panel, optional Home/Help tabs, SSE transport, server-resolved theming, visit booking ("Agendar visita", per-tenant), and a `<script>` loader for no-build sites. | **shipped** — [![npm](https://img.shields.io/npm/v/@vitrina/widget.svg)](https://www.npmjs.com/package/@vitrina/widget) |
 
 Reserved for later, and deliberately not scaffolded until something needs them:
 `@vitrina/react` (headless hooks) and `@vitrina/stock-ui` (themeable stock
