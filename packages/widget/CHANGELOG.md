@@ -1,5 +1,90 @@
 # @vitrina/widget
 
+## 0.8.0
+
+The panel can be more than a transcript: an Intercom-style **Home** screen and a
+**Help** FAQ, both server-driven, both off by default.
+
+### Nothing changes for a tenant who configures nothing
+
+This is the load-bearing property of the release. With no `home` and no `help`,
+`ensureViews()` is never reached — there is no `.vtr-views` wrapper, no
+`.vtr-tabs` node, no `data-tabs` and no `data-active-view` on the panel, and the
+header keeps its accent band. The panel's children are still
+`header → messages → typing → banner → composer → footer`, node for node, and
+the test suite asserts that exact list so a future wrapper breaks a test rather
+than a dealer's site.
+
+`openBooking()` keeps its semantics exactly, including the pending-open path.
+
+### `home` — a landing screen in front of the conversation
+
+```json
+{ "home": { "enabled": true, "title": "¡Hola! 👋", "subtitle": "¿Cómo te podemos ayudar?" } }
+```
+
+A hero in the tenant's accent — logo, an overlapping stack of up to three faces
+from `team`, greeting — with cards floating over its fade:
+
+- **the last message**, one line, markdown stripped, only when there is a
+  conversation to come back to;
+- **"Envíanos un mensaje"**, always, because that is what the widget is for;
+- **the booking card**, only for a tenant whose agenda is on, titled with their
+  `bookingLabel` and never with our copy, opening the same overlay by the same
+  gated path as the chip.
+
+`title` and `subtitle` are optional and fall back to localized defaults.
+
+### `help` — an FAQ accordion, and one way out
+
+```json
+{ "help": { "enabled": true, "faqs": [{ "q": "¿Cómo agendo?", "a": "Desde **Agendar visita**." }] } }
+```
+
+Answers are markdown, rendered through the same node-building renderer as every
+agent reply — a pasted `<img onerror=…>` is text, in every path, because nothing
+in this package parses HTML. Several answers can stand open at once. One sticky
+button at the bottom drops the visitor into the composer.
+
+Enabled means the flag AND at least one usable question: a Help tab that opens
+onto nothing is worse than no Help tab, so it is re-derived client-side after
+the sanitizers have run.
+
+### `team` — faces on the hero
+
+```json
+{ "team": [{ "name": "María Fernández", "avatarUrl": "https://cdn.dealer.cl/maria.jpg" }] }
+```
+
+Up to five accepted, the first three drawn. An `avatarUrl` that is not an
+absolute http(s) URL becomes the member's initials on a colour picked by hashing
+their name — stable across every repaint, and never a broken image.
+
+### Layering and failure modes
+
+`home` and `help` merge FIELD-WISE under the inline config, like `theme`: an
+inline `home.title` beats the server's while the server's `home.enabled` still
+decides whether the tab exists. `team` replaces the server's list wholesale.
+
+Every cap fails per-item rather than all-or-nothing: `title` ≤ 80,
+`subtitle` ≤ 120, ≤ 20 FAQs (`q` ≤ 200, `a` ≤ 2000), ≤ 5 team members
+(`name` ≤ 40). A malformed FAQ entry drops itself and the rest still render; an
+over-long title falls back to the default rather than being cut mid-sentence.
+The sanitizers run on the wire AND in `resolveConfig`, so a tampered
+last-known-good cache cannot smuggle an unvalidated value into the panel.
+
+### Where the visitor lands
+
+Home, unless replies were waiting behind a closed panel — then Messages. The
+host marks the conversation read immediately before opening, so the unread
+count always reads zero by then; the widget remembers the fact separately.
+
+### Panel size
+
+400×704 (from 360×520), with or without the tabs. The old card was sized for a
+transcript and nothing else. Still `max-width: calc(100vw - 40px)`, still
+fullscreen at ≤480px.
+
 ## 0.7.0
 
 The widget wears the tenant's brand: their word for the booking flow, their

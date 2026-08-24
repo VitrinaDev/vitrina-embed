@@ -22,7 +22,6 @@ export const STYLES = `
   --vtr-text: #111827;
   --vtr-muted: #6b7280;
   --vtr-border: #e5e7eb;
-  --vtr-bubble-in: var(--vtr-accent);
   --vtr-bubble-out: #f3f4f6;
   --vtr-danger: #b91c1c;
   --vtr-ok: #15803d;
@@ -48,7 +47,11 @@ export const STYLES = `
    the already-computed value — so the rule that reads it has to live on the
    same element that carries it. With nothing set, this resolves to the :host
    value: byte-identical to the stack the widget has always used. */
-.vtr-root { position: fixed; bottom: 20px; z-index: 2147483000; font-family: var(--vtr-font); }
+/* --vtr-bubble-in lives HERE for the same reason: var() substitutes at
+   computed-value time on the element that declares it. Declared on :host it
+   froze to the default accent before .vtr-root's setProperty could matter —
+   visitor bubbles never picked up the dealer accent. */
+.vtr-root { position: fixed; bottom: 20px; z-index: 2147483000; font-family: var(--vtr-font); --vtr-bubble-in: var(--vtr-accent); }
 .vtr-root[data-pos="br"] { right: 20px; }
 .vtr-root[data-pos="bl"] { left: 20px; }
 
@@ -78,10 +81,15 @@ export const STYLES = `
 }
 .vtr-badge[hidden] { display: none; }
 
+/* 400x704 rather than 360x520. The old card was sized for a transcript and
+   nothing else; a Home screen with a hero and three cards, or an FAQ with a tab
+   bar under it, needs the room — and 400 is still narrow enough to sit beside a
+   dealer's own content on a laptop. min() keeps it off the viewport edges on a
+   short window; 100dvh, never vh (see the mobile block). */
 .vtr-panel {
   position: absolute; bottom: 0;
-  width: 360px; max-width: calc(100vw - 40px);
-  height: 520px; max-height: calc(100vh - 40px);
+  width: 400px; max-width: calc(100vw - 40px);
+  height: min(704px, calc(100dvh - 40px));
   background: var(--vtr-surface); color: var(--vtr-text);
   border: 1px solid var(--vtr-border); border-radius: 16px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.28);
@@ -111,6 +119,12 @@ export const STYLES = `
   display: flex; align-items: center; justify-content: center;
 }
 .vtr-close:hover { background: rgba(255,255,255,0.18); }
+/* On the compact (tabs-mode) header there is no accent band behind it, so the
+   glyph has to come back to the text colour or it is white on white. */
+.vtr-panel[data-tabs] .vtr-header .vtr-close, .vtr-vhead .vtr-close { color: var(--vtr-text); }
+.vtr-panel[data-tabs] .vtr-header .vtr-close:hover, .vtr-vhead .vtr-close:hover {
+  background: var(--vtr-bubble-out);
+}
 
 .vtr-messages {
   flex: 1; overflow-y: auto; padding: 16px;
@@ -276,7 +290,8 @@ export const STYLES = `
 .vtr-chip-visits { color: var(--vtr-muted); border-color: var(--vtr-border); }
 .vtr-chip[hidden] { display: none; }
 .vtr-panel[data-booking] .vtr-composer,
-.vtr-panel[data-booking] .vtr-actions { display: none; }
+.vtr-panel[data-booking] .vtr-actions,
+.vtr-panel[data-booking] .vtr-tabs { display: none; }
 
 /* The overlay itself. Covers the panel, does NOT replace it — the transcript is
    still in the DOM underneath, untouched, and closing is a hidden flip. */
@@ -446,6 +461,167 @@ export const STYLES = `
 .vtr-bk-visit-when[data-struck] { text-decoration: line-through; color: var(--vtr-muted); }
 .vtr-bk-visit-meta { display: flex; gap: 8px; align-items: baseline; }
 .vtr-bk-visit-status { font-size: 11.5px; color: var(--vtr-muted); }
+
+/* Tabs: Home / Messages / Help (0.8.0). Every rule below is inert for a tenant
+   who turned neither tab on — the nodes they select do not exist, and the panel
+   is the single-view card it has always been. */
+
+.vtr-views { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.vtr-view { flex: 1; min-height: 0; display: none; flex-direction: column; }
+.vtr-panel[data-active-view="home"] .vtr-view[data-view="home"],
+.vtr-panel[data-active-view="messages"] .vtr-view[data-view="messages"],
+.vtr-panel[data-active-view="help"] .vtr-view[data-view="help"] { display: flex; }
+
+/* In tabs mode the accent band moves to the Home hero and the conversation
+   header goes quiet: one surface with a tab bar, not three lidded screens. */
+.vtr-panel[data-tabs] .vtr-header {
+  background: var(--vtr-surface); color: var(--vtr-text); padding: 13px 16px;
+}
+
+.vtr-tabs {
+  display: flex; flex: none; height: 56px;
+  border-top: 1px solid var(--vtr-border); background: var(--vtr-surface);
+}
+.vtr-tabs[hidden] { display: none; }
+.vtr-tab {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; padding: 0; cursor: pointer;
+  background: transparent; border: none; color: var(--vtr-muted);
+  font: inherit; font-size: 11px; font-weight: 500; letter-spacing: 0.01em;
+}
+.vtr-tab[hidden] { display: none; }
+.vtr-tab-icon { position: relative; display: flex; }
+.vtr-tab svg {
+  width: 20px; height: 20px; fill: none; stroke: currentColor;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.vtr-tab[aria-selected="true"] { color: var(--vtr-accent); font-weight: 600; }
+.vtr-tab:hover { color: var(--vtr-text); }
+.vtr-tab[aria-selected="true"]:hover { color: var(--vtr-accent); }
+.vtr-tab:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: -3px; border-radius: 8px; }
+.vtr-tab-dot {
+  position: absolute; top: -1px; right: -3px;
+  width: 7px; height: 7px; border-radius: 999px; background: #dc2626;
+  box-shadow: 0 0 0 2px var(--vtr-surface);
+}
+.vtr-tab-dot[hidden] { display: none; }
+
+/* Home */
+.vtr-home-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.vtr-home-hero {
+  padding: 20px 20px 48px; color: #fff;
+  background: linear-gradient(180deg, var(--vtr-accent) 0%, var(--vtr-accent) 55%, transparent 100%);
+}
+.vtr-home-top { display: flex; align-items: center; gap: 10px; }
+.vtr-home-spacer { flex: 1; }
+.vtr-home-title { margin: 20px 0 0; font-size: 22px; font-weight: 700; line-height: 1.25; }
+.vtr-home-sub { margin: 6px 0 0; font-size: 15px; line-height: 1.4; opacity: 0.92; }
+
+/* The avatar stack: the "there are humans here" signal, in 28px. */
+.vtr-avatars { display: flex; align-items: center; }
+.vtr-avatars[hidden] { display: none; }
+.vtr-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex: none;
+  border: 2px solid var(--vtr-surface); object-fit: cover;
+  background: var(--vtr-bubble-out);
+}
+.vtr-avatar-initials {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; color: #fff; letter-spacing: 0.01em;
+}
+.vtr-avatar + .vtr-avatar { margin-left: -8px; }
+
+/* The cards float over the bottom of the hero fade.
+   minmax(0, 1fr) is load-bearing, not decoration: the recent-conversation
+   preview is a single nowrap line, so an auto-sized grid column takes its
+   min-content width and the card grows straight out through the panel. */
+.vtr-home-cards {
+  padding: 0 16px 16px; margin-top: -32px;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px;
+}
+.vtr-home-card {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  width: 100%; min-width: 0;
+  padding: 14px 16px; cursor: pointer; font: inherit; color: var(--vtr-text);
+  background: var(--vtr-surface); border: 1px solid var(--vtr-border); border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
+.vtr-home-card:hover { border-color: var(--vtr-accent); }
+.vtr-home-card:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+.vtr-home-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.vtr-home-card-title { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.vtr-home-card-sub { font-size: 12.5px; line-height: 1.35; color: var(--vtr-muted); }
+.vtr-home-card-preview {
+  min-width: 0; font-size: 12.5px; color: var(--vtr-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.vtr-home-card-icon { flex: none; display: flex; color: var(--vtr-accent); }
+.vtr-home-card-chev { color: var(--vtr-muted); }
+.vtr-home-card-icon svg {
+  width: 20px; height: 20px; fill: none; stroke: currentColor;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* Help. Compact header, scrolling accordion, one sticky way out. */
+.vtr-vhead {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 16px; background: var(--vtr-surface); color: var(--vtr-text);
+}
+.vtr-help-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 8px; }
+.vtr-help-foot { flex: none; padding: 8px 16px 14px; }
+.vtr-help-cta {
+  width: 100%; height: 40px; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 600;
+  background: transparent; color: var(--vtr-accent);
+  border: 1px solid var(--vtr-accent); border-radius: 999px;
+}
+.vtr-help-cta:hover { background: var(--vtr-bubble-out); }
+.vtr-help-cta:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+
+.vtr-faq { display: flex; flex-direction: column; }
+.vtr-faq-item { border-bottom: 1px solid var(--vtr-border); }
+.vtr-faq-q {
+  width: 100%; display: flex; align-items: flex-start; gap: 10px; text-align: left;
+  padding: 13px 0; cursor: pointer; font: inherit;
+  font-size: 15px; font-weight: 500; line-height: 1.4;
+  background: transparent; border: none; color: var(--vtr-text);
+}
+.vtr-faq-qtext { flex: 1; }
+.vtr-faq-chev { flex: none; display: flex; margin-top: 2px; transition: transform 0.18s ease; }
+.vtr-faq-chev svg {
+  width: 16px; height: 16px; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; color: var(--vtr-muted);
+}
+.vtr-faq-q[aria-expanded="true"] .vtr-faq-chev { transform: rotate(180deg); }
+.vtr-faq-q:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: -2px; border-radius: 8px; }
+.vtr-faq-a {
+  padding: 0 26px 14px 0; font-size: 14px; line-height: 1.55;
+  color: var(--vtr-muted); white-space: pre-wrap; word-break: break-word;
+  animation: vtr-faq-in 0.18s ease;
+}
+.vtr-faq-a[hidden] { display: none; }
+/* Markdown inside an answer. Same subset as a bubble, scoped again because the
+   bubble rules are scoped to .vtr-msg. */
+.vtr-faq-a .vtr-list { margin: 4px 0; padding-left: 20px; }
+.vtr-faq-a .vtr-list li { margin: 2px 0; }
+.vtr-faq-a .vtr-link { color: var(--vtr-accent); text-decoration: underline; }
+.vtr-faq-a .vtr-link:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+.vtr-faq-a .vtr-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em; padding: 1px 4px; border-radius: 4px; background: rgba(0,0,0,0.07);
+}
+.vtr-faq-a strong { font-weight: 650; color: var(--vtr-text); }
+@media (prefers-color-scheme: dark) {
+  .vtr-faq-a .vtr-code { background: rgba(255,255,255,0.12); }
+}
+@keyframes vtr-faq-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vtr-faq-chev { transition: none; }
+  .vtr-faq-a { animation: none; }
+}
 
 /* Mobile. Ships regardless of booking: a 360x520 card floating over a phone is
    a desktop widget on a screen that has no desktop. 100dvh, never vh — vh

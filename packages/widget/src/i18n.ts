@@ -33,6 +33,29 @@ export interface WidgetStrings {
   /** Link on a vehicle card, when the listing has a URL. */
   viewVehicle: string;
 
+  // --- Home / Help tabs (0.8.0) ---------------------------------------------
+  // Only ever painted for a tenant who turned the tabs on. Every default here
+  // is overridable per tenant except the tab labels themselves, which name the
+  // widget's own navigation and stay in the chrome language.
+
+  /** Home hero greeting. Overridden by `home.title`. */
+  homeTitle: string;
+  /** Line under the greeting. Overridden by `home.subtitle`. */
+  homeSubtitle: string;
+  /** Chat CTA card on Home. */
+  homeChatTitle: string;
+  homeChatSub: string;
+  /** Sub-line of the booking card. Its TITLE is the tenant's bookingLabel. */
+  homeBookSub: string;
+  /** Label over the one-line preview of the last message. */
+  recentConversation: string;
+  /** Tab bar. */
+  tabHome: string;
+  tabMessages: string;
+  tabHelp: string;
+  /** Sticky escape hatch at the bottom of the Help tab. */
+  helpCta: string;
+
   // --- Booking (S15-21) -----------------------------------------------------
   // Tone: es-CL, "tú", never "usted". Copy states facts the visitor can act on;
   // no screen is ever empty and mute.
@@ -148,6 +171,17 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     advisorJoined: 'Un asesor se unió a la conversación',
     viewVehicle: 'Ver el vehículo',
 
+    homeTitle: '¡Hola! 👋',
+    homeSubtitle: '¿Cómo te podemos ayudar?',
+    homeChatTitle: 'Envíanos un mensaje',
+    homeChatSub: 'Normalmente respondemos en unos minutos',
+    homeBookSub: 'Elige día y hora en segundos',
+    recentConversation: 'Conversación reciente',
+    tabHome: 'Inicio',
+    tabMessages: 'Mensajes',
+    tabHelp: 'Ayuda',
+    helpCta: '¿No encontraste lo que buscabas? Escríbenos',
+
     bookVisit: 'Agendar visita',
     myVisits: 'Mis reservas',
     back: 'Volver',
@@ -228,6 +262,17 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     typing: 'Typing a reply…',
     advisorJoined: 'An advisor joined the conversation',
     viewVehicle: 'View the vehicle',
+
+    homeTitle: 'Hi there 👋',
+    homeSubtitle: 'How can we help?',
+    homeChatTitle: 'Send us a message',
+    homeChatSub: 'We typically reply in a few minutes',
+    homeBookSub: 'Pick a day and time in seconds',
+    recentConversation: 'Recent conversation',
+    tabHome: 'Home',
+    tabMessages: 'Messages',
+    tabHelp: 'Help',
+    helpCta: "Didn't find what you were looking for? Write to us",
 
     bookVisit: 'Book a visit',
     myVisits: 'My bookings',

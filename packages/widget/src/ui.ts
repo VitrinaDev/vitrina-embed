@@ -16,7 +16,13 @@ import {
   type BookingUi,
   type BookingViewState,
 } from './booking-ui';
-import type { WidgetMessage, WidgetNotice } from './config';
+import type {
+  ResolvedHelp,
+  ResolvedHome,
+  TeamMember,
+  WidgetMessage,
+  WidgetNotice,
+} from './config';
 import { ensureFontLoaded, fontStack } from './fonts';
 import { makeT, type StringKey, type Translate } from './i18n';
 import { renderMarkdown } from './markdown';
@@ -80,6 +86,15 @@ export interface WidgetUiOptions {
    * built-in "Agendar visita" / "Book a visit", which follows the locale.
    */
   bookingLabel?: string | null;
+  /**
+   * The Home tab. Omitted (or `enabled: false`) ⇒ no tab bar and no Home view
+   * is ever constructed — see the lazy-construction note above `ensureViews`.
+   */
+  home?: ResolvedHome;
+  /** The Help tab. Same zero-DOM-until-needed rule. */
+  help?: ResolvedHelp;
+  /** Faces for the Home hero's avatar stack. Empty ⇒ no stack. */
+  team?: TeamMember[];
   callbacks: WidgetUiCallbacks;
   /**
    * Mount invisibly, awaiting `reveal()`. Used ONLY when the appearance is
@@ -131,6 +146,19 @@ export interface WidgetUi {
   setWelcomeMessage(message: string | null): void;
   /** Swap the chrome language, re-rendering every static string in place. */
   setLocale(locale: WidgetLocale): void;
+
+  // --- Tabs: Home / Messages / Help (0.8.0) ---------------------------------
+  // Same contract as the booking surface above: NOTHING is constructed until a
+  // resolved config says the surface is on. A tenant with neither Home nor Help
+  // gets the panel the widget has always produced — no `.vtr-views` wrapper, no
+  // `.vtr-tabs` node, node for node.
+
+  /** Turn the Home tab on/off and repaint its greeting. */
+  setHomeConfig(home: ResolvedHome): void;
+  /** Turn the Help tab on/off and rebuild its FAQ accordion. */
+  setHelpConfig(help: ResolvedHelp): void;
+  /** Faces for the Home hero. An empty list removes the stack. */
+  setTeam(team: TeamMember[]): void;
   /** Show a widget mounted with `hidden`. Idempotent, and safe to call when it
    *  was never hidden in the first place. */
   reveal(): void;
@@ -189,6 +217,91 @@ function chatIcon(): SVGElement {
 }
 
 /**
+ * The stroked line icons for the tab bar and the Home cards. Same
+ * createElementNS discipline as the launcher glyph — these are module
+ * constants, never built from anything a tenant can supply.
+ *
+ * Stroke rather than fill so a single `currentColor` carries both the muted
+ * inactive state and the dealer's accent on the active tab.
+ */
+const ICONS = {
+  home: ['M3 10.4 12 3l9 7.4V20a1 1 0 0 1-1 1h-4.6v-6.1H8.6V21H4a1 1 0 0 1-1-1z'],
+  chat: [
+    'M20.5 11.6c0 4.2-3.8 7.6-8.5 7.6-1 0-2-.15-2.9-.42L4 20.6l1.5-3.9C4 15.3 3.5 13.5 3.5 11.6 3.5 7.4 7.3 4 12 4s8.5 3.4 8.5 7.6z',
+  ],
+  help: [
+    'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',
+    'M9.3 9.3A2.8 2.8 0 0 1 12 7.4c1.6 0 2.8 1 2.8 2.4 0 1.9-2.7 2.3-2.7 4',
+    'M12 16.6h.01',
+  ],
+  send: ['M21.5 2.5 10.8 13.2', 'M21.5 2.5 14.7 21.5l-3.9-8.3-8.3-3.9z'],
+  calendar: [
+    'M4.5 6.4h15a1 1 0 0 1 1 1v11.6a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V7.4a1 1 0 0 1 1-1z',
+    'M8 3.5v5',
+    'M16 3.5v5',
+    'M3.5 11.4h17',
+  ],
+  chevronRight: ['m9.5 5.5 6.5 6.5-6.5 6.5'],
+  chevronDown: ['m5.5 9 6.5 6.5L18.5 9'],
+} as const;
+
+/** One stroked 24×24 glyph. `paths` is always a module constant (see ICONS). */
+function strokeIcon(paths: readonly string[]): SVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  for (const d of paths) {
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', d);
+    svg.appendChild(path);
+  }
+  return svg;
+}
+
+/**
+ * The eight initials backgrounds. Picked deterministically from the member's
+ * name, so the same person is the same colour on every pageview and across
+ * every repaint — an avatar that changes colour reads as a different person.
+ *
+ * All eight are dark enough to carry white text at 11px (contrast ≥ 4.5:1).
+ */
+const AVATAR_COLORS = [
+  '#0f766e',
+  '#b45309',
+  '#4338ca',
+  '#be123c',
+  '#15803d',
+  '#7c3aed',
+  '#0369a1',
+  '#9a3412',
+];
+
+/** FNV-1a over the name → a palette INDEX. Stable, and never a network call. */
+function avatarColorIndex(name: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < name.length; i += 1) {
+    h ^= name.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h % AVATAR_COLORS.length;
+}
+
+/** "María Fernández" → "MF"; "Pedro" → "P". Never more than two letters. */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter((p) => p !== '');
+  const first = parts[0]?.charAt(0) ?? '';
+  const second = parts.length > 1 ? parts[1].charAt(0) : '';
+  return (first + second).toUpperCase();
+}
+
+/** Which view the panel is showing. Only ever one, only ever these three. */
+type ViewName = 'home' | 'messages' | 'help';
+
+/** Longest preview we put in the DOM. CSS ellipsis does the visible truncation;
+ *  this only stops a 4kB reply from becoming a 4kB text node. */
+const MAX_PREVIEW = 160;
+
+/**
  * Build the widget UI. Nothing is attached to the page until mount() is called;
  * destroy() removes the host node and every tracked listener.
  */
@@ -203,6 +316,12 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   // whatever the dealer typed, in whatever language, and a locale swap leaves it
   // alone on purpose.
   let bookingLabel: string | null = opts.bookingLabel ?? null;
+  // The tab surfaces. All three are MUTABLE for the same reason as the
+  // greeting: the server-resolved config lands after mount and must be able to
+  // bring Home and Help into existence without a remount.
+  let homeCfg: ResolvedHome = opts.home ?? { enabled: false, title: null, subtitle: null };
+  let helpCfg: ResolvedHelp = opts.help ?? { enabled: false, faqs: [] };
+  let team: TeamMember[] = opts.team ?? [];
 
   const host = document.createElement('div');
   // Defensive light-DOM styles: the shadow root protects everything INSIDE it,
@@ -295,34 +414,65 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   // front (rather than inserted on demand) so a logo arriving with the
   // server-resolved config lands in the right slot without re-ordering the
   // header — and so `hidden` + no `src` means no request and nothing drawn.
-  const logo = document.createElement('img');
-  logo.className = 'vtr-logo';
-  logo.alt = '';
-  logo.hidden = true;
+  // The Home hero carries the SAME mark as the header, so there are up to two
+  // <img> for one URL. They are painted from one source of truth rather than
+  // being kept in sync by hand — a logo that lands on one and not the other is
+  // the kind of half-branded panel applyLogo exists to prevent.
+  let logoUrl: string | undefined = theme.logoUrl;
+  const logoImages: HTMLImageElement[] = [];
 
-  /** Point the header logo at `url`, or hide it. Re-validated every time: this
-   *  runs again for every server-resolved config, not just the first paint. */
-  function applyLogo(url: string | undefined): void {
-    const href = validateLogoUrl(url);
+  /** Point ONE logo <img> at the current URL, or hide it. */
+  function paintLogo(el: HTMLImageElement): void {
+    const href = validateLogoUrl(logoUrl);
     if (href) {
-      logo.src = href;
-      logo.hidden = false;
+      el.src = href;
+      el.hidden = false;
       return;
     }
-    logo.hidden = true;
-    logo.removeAttribute('src');
+    el.hidden = true;
+    el.removeAttribute('src');
   }
-  applyLogo(theme.logoUrl);
+
+  /** A logo slot: always in the DOM, hidden until there is a URL worth loading. */
+  function makeLogo(): HTMLImageElement {
+    const el = document.createElement('img');
+    el.className = 'vtr-logo';
+    el.alt = '';
+    el.hidden = true;
+    logoImages.push(el);
+    paintLogo(el);
+    return el;
+  }
+
+  /** Point every logo slot at `url`, or hide them all. Re-validated every time:
+   *  this runs again for every server-resolved config, not just the first paint. */
+  function applyLogo(url: string | undefined): void {
+    logoUrl = url;
+    for (const el of logoImages) paintLogo(el);
+  }
+
+  const logo = makeLogo();
   header.appendChild(logo);
+
+  // Every view has its own close button — the panel must be dismissible from
+  // wherever the visitor happens to be standing. They share one handler and one
+  // accessible name, both re-derived on a locale swap.
+  const closeButtons: HTMLButtonElement[] = [];
+
+  function makeCloseBtn(): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.className = 'vtr-close';
+    btn.type = 'button';
+    btn.setAttribute('aria-label', t('close'));
+    btn.textContent = '×';
+    closeButtons.push(btn);
+    return btn;
+  }
 
   const title = document.createElement('span');
   title.className = 'vtr-title';
   title.textContent = t('title');
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'vtr-close';
-  closeBtn.type = 'button';
-  closeBtn.setAttribute('aria-label', t('close'));
-  closeBtn.textContent = '×';
+  const closeBtn = makeCloseBtn();
   header.append(title, closeBtn);
 
   const messagesEl = document.createElement('div');
@@ -383,6 +533,22 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   // parsing our own rendered strings.
   let bannerState: BannerState = 'none';
   let unreadCount = 0;
+  /**
+   * Whether replies arrived while the panel was shut, remembered ACROSS the
+   * moment the host zeroes the count.
+   *
+   * The host marks the conversation read (`setUnread(0)`) immediately before
+   * `openPanel()`, so reading `unreadCount` at open time always sees zero. This
+   * flag is what actually decides "the visitor has something waiting, put them
+   * in Messages rather than on the Home screen" — the rule the count was only
+   * ever a proxy for.
+   */
+  let hadUnreadSinceOpen = false;
+  /** One-line, markdown-stripped preview of the newest message, for the Home
+   *  "recent conversation" card. null ⇒ the transcript is empty and no card. */
+  let lastPreview: string | null = null;
+  /** Mirrors setBookingEnabled, so the Home booking card can follow the gate. */
+  let bookingSurfaceEnabled = false;
 
   function on(target: EventTarget, type: string, handler: EventListener): void {
     target.addEventListener(type, handler);
@@ -561,6 +727,12 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   // `GET /widget/config` said `bookingEnabled`. Until then the panel's children
   // are header → messages → typing → banner → composer → footer, exactly as
   // they have always been — not a hidden chip, not an empty overlay, nothing.
+  // Where the conversation's own chrome lives. `panel` in legacy mode — which
+  // is what makes the legacy DOM byte-identical — and the messages VIEW once
+  // the tab bar exists. Everything that inserts into the conversation column
+  // (today: the booking chips) goes through this rather than through `panel`.
+  let messagesHost: HTMLElement = panel;
+
   let actions: HTMLElement | null = null;
   let bookBtn: HTMLButtonElement | null = null;
   let visitsBtn: HTMLButtonElement | null = null;
@@ -599,7 +771,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     actions.append(bookBtn, visitsBtn);
     // Over the composer, under the banner: always in view, never in the way,
     // and it never covers a single line of the conversation.
-    panel.insertBefore(actions, form);
+    messagesHost.insertBefore(actions, form);
 
     bookingUi = createBookingUi({
       getT: () => t,
@@ -614,6 +786,459 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     on(bookBtn, 'click', () => callbacks.onBookingOpen?.());
     on(visitsBtn, 'click', () => callbacks.onVisitsOpen?.());
     paintVisitsChip();
+  }
+
+  // --- Tabs: Home / Messages / Help (0.8.0) -----------------------------------
+  //
+  // LAZY BY DESIGN, on exactly the same terms as the booking surface above. A
+  // tenant with neither Home nor Help never reaches `ensureViews()`: the panel's
+  // children stay header → messages → typing → banner → composer → footer, the
+  // panel carries no `data-tabs` and no `data-active-view`, and `.vtr-views` /
+  // `.vtr-tabs` are not in the document at all.
+  //
+  // When they ARE on, the conversation does not move house — it is wrapped. The
+  // same header, transcript, banner, chips, composer and footer nodes are
+  // re-parented once into `.vtr-view[data-view="messages"]`, so nothing that
+  // holds a reference to them (the booking overlay, the retry delegation, the
+  // typing indicator) notices.
+  let views: HTMLElement | null = null;
+  let messagesView: HTMLElement | null = null;
+  let homeView: HTMLElement | null = null;
+  let helpView: HTMLElement | null = null;
+  let tabsEl: HTMLElement | null = null;
+  let activeView: ViewName = 'messages';
+
+  const tabButtons: Partial<Record<ViewName, HTMLButtonElement>> = {};
+  const tabLabels: Partial<Record<ViewName, HTMLElement>> = {};
+  let tabDot: HTMLElement | null = null;
+
+  // Home internals.
+  let homeTitleEl: HTMLElement | null = null;
+  let homeSubEl: HTMLElement | null = null;
+  let avatarsEl: HTMLElement | null = null;
+  let homeCardsEl: HTMLElement | null = null;
+  // Help internals.
+  let helpTitleEl: HTMLElement | null = null;
+  let faqListEl: HTMLElement | null = null;
+  let helpCtaEl: HTMLButtonElement | null = null;
+
+  /** A view is reachable only when it is BOTH configured on and constructed. */
+  function viewAvailable(view: ViewName): boolean {
+    if (view === 'home') return homeCfg.enabled && homeView !== null;
+    if (view === 'help') return helpCfg.enabled && helpView !== null;
+    return true;
+  }
+
+  /** True while the panel has a tab bar. The one test for "am I in tabs mode". */
+  function tabsOn(): boolean {
+    return homeCfg.enabled || helpCfg.enabled;
+  }
+
+  /** Repaint the tab bar: which tabs exist, which is selected, the unread dot. */
+  function paintTabs(): void {
+    if (!tabsEl) return;
+    tabsEl.hidden = !tabsOn();
+    const visible: Array<[ViewName, boolean]> = [
+      ['home', homeCfg.enabled && homeView !== null],
+      ['messages', true],
+      ['help', helpCfg.enabled && helpView !== null],
+    ];
+    for (const [view, shown] of visible) {
+      const btn = tabButtons[view];
+      if (!btn) continue;
+      btn.hidden = !shown;
+      btn.setAttribute('aria-selected', String(activeView === view));
+      btn.tabIndex = activeView === view ? 0 : -1;
+    }
+    // The dot repeats the launcher badge INSIDE the panel: replies are waiting
+    // and the visitor is looking at another tab. It says "there", never "how
+    // many" — a count on a tab is noise a bubble already carries.
+    if (tabDot) tabDot.hidden = !(unreadCount > 0 && activeView !== 'messages');
+  }
+
+  /**
+   * Show one view. An unavailable target falls back to the conversation, which
+   * is the view that always exists — a Home tab switched off mid-session can
+   * never leave the visitor staring at a blank panel.
+   */
+  function setView(next: ViewName): void {
+    activeView = viewAvailable(next) ? next : 'messages';
+    if (!views) return;
+    panel.setAttribute('data-active-view', activeView);
+    paintTabs();
+    if (activeView === 'home') paintHome();
+    if (activeView === 'messages') scrollToBottom();
+  }
+
+  /** Land in the conversation with the cursor already in the composer. */
+  function goToComposer(): void {
+    setView('messages');
+    input.focus();
+  }
+
+  /** One tab button: 20px glyph over an 11px label, plus the unread dot slot. */
+  function makeTab(view: ViewName, key: StringKey, paths: readonly string[]): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.className = 'vtr-tab';
+    btn.type = 'button';
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', 'false');
+    btn.dataset.tab = view;
+
+    const iconWrap = document.createElement('span');
+    iconWrap.className = 'vtr-tab-icon';
+    iconWrap.appendChild(strokeIcon(paths));
+    if (view === 'messages') {
+      tabDot = document.createElement('span');
+      tabDot.className = 'vtr-tab-dot';
+      tabDot.setAttribute('aria-hidden', 'true');
+      tabDot.hidden = true;
+      iconWrap.appendChild(tabDot);
+    }
+
+    const label = document.createElement('span');
+    label.className = 'vtr-tab-label';
+    label.textContent = t(key);
+
+    btn.append(iconWrap, label);
+    tabButtons[view] = btn;
+    tabLabels[view] = label;
+    return btn;
+  }
+
+  /** The i18n key behind each tab's label, for the locale swap. */
+  const TAB_KEYS: Record<ViewName, StringKey> = {
+    home: 'tabHome',
+    messages: 'tabMessages',
+    help: 'tabHelp',
+  };
+
+  /**
+   * Wrap the conversation in a view router and build the tab bar. Called by the
+   * first `setHomeConfig`/`setHelpConfig` that turns a tab on, and never again.
+   */
+  function ensureViews(): void {
+    if (views) return;
+    views = document.createElement('div');
+    views.className = 'vtr-views';
+
+    messagesView = document.createElement('div');
+    messagesView.className = 'vtr-view';
+    messagesView.dataset.view = 'messages';
+    // append() MOVES these nodes; every existing reference stays valid.
+    messagesView.append(header, messagesEl, typingEl, banner);
+    if (actions) messagesView.appendChild(actions);
+    messagesView.append(form, footer);
+    views.appendChild(messagesView);
+    messagesHost = messagesView;
+
+    tabsEl = document.createElement('div');
+    tabsEl.className = 'vtr-tabs';
+    tabsEl.setAttribute('role', 'tablist');
+    tabsEl.append(
+      makeTab('home', 'tabHome', ICONS.home),
+      makeTab('messages', 'tabMessages', ICONS.chat),
+      makeTab('help', 'tabHelp', ICONS.help),
+    );
+    // ONE delegated listener for all three tabs: they are never rebuilt, but
+    // the delegation keeps the tracked-listener array flat either way.
+    on(tabsEl, 'click', (e) => {
+      const el = (e.target as Element | null)?.closest?.('[data-tab]') as HTMLElement | null;
+      const view = el?.dataset.tab as ViewName | undefined;
+      if (view) setView(view);
+    });
+
+    panel.prepend(views);
+    // Before the booking overlay when it already exists, so the overlay stays
+    // the last child and keeps covering everything — the tab bar included.
+    panel.insertBefore(tabsEl, bookingUi?.root ?? null);
+    panel.setAttribute('data-tabs', '1');
+  }
+
+  // --- Home view --------------------------------------------------------------
+
+  /** The overlapping avatar stack. Up to three faces, from the resolved team. */
+  function paintAvatars(): void {
+    if (!avatarsEl) return;
+    avatarsEl.replaceChildren();
+    const shown = team.slice(0, 3);
+    avatarsEl.hidden = shown.length === 0;
+    // Eight colours and three overlapping circles: a plain hash pairs two of
+    // them often enough to look like a bug. The hash still picks the colour;
+    // a collision with the circle IMMEDIATELY to the left just steps one along.
+    // Both inputs (the name, its place in the roster) are stable, so a member
+    // keeps their colour across every repaint.
+    let prev = -1;
+    for (const member of shown) {
+      if (member.avatarUrl) {
+        const img = document.createElement('img');
+        img.className = 'vtr-avatar';
+        img.src = member.avatarUrl;
+        // The name IS the alt text: the stack's whole job is to say who is here.
+        img.alt = member.name;
+        img.loading = 'lazy';
+        avatarsEl.appendChild(img);
+        // A photo between two initials breaks the adjacency the step-along
+        // exists to fix, so it also clears it.
+        prev = -1;
+        continue;
+      }
+      // No usable URL ⇒ initials on a deterministic colour. Never a broken
+      // <img>, and never a grey blank where a person should be.
+      let index = avatarColorIndex(member.name);
+      if (index === prev) index = (index + 1) % AVATAR_COLORS.length;
+      prev = index;
+      const el = document.createElement('span');
+      el.className = 'vtr-avatar vtr-avatar-initials';
+      el.style.setProperty('background-color', AVATAR_COLORS[index]);
+      el.title = member.name;
+      el.textContent = initialsOf(member.name);
+      avatarsEl.appendChild(el);
+    }
+  }
+
+  /** A Home card. `kind` is what the delegated click listener dispatches on. */
+  function homeCard(kind: string, paths: readonly string[], accent: boolean): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.className = 'vtr-home-card';
+    btn.type = 'button';
+    btn.dataset.card = kind;
+    const body = document.createElement('div');
+    body.className = 'vtr-home-card-body';
+    btn.appendChild(body);
+    const icon = document.createElement('span');
+    icon.className = accent ? 'vtr-home-card-icon' : 'vtr-home-card-icon vtr-home-card-chev';
+    icon.appendChild(strokeIcon(paths));
+    btn.appendChild(icon);
+    return btn;
+  }
+
+  /** Add a title/sub pair into a card body. */
+  function cardLine(card: HTMLElement, cls: string, text: string): void {
+    const el = document.createElement('div');
+    el.className = cls;
+    el.textContent = text;
+    card.firstElementChild?.appendChild(el);
+  }
+
+  /**
+   * Remember a one-line, markup-free preview of the newest message.
+   *
+   * The markdown is stripped by RENDERING it and reading the text back, rather
+   * than by a second regex pass: the renderer is the only thing that knows what
+   * the subset means, and its output is nodes, so `**Corolla**` becomes
+   * "Corolla" and an injected tag stays literal text either way.
+   */
+  function setPreview(content: string | null): void {
+    let next: string | null = null;
+    if (content !== null) {
+      const flat = (renderMarkdown(content).textContent ?? '').replace(/\s+/g, ' ').trim();
+      if (flat !== '') {
+        next = flat.length > MAX_PREVIEW ? `${flat.slice(0, MAX_PREVIEW)}…` : flat;
+      }
+    }
+    if (next === lastPreview) return;
+    lastPreview = next;
+    paintHomeCards();
+  }
+
+  /**
+   * The Home cards, rebuilt from scratch on every paint.
+   *
+   * Three of them, and which ones are present is the whole design:
+   *   · recent conversation — only with something to come back to;
+   *   · send us a message — ALWAYS, because that is what the widget is for;
+   *   · the booking card — only for a tenant whose agenda is on, and titled
+   *     with THEIR word for it, never ours.
+   */
+  function paintHomeCards(): void {
+    if (!homeCardsEl) return;
+    homeCardsEl.replaceChildren();
+
+    if (lastPreview) {
+      const card = homeCard('recent', ICONS.chevronRight, false);
+      cardLine(card, 'vtr-home-card-title', t('recentConversation'));
+      cardLine(card, 'vtr-home-card-preview', lastPreview);
+      homeCardsEl.appendChild(card);
+    }
+
+    const chat = homeCard('chat', ICONS.send, true);
+    cardLine(chat, 'vtr-home-card-title', t('homeChatTitle'));
+    cardLine(chat, 'vtr-home-card-sub', t('homeChatSub'));
+    homeCardsEl.appendChild(chat);
+
+    if (bookingSurfaceEnabled) {
+      const book = homeCard('book', ICONS.calendar, true);
+      cardLine(book, 'vtr-home-card-title', bookChipText());
+      cardLine(book, 'vtr-home-card-sub', t('homeBookSub'));
+      homeCardsEl.appendChild(book);
+    }
+  }
+
+  /** Repaint the whole Home view: greeting, faces, cards. */
+  function paintHome(): void {
+    if (!homeView) return;
+    if (homeTitleEl) homeTitleEl.textContent = homeCfg.title ?? t('homeTitle');
+    if (homeSubEl) homeSubEl.textContent = homeCfg.subtitle ?? t('homeSubtitle');
+    paintAvatars();
+    paintHomeCards();
+  }
+
+  function ensureHomeView(): void {
+    if (homeView) return;
+    ensureViews();
+    homeView = document.createElement('div');
+    homeView.className = 'vtr-view';
+    homeView.dataset.view = 'home';
+
+    const scroll = document.createElement('div');
+    scroll.className = 'vtr-home-scroll';
+
+    const hero = document.createElement('div');
+    hero.className = 'vtr-home-hero';
+    const top = document.createElement('div');
+    top.className = 'vtr-home-top';
+    const spacer = document.createElement('div');
+    spacer.className = 'vtr-home-spacer';
+    avatarsEl = document.createElement('div');
+    avatarsEl.className = 'vtr-avatars';
+    const closeHome = makeCloseBtn();
+    on(closeHome, 'click', () => callbacks.onRequestClose());
+    top.append(makeLogo(), spacer, avatarsEl, closeHome);
+
+    homeTitleEl = document.createElement('h2');
+    homeTitleEl.className = 'vtr-home-title';
+    homeSubEl = document.createElement('p');
+    homeSubEl.className = 'vtr-home-sub';
+    hero.append(top, homeTitleEl, homeSubEl);
+
+    homeCardsEl = document.createElement('div');
+    homeCardsEl.className = 'vtr-home-cards';
+    // ONE delegated listener: the cards are rebuilt on every repaint, so a
+    // per-card listener would grow the tracked-listener array without bound.
+    on(homeCardsEl, 'click', (e) => {
+      const el = (e.target as Element | null)?.closest?.('[data-card]') as HTMLElement | null;
+      switch (el?.dataset.card) {
+        case 'recent':
+          setView('messages');
+          break;
+        case 'chat':
+          goToComposer();
+          break;
+        case 'book':
+          // The SAME path the chip takes, gate and all — the card is another
+          // door onto one flow, never a second implementation of it.
+          callbacks.onBookingOpen?.();
+          break;
+        default:
+          break;
+      }
+    });
+
+    scroll.append(hero, homeCardsEl);
+    homeView.appendChild(scroll);
+    views?.insertBefore(homeView, messagesView);
+    paintHome();
+  }
+
+  // --- Help view --------------------------------------------------------------
+
+  /**
+   * The FAQ accordion. Answers go through the same markdown renderer as every
+   * agent reply — DOM nodes, never an HTML string — so a dealer who pastes a
+   * `<script>` into an answer gets a visible `<script>`, not a running one.
+   */
+  function paintFaqs(): void {
+    if (!faqListEl) return;
+    faqListEl.replaceChildren();
+    helpCfg.faqs.forEach((faq, i) => {
+      const item = document.createElement('div');
+      item.className = 'vtr-faq-item';
+
+      const q = document.createElement('button');
+      q.className = 'vtr-faq-q';
+      q.type = 'button';
+      q.setAttribute('aria-expanded', 'false');
+      q.dataset.faq = String(i);
+      const qText = document.createElement('span');
+      qText.className = 'vtr-faq-qtext';
+      qText.textContent = faq.q;
+      const chev = document.createElement('span');
+      chev.className = 'vtr-faq-chev';
+      chev.appendChild(strokeIcon(ICONS.chevronDown));
+      q.append(qText, chev);
+
+      const a = document.createElement('div');
+      a.className = 'vtr-faq-a';
+      a.hidden = true;
+      a.appendChild(renderMarkdown(faq.a));
+
+      item.append(q, a);
+      faqListEl?.appendChild(item);
+    });
+  }
+
+  function ensureHelpView(): void {
+    if (helpView) return;
+    ensureViews();
+    helpView = document.createElement('div');
+    helpView.className = 'vtr-view';
+    helpView.dataset.view = 'help';
+
+    // The compact header: no accent band, no border. On the Help and (in tabs
+    // mode) Messages views the panel reads as ONE surface with a tab bar at the
+    // bottom, rather than as three screens that each start with a coloured lid.
+    const head = document.createElement('div');
+    head.className = 'vtr-vhead';
+    helpTitleEl = document.createElement('span');
+    helpTitleEl.className = 'vtr-title';
+    helpTitleEl.textContent = t('tabHelp');
+    const closeHelp = makeCloseBtn();
+    on(closeHelp, 'click', () => callbacks.onRequestClose());
+    head.append(helpTitleEl, closeHelp);
+
+    const body = document.createElement('div');
+    body.className = 'vtr-help-body';
+    faqListEl = document.createElement('div');
+    faqListEl.className = 'vtr-faq';
+    // Delegated, like every other repeated control in this file.
+    on(faqListEl, 'click', (e) => {
+      const q = (e.target as Element | null)?.closest?.('.vtr-faq-q') as HTMLElement | null;
+      if (!q || !faqListEl?.contains(q)) return;
+      const answer = q.nextElementSibling as HTMLElement | null;
+      if (!answer) return;
+      // Several may be open at once: a visitor comparing two answers should not
+      // have the first one taken away to read the second.
+      const expanded = q.getAttribute('aria-expanded') === 'true';
+      q.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      answer.hidden = expanded;
+    });
+    body.appendChild(faqListEl);
+
+    const foot = document.createElement('div');
+    foot.className = 'vtr-help-foot';
+    helpCtaEl = document.createElement('button');
+    helpCtaEl.className = 'vtr-help-cta';
+    helpCtaEl.type = 'button';
+    helpCtaEl.textContent = t('helpCta');
+    on(helpCtaEl, 'click', () => goToComposer());
+    foot.appendChild(helpCtaEl);
+
+    helpView.append(head, body, foot);
+    views?.appendChild(helpView);
+    paintFaqs();
+  }
+
+  /**
+   * Reflect the current Home/Help flags on the chrome. Safe in both directions
+   * and at any time: a tenant who switches Home off mid-session loses the tab
+   * and, if they were standing on it, is moved to the conversation.
+   */
+  function syncTabChrome(): void {
+    if (!views) return;
+    if (tabsOn()) panel.setAttribute('data-tabs', '1');
+    else panel.removeAttribute('data-tabs');
+    setView(activeView);
   }
 
   const ui: WidgetUi = {
@@ -635,7 +1260,15 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       launcher.hidden = true;
       // Paint the ephemeral greeting on first open if the list is still empty.
       if (messagesEl.childElementCount === 0) renderWelcome();
-      input.focus();
+      // Where the visitor lands. Replies waiting beat the Home screen every
+      // time: they came back to READ something, and making them find the
+      // Messages tab first would be a redesign that costs them a click.
+      const waiting = unreadCount > 0 || hadUnreadSinceOpen;
+      setView(!waiting && viewAvailable('home') ? 'home' : 'messages');
+      hadUnreadSinceOpen = false;
+      // Only when the composer is actually on screen — focusing an input inside
+      // a display:none view would scroll nothing and steal nothing.
+      if (activeView === 'messages') input.focus();
       scrollToBottom();
     },
     closePanel(): void {
@@ -653,6 +1286,10 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       // and a repaint fires after every send. The echo now survives by
       // construction, because it is in `messages`.
       messagesEl.replaceChildren();
+      // The Home card's one-line preview follows the transcript, so it is
+      // derived HERE — from the caller's list, the same single source of truth
+      // the panel is painted from — rather than read back out of the DOM.
+      setPreview(messages.length > 0 ? messages[messages.length - 1].content : null);
       if (messages.length === 0 && notices.length === 0) {
         if (open) renderWelcome();
         return;
@@ -723,6 +1360,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       // Only if the chip exists. A tenant without booking must not gain one for
       // having been told what it would have been called.
       if (bookBtn) bookBtn.textContent = bookChipText();
+      // Same words on the Home card, which titles itself with the tenant's
+      // label and never with ours.
+      paintHomeCards();
     },
     setWelcomeMessage(message: string | null): void {
       if (message === welcomeMessage) return;
@@ -730,6 +1370,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       repaintWelcome();
     },
     setBookingEnabled(enabled: boolean): void {
+      bookingSurfaceEnabled = enabled;
+      // The Home card follows the same gate as the chip, in both directions.
+      paintHomeCards();
       if (!enabled) {
         // Never constructed ⇒ nothing to hide. A tenant who never had booking
         // must not gain a hidden node for having been asked about it.
@@ -783,7 +1426,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       launcher.setAttribute('aria-label', t('launcherLabel'));
       panel.setAttribute('aria-label', t('title'));
       title.textContent = t('title');
-      closeBtn.setAttribute('aria-label', t('close'));
+      for (const btn of closeButtons) btn.setAttribute('aria-label', t('close'));
       typingEl.setAttribute('aria-label', t('typing'));
       input.placeholder = t('placeholder');
       input.setAttribute('aria-label', t('placeholder'));
@@ -803,6 +1446,39 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       if (bookBtn) bookBtn.textContent = bookChipText();
       paintVisitsChip();
       bookingUi?.setLocale();
+      // The tabs are chrome too. The tenant's own words — home.title,
+      // home.subtitle, the FAQ text, the booking label — are NOT: paintHome and
+      // paintFaqs fall back to t() only where the tenant said nothing.
+      for (const view of ['home', 'messages', 'help'] as ViewName[]) {
+        const label = tabLabels[view];
+        if (label) label.textContent = t(TAB_KEYS[view]);
+      }
+      if (helpTitleEl) helpTitleEl.textContent = t('tabHelp');
+      if (helpCtaEl) helpCtaEl.textContent = t('helpCta');
+      paintHome();
+    },
+    setHomeConfig(home: ResolvedHome): void {
+      homeCfg = {
+        enabled: home?.enabled === true,
+        title: home?.title ?? null,
+        subtitle: home?.subtitle ?? null,
+      };
+      if (homeCfg.enabled) ensureHomeView();
+      paintHome();
+      syncTabChrome();
+    },
+    setHelpConfig(help: ResolvedHelp): void {
+      const faqs = Array.isArray(help?.faqs) ? help.faqs : [];
+      // Re-derived rather than trusted: "Help is on" and "Help has answers" are
+      // two different facts, and only their conjunction earns a tab.
+      helpCfg = { enabled: help?.enabled === true && faqs.length > 0, faqs };
+      if (helpCfg.enabled) ensureHelpView();
+      paintFaqs();
+      syncTabChrome();
+    },
+    setTeam(next: TeamMember[]): void {
+      team = Array.isArray(next) ? next : [];
+      paintAvatars();
     },
     reveal(): void {
       root.style.removeProperty('visibility');
@@ -814,6 +1490,10 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     setUnread(count: number): void {
       const n = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
       unreadCount = n;
+      // Sticky across the host's read-marking, which happens a line before
+      // openPanel() — see hadUnreadSinceOpen.
+      if (n > 0) hadUnreadSinceOpen = true;
+      paintTabs();
       if (n === 0) {
         badge.hidden = true;
         badge.textContent = '';
@@ -860,6 +1540,14 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       submit();
     }
   }) as EventListener);
+
+  // Build the tab chrome NOW when the caller already knows the answer — a
+  // repeat visitor whose cached config says Home is on gets the tab bar on the
+  // first paint rather than watching it appear a round trip later. A caller who
+  // passes nothing reaches none of this, and the panel above is complete.
+  if (homeCfg.enabled) ensureHomeView();
+  if (helpCfg.enabled) ensureHelpView();
+  if (views) syncTabChrome();
 
   return ui;
 }
