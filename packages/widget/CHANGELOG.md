@@ -1,5 +1,39 @@
 # @vitrina/widget
 
+## 0.6.0
+
+The host page can open the agenda itself.
+
+### `openBooking()` on the public handle
+
+A site that already shows the ask — a dealer's "Agendar visita" button, a
+landing page's "Agendar demo" — no longer has to answer that click with a chat
+panel and leave the visitor hunting for the chip:
+
+```js
+// true  → the visitor is looking at the calendar
+// false → they got the conversation panel instead
+const onCalendar = window.vitrinaChatInstance?.openBooking() ?? false;
+```
+
+The panel opens in every case, because the conversation is the honest fallback
+whenever the agenda cannot appear — so `false` is a fallback, never a failure.
+It means one of two things: this tenant has booking off, or `GET /widget/config`
+has not answered yet. The second is **held, not dropped** — the calendar opens
+by itself the moment the gate answers yes, unless the visitor closed the panel
+first, since an overlay must never appear under the cursor of someone who
+walked away.
+
+Purely additive: `init()` returns the same handle it always did, plus this. A
+tenant without the agenda still constructs no booking node at all.
+
+### Fixed
+
+- The booking suite's fixture pinned day 12 of the current month, so from the
+  12th onward it booked a visit in the PAST and the "Mis visitas" badge
+  assertion failed — a red suite that had nothing to do with the widget. Every
+  date is now computed from `now`, month boundaries included.
+
 ## 0.4.0
 
 A visitor can book a visit without writing a single message.

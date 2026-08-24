@@ -185,13 +185,38 @@ export function init(config: WidgetConfig): WidgetInstance {
     return booking;
   }
 
+  /**
+   * A host page asked for the agenda before the server had answered whether
+   * this tenant even has one. Held here rather than dropped, so a visitor who
+   * clicks a "Agendar demo" button on the host page in the first few hundred
+   * milliseconds of a cold load still lands on the calendar instead of on a
+   * chat panel that silently ignored them.
+   */
+  let pendingBookingOpen = false;
+
+  /** Put the booking overlay up over the (already open) panel. */
+  function showBooking(): void {
+    pendingBookingOpen = false;
+    ui.openBooking();
+    ensureBookingController().openBooking();
+  }
+
   /** Reflect the tenant's booking gate. Idempotent, and safe in both directions. */
   function applyBookingGate(enabled: boolean): void {
     if (destroyed || enabled === bookingEnabled) return;
     bookingEnabled = enabled;
     ui.setBookingEnabled(enabled);
-    if (enabled) ensureBookingController().refreshChip();
-    else ui.closeBooking();
+    if (enabled) {
+      ensureBookingController().refreshChip();
+      // The answer arrived after the ask. Honour it — but only while the panel
+      // is still open: a visitor who walked away must not have an overlay
+      // appear under their cursor a second later.
+      if (pendingBookingOpen && panelOpen) showBooking();
+      pendingBookingOpen = false;
+    } else {
+      pendingBookingOpen = false;
+      ui.closeBooking();
+    }
   }
 
   const ui = createWidgetUI({
@@ -211,8 +236,7 @@ export function init(config: WidgetConfig): WidgetInstance {
       },
       onBookingOpen: () => {
         if (!bookingEnabled) return;
-        ui.openBooking();
-        ensureBookingController().openBooking();
+        showBooking();
       },
       onVisitsOpen: () => {
         if (!bookingEnabled) return;
@@ -501,12 +525,45 @@ export function init(config: WidgetConfig): WidgetInstance {
   function instanceClose(): void {
     if (destroyed) return;
     panelOpen = false;
+    // Closing the panel withdraws a booking that has not opened yet. The intent
+    // belongs to the moment it was expressed, not to the next pageview.
+    pendingBookingOpen = false;
     ui.closePanel();
+  }
+
+  /**
+   * Open the agenda DIRECTLY, skipping the chip the visitor would otherwise
+   * have to find inside the panel.
+   *
+   * This exists because the host page often already has the ask on screen — a
+   * dealer's "Agendar visita" button, a landing page's "Agendar demo" — and
+   * routing that click through open() would answer it with a chat panel and
+   * leave the visitor to hunt for the calendar.
+   *
+   * The panel opens either way: booking is an overlay LAID OVER the
+   * conversation, and the conversation is the honest fallback whenever the
+   * agenda is not available. So the return value is the useful signal, not an
+   * error — `true` means the visitor is looking at the calendar, `false` means
+   * they got the panel and the host page can say so in its own words.
+   */
+  function instanceOpenBooking(): boolean {
+    if (destroyed) return false;
+    instanceOpen();
+    if (bookingEnabled) {
+      showBooking();
+      return true;
+    }
+    // Either this tenant has the agenda off — in which case the panel is the
+    // whole answer and nothing more will happen — or GET /widget/config is
+    // still in flight, in which case applyBookingGate finishes the job.
+    pendingBookingOpen = true;
+    return false;
   }
 
   return {
     open: instanceOpen,
     close: instanceClose,
+    openBooking: instanceOpenBooking,
     setVehicle(id: string | null, label?: string | null): void {
       // Live server-side: the next send() carries it as `vehicle_id`, which the
       // webchat ingress persists onto the inbound message's metadata so the
