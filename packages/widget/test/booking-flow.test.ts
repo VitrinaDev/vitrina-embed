@@ -76,14 +76,85 @@ function slot(ym: string, day: string, from: string, to: string, available: bool
   };
 }
 
+// --- The agenda, generated RELATIVE TO TODAY ---------------------------------
+//
+// This fixture used to pin day 12 of the current month, which made the suite
+// green for eleven days a month and red for the rest: after the 11th the visit
+// the happy path books lands in the PAST, so the visits badge counts zero
+// upcoming and "Mis visitas · 1" never arrives. Nothing about the widget was
+// wrong — the calendar the test drove was.
+//
+// Everything below is computed from `now`, so the booked slot is always a real
+// future hour. Two properties the rest of the suite leans on are preserved by
+// construction:
+//
+//   · BOTH free days live in ONE month, because the grid shows one month and
+//     the happy path asserts "2 días con horas" on it. Late in a month that
+//     means the second day steps BACK (still tomorrow-or-later) rather than
+//     forward into a month nobody is looking at.
+//   · EVERY OTHER month still offers one day, so any grid the suite opens has
+//     a `.vtr-bk-count` to wait on — including the current month on the few
+//     days a year when the agenda itself has moved into the next one.
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
+function monthKeyOf(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+}
+function daysInMonthOf(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+}
+
+function buildAgenda(now: Date): {
+  ym: string;
+  first: string;
+  second: string;
+  firstKey: string;
+  nextMonth: boolean;
+} {
+  const first = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 3);
+  const forward = first.getDate() + 2 <= daysInMonthOf(first);
+  const second = new Date(
+    first.getFullYear(),
+    first.getMonth(),
+    first.getDate() + (forward ? 2 : -2),
+  );
+  const ym = monthKeyOf(first);
+  return {
+    ym,
+    first: pad2(first.getDate()),
+    second: pad2(second.getDate()),
+    firstKey: `${ym}-${pad2(first.getDate())}`,
+    // today + 3 crossed a month boundary: the grid opens on the current month
+    // and the tests have to page forward once to reach the agenda.
+    nextMonth: ym !== monthKeyOf(now),
+  };
+}
+
+const AGENDA = buildAgenda(new Date());
+
+/** The one day any month OUTSIDE the agenda offers. Never clicked, only counted. */
+const FILLER_DAY = '15';
+
+/**
+ * The agenda's wire for one month. `taken` names the hours that come back
+ * unavailable, which is how the dimmed grid and the lost-slot race are driven.
+ */
+function agendaMonth(ym: string, taken: string[] = ['10:30']): WireSlot[] {
+  if (ym !== AGENDA.ym) return [slot(ym, FILLER_DAY, '09:00', '09:30', true)];
+  const free = (time: string): boolean => !taken.includes(time);
+  return [
+    slot(ym, AGENDA.first, '10:00', '10:30', free('10:00')),
+    slot(ym, AGENDA.first, '10:30', '11:00', free('10:30')),
+    slot(ym, AGENDA.first, '11:00', '11:30', free('11:00')),
+    slot(ym, AGENDA.second, '09:00', '09:30', true),
+  ];
+}
+
 /** Two free days, with one already-taken hour so the dimmed grid is exercised. */
 function defaultMonth(ym: string): WireSlot[] {
-  return [
-    slot(ym, '12', '10:00', '10:30', true),
-    slot(ym, '12', '10:30', '11:00', false),
-    slot(ym, '12', '11:00', '11:30', true),
-    slot(ym, '14', '09:00', '09:30', true),
-  ];
+  return agendaMonth(ym);
 }
 
 const APPOINTMENT = {
@@ -235,11 +306,28 @@ async function boot(config: Record<string, unknown> = {}): Promise<ReturnType<ty
   return w;
 }
 
-/** Open the overlay and wait for the month grid to land. */
+/** Open the overlay on the month the widget itself picks — always the current one. */
 async function openCalendar(): Promise<void> {
   must<HTMLButtonElement>('.vtr-chip-book').click();
   await vi.waitFor(() => expect(shadowOf().querySelectorAll('.vtr-bk-day').length).toBeGreaterThan(0));
   await vi.waitFor(() => expect(q('.vtr-bk-count')).not.toBeNull());
+}
+
+/**
+ * Open the overlay ON THE AGENDA — the month that actually holds the two free
+ * days. Identical to `openCalendar` on most days; near a month boundary it
+ * pages forward once, exactly as a visitor would.
+ */
+async function openAgenda(): Promise<void> {
+  await openCalendar();
+  if (!AGENDA.nextMonth) return;
+  must<HTMLButtonElement>('.vtr-bk-navnext').click();
+  // The key carries the year and month, so finding it IS proof the grid moved…
+  await vi.waitFor(() =>
+    expect(shadowOf().querySelector(`[data-bk-day="${AGENDA.firstKey}"]`)).not.toBeNull(),
+  );
+  // …and the count is proof that month's availability landed.
+  await vi.waitFor(() => expect(must('.vtr-bk-count').textContent).toBe('2 días con horas'));
 }
 
 function dayButton(day: string): HTMLButtonElement {
@@ -254,9 +342,9 @@ function slotButton(time: string): HTMLButtonElement {
   return el;
 }
 
-/** Walk fecha → hora → datos and fill the form. */
+/** Walk fecha → hora → datos and fill the form. Assumes the agenda's month. */
 async function fillForm(): Promise<void> {
-  dayButton('12').click();
+  dayButton(AGENDA.first).click();
   await vi.waitFor(() => expect(shadowOf().querySelectorAll('.vtr-bk-slot').length).toBe(3));
   slotButton('10:00').click();
   await vi.waitFor(() => expect(q('.vtr-bk-form')).not.toBeNull());
@@ -336,7 +424,7 @@ describe('booking gate', () => {
 describe('fecha → hora → datos → resumen → ok', () => {
   it('walks the whole flow and books', async () => {
     const w = await boot();
-    await openCalendar();
+    await openAgenda();
 
     // The counter is the trust device on a thin agenda.
     expect(must('.vtr-bk-count').textContent).toBe('2 días con horas');
@@ -378,7 +466,7 @@ describe('fecha → hora → datos → resumen → ok', () => {
 
   it('sends the host page vehicle with the booking, and shows its label on the summary', async () => {
     const w = await boot({ vehicleId: 'veh_9', vehicleLabel: 'Toyota Yaris 2021' });
-    await openCalendar();
+    await openAgenda();
     await fillForm();
     must<HTMLButtonElement>('.vtr-bk-primary').click();
     await vi.waitFor(() => expect(must('.vtr-bk-step').textContent).toBe('Paso 4 de 4'));
@@ -391,7 +479,7 @@ describe('fecha → hora → datos → resumen → ok', () => {
 
   it('renders no vehicle line when the page gave an id but no label', async () => {
     const w = await boot({ vehicleId: 'veh_9' });
-    await openCalendar();
+    await openAgenda();
     await fillForm();
     must<HTMLButtonElement>('.vtr-bk-primary').click();
     await vi.waitFor(() => expect(must('.vtr-bk-step').textContent).toBe('Paso 4 de 4'));
@@ -402,8 +490,8 @@ describe('fecha → hora → datos → resumen → ok', () => {
 
   it('shows a taken hour DIMMED and disabled rather than removing it', async () => {
     const w = await boot();
-    await openCalendar();
-    dayButton('12').click();
+    await openAgenda();
+    dayButton(AGENDA.first).click();
     await vi.waitFor(() => expect(shadowOf().querySelectorAll('.vtr-bk-slot').length).toBe(3));
     const taken = slotButton('10:30');
     expect(taken.disabled).toBe(true);
@@ -416,8 +504,8 @@ describe('fecha → hora → datos → resumen → ok', () => {
 
   it('gates the continue button on nombre + teléfono + consentimiento', async () => {
     const w = await boot();
-    await openCalendar();
-    dayButton('12').click();
+    await openAgenda();
+    dayButton(AGENDA.first).click();
     await vi.waitFor(() => expect(shadowOf().querySelectorAll('.vtr-bk-slot').length).toBe(3));
     slotButton('10:00').click();
     await vi.waitFor(() => expect(q('.vtr-bk-form')).not.toBeNull());
@@ -444,7 +532,7 @@ describe('fecha → hora → datos → resumen → ok', () => {
 describe('slot taken mid-form', () => {
   it('bounces back to the hour grid, refetches, and keeps every field', async () => {
     const w = await boot();
-    await openCalendar();
+    await openAgenda();
     await fillForm();
     must<HTMLButtonElement>('.vtr-bk-primary').click();
     await vi.waitFor(() => expect(must('.vtr-bk-step').textContent).toBe('Paso 4 de 4'));
@@ -458,12 +546,7 @@ describe('slot taken mid-form', () => {
           details: { reason: 'slot_taken' },
         },
       });
-    monthSlots = (ym) => [
-      slot(ym, '12', '10:00', '10:30', false),
-      slot(ym, '12', '10:30', '11:00', false),
-      slot(ym, '12', '11:00', '11:30', true),
-      slot(ym, '14', '09:00', '09:30', true),
-    ];
+    monthSlots = (ym) => agendaMonth(ym, ['10:00', '10:30']);
 
     must<HTMLButtonElement>('.vtr-bk-primary').click();
     await vi.waitFor(() => expect(must('.vtr-bk-step').textContent).toBe('Paso 2 de 4'));
@@ -484,7 +567,7 @@ describe('slot taken mid-form', () => {
 
   it('says something different when it is the CAR that is taken', async () => {
     const w = await boot({ vehicleId: 'veh_9' });
-    await openCalendar();
+    await openAgenda();
     await fillForm();
     must<HTMLButtonElement>('.vtr-bk-primary').click();
     await vi.waitFor(() => expect(must('.vtr-bk-step').textContent).toBe('Paso 4 de 4'));
@@ -499,7 +582,7 @@ describe('slot taken mid-form', () => {
 
   it('stays on the summary with generic copy for an unexplained refusal', async () => {
     const w = await boot();
-    await openCalendar();
+    await openAgenda();
     await fillForm();
     must<HTMLButtonElement>('.vtr-bk-primary').click();
     await vi.waitFor(() => expect(must('.vtr-bk-step').textContent).toBe('Paso 4 de 4'));
