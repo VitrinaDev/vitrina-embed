@@ -59,6 +59,19 @@ export interface WidgetInstance {
   open(): void;
   close(): void;
   /**
+   * Open the panel with the "Agendar visita" calendar already up, for a host
+   * page that has its own booking button.
+   *
+   * Returns `true` when the calendar is showing and `false` when the visitor
+   * got the conversation instead — this tenant has booking off, or the widget
+   * has not yet heard back from `GET /widget/config` (in that case the calendar
+   * still opens on its own the moment the answer arrives, as long as the
+   * visitor has not closed the panel meanwhile).
+   *
+   * The panel opens in every case, so `false` is a fallback, never a failure.
+   */
+  openBooking(): boolean;
+  /**
    * Point the current conversation — and any booking started after it — at a
    * vehicle (e.g. on SPA route change).
    *

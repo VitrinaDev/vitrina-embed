@@ -119,7 +119,8 @@ version instead — `https://cdn.jsdelivr.net/npm/@vitrina/widget@0.3.0/dist/loa
 
 The `window.vitrinaChat` object is exactly the config table below. After load, the
 live handle is stashed on `window.vitrinaChatInstance`, so the host page can call
-`window.vitrinaChatInstance.open()` / `.close()` / `.setVehicle(id)` / `.destroy()`.
+`window.vitrinaChatInstance.open()` / `.openBooking()` / `.close()` /
+`.setVehicle(id)` / `.destroy()`.
 
 The loader is defensive: it `console.warn`s and no-ops on a missing/invalid config,
 is idempotent against a double-load, and never throws into the host page.
@@ -158,6 +159,20 @@ drops any the server stops resolving.
 Set `vehicleLabel` alongside `vehicleId` if you want the car named on the
 booking summary; without a label the widget shows no vehicle line at all rather
 than an empty card.
+
+A host page with its own booking button opens the calendar directly:
+
+```js
+// true  → the visitor is looking at the calendar
+// false → they got the conversation panel instead (tenant has booking off, or
+//         GET /widget/config has not answered yet — in which case the calendar
+//         still opens by itself once it does, unless the panel was closed)
+const onCalendar = window.vitrinaChatInstance?.openBooking() ?? false;
+```
+
+The panel opens either way, because the conversation is the honest fallback: a
+button that promised an agenda never leaves the visitor on the page they were
+already on.
 
 Message content is **never** parsed as HTML. A visitor's own text is written with
 `textContent`; a reply goes through a safe-subset markdown renderer that

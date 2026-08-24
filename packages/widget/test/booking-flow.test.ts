@@ -104,6 +104,7 @@ let bookResponse: () => Response;
 let getBookingResponse: () => Response;
 let cancelResponse: () => Response;
 let availabilityMonths: string[];
+let configGate: Promise<void> | null;
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
@@ -116,6 +117,7 @@ beforeEach(() => {
   horizonEnd = null;
   monthSlots = defaultMonth;
   availabilityMonths = [];
+  configGate = null;
   bookResponse = () =>
     jsonRes(201, {
       appointment: { ...APPOINTMENT, startsAt: lastPostedStart, endsAt: lastPostedEnd },
@@ -127,7 +129,13 @@ beforeEach(() => {
   fetchMock = vi.fn((url: string, opts?: RequestInit) => {
     const u = String(url);
     const method = opts?.method ?? 'GET';
-    if (u.includes('/widget/config')) return Promise.resolve(jsonRes(200, configData));
+    if (u.includes('/widget/config')) {
+      const res = jsonRes(200, configData);
+      // `configGate` lets a test hold the appearance answer open, which is the
+      // only way to exercise what a host page's booking button does during the
+      // first few hundred milliseconds of a cold load.
+      return configGate ? configGate.then(() => res) : Promise.resolve(res);
+    }
     if (u.includes('/widget/appointments/availability')) {
       const from = new URL(u).searchParams.get('from') ?? '';
       const ym = from.slice(0, 7);
@@ -715,6 +723,69 @@ describe('booking horizon', () => {
     must<HTMLButtonElement>('[data-bk-nav="prev"]').click();
     await vi.waitFor(() => expect(q('.vtr-bk-count')).not.toBeNull());
     expect(availabilityMonths).toHaveLength(2);
+    w.destroy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. The host page's own booking button: instance.openBooking().
+// ---------------------------------------------------------------------------
+describe('openBooking() on the public handle', () => {
+  it('opens the calendar directly, without the visitor finding the chip', async () => {
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' } as never);
+    await vi.waitFor(() => expect(q('.vtr-chip-book')).not.toBeNull());
+    expect(w.openBooking()).toBe(true);
+    // The panel came with it — the overlay is laid OVER a conversation, never
+    // floated on its own.
+    expect(must('.vtr-panel').hidden).toBe(false);
+    await vi.waitFor(() => expect(shadowOf().querySelectorAll('.vtr-bk-day').length).toBeGreaterThan(0));
+    w.destroy();
+  });
+
+  it('falls back to the panel and finishes the job when the gate answers late', async () => {
+    let openGate = (): void => {};
+    configGate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' } as never);
+    // The click lands before the server has said whether this tenant has an
+    // agenda at all, so the honest answer is "not yet".
+    expect(w.openBooking()).toBe(false);
+    expect(q('.vtr-booking')).toBeNull();
+    openGate();
+    // …and the ask is honoured rather than dropped: the calendar arrives with
+    // the answer, with nothing more asked of the visitor.
+    await vi.waitFor(() => expect(shadowOf().querySelectorAll('.vtr-bk-day').length).toBeGreaterThan(0));
+    w.destroy();
+  });
+
+  it('withdraws a deferred open when the visitor closes the panel first', async () => {
+    let openGate = (): void => {};
+    configGate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' } as never);
+    expect(w.openBooking()).toBe(false);
+    w.close();
+    openGate();
+    // The chip mounts, because the tenant does take bookings…
+    await vi.waitFor(() => expect(q('.vtr-chip-book')).not.toBeNull());
+    // …but nothing opens itself over a visitor who walked away.
+    expect((q('.vtr-booking') as HTMLElement | null)?.hidden ?? true).toBe(true);
+    expect(availabilityMonths).toHaveLength(0);
+    w.destroy();
+  });
+
+  it('gives a booking-off tenant the conversation, and constructs no overlay', async () => {
+    configData = {};
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' } as never);
+    await vi.waitFor(() =>
+      expect(fetchMock.mock.calls.filter((c) => String(c[0]).includes('/widget/config')).length).toBe(1),
+    );
+    expect(w.openBooking()).toBe(false);
+    expect(must('.vtr-panel').hidden).toBe(false);
+    expect(q('.vtr-booking')).toBeNull();
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/widget/appointments'))).toBe(false);
     w.destroy();
   });
 });
