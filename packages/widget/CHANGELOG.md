@@ -1,5 +1,11 @@
 # @vitrina/widget
 
+## 0.8.1
+
+Spacing fix: the entry-chip row (`.vtr-actions`, e.g. "Agendar visita" /
+"Agendar demo") now carries 10px bottom padding — it used to sit directly on
+the composer's top border with zero separation.
+
 ## 0.8.0
 
 The panel can be more than a transcript: an Intercom-style **Home** screen and a
