@@ -383,6 +383,20 @@ describe('home view', () => {
     second.destroy();
   });
 
+  it('never paints two touching circles the same colour', async () => {
+    configData = withTabs({
+      // Three names whose raw hashes collide two-and-two on an 8-colour palette.
+      team: [{ name: 'María Fernández' }, { name: 'Pedro Soto' }, { name: 'Josefa Ulloa' }],
+    });
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
+    await settled();
+    const colors = all('.vtr-avatar-initials').map((el) => (el as HTMLElement).style.backgroundColor);
+    expect(colors).toHaveLength(3);
+    expect(colors[0]).not.toBe(colors[1]);
+    expect(colors[1]).not.toBe(colors[2]);
+    w.destroy();
+  });
+
   it('draws no stack for a tenant with no team', async () => {
     configData = withTabs();
     const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
