@@ -37,7 +37,13 @@ export interface WidgetStrings {
   // Tone: es-CL, "tú", never "usted". Copy states facts the visitor can act on;
   // no screen is ever empty and mute.
 
-  /** Chip over the composer that opens the booking overlay. */
+  /**
+   * Chip over the composer that opens the booking overlay — the DEFAULT copy.
+   * A tenant who sets `bookingLabel` replaces it verbatim, in which case this
+   * string is never painted (see ui.ts). Every OTHER string in this block has to
+   * still read correctly next to "Agendar demo" or "Reservar hora", which is why
+   * the flow says "reserva"/"hora" and not "visita" anywhere below.
+   */
   bookVisit: string;
   /** Second chip, present only when this browser holds a booking. */
   myVisits: string;
@@ -70,7 +76,7 @@ export interface WidgetStrings {
   /** Low-tone escape hatch on an empty month → drops into the chat. */
   writeUsCta: string;
   writeUsDraft: string;
-  /** Low-tone escape hatch on "Mis visitas" → drops into the chat. */
+  /** Low-tone escape hatch on "Mis reservas" → drops into the chat. */
   otherDeviceQ: string;
   otherDeviceDraft: string;
   noTimesForDay: string;
@@ -143,7 +149,7 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     viewVehicle: 'Ver el vehículo',
 
     bookVisit: 'Agendar visita',
-    myVisits: 'Mis visitas',
+    myVisits: 'Mis reservas',
     back: 'Volver',
     stepLabel: 'Paso',
     stepOf: 'de',
@@ -151,9 +157,9 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     stepTimeTitle: 'Elige la hora',
     stepFormTitle: 'Tus datos',
     stepSummaryTitle: 'Revisa y confirma',
-    stepDoneTitle: 'Visita agendada',
-    cancelTitle: 'Cancelar visita',
-    cancelledTitle: 'Visita cancelada',
+    stepDoneTitle: 'Reserva confirmada',
+    cancelTitle: 'Cancelar reserva',
+    cancelledTitle: 'Reserva cancelada',
     prevMonth: 'Mes anterior',
     nextMonth: 'Mes siguiente',
     daysWithSlots: 'días con horas',
@@ -164,9 +170,9 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     loading: 'Cargando la agenda…',
     loadFailed: 'No pudimos cargar la agenda.',
     writeUsCta: 'Escríbenos y te avisamos apenas se abran horas',
-    writeUsDraft: 'Hola, quiero agendar una visita. ¿Me avisan cuando haya horas?',
+    writeUsDraft: 'Hola, quiero reservar una hora. ¿Me avisan cuando haya disponibilidad?',
     otherDeviceQ: '¿Reservaste en otro dispositivo? Escríbenos por acá y lo vemos contigo',
-    otherDeviceDraft: 'Hola, reservé una visita desde otro dispositivo y quiero verla.',
+    otherDeviceDraft: 'Hola, reservé una hora desde otro dispositivo y quiero verla.',
     noTimesForDay: 'No quedan horas ese día.',
     slotTaken: 'Hora tomada',
     fieldName: 'Nombre',
@@ -175,26 +181,26 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     fieldPhonePlaceholder: '+56 9 1234 5678',
     fieldEmail: 'Email (opcional)',
     fieldEmailPlaceholder: 'tu@correo.cl',
-    consentLabel: 'Autorizo que me contacten para coordinar esta visita',
-    privacyNote: 'Usamos tus datos solo para coordinar la visita.',
+    consentLabel: 'Autorizo que me contacten para coordinar esta reserva',
+    privacyNote: 'Usamos tus datos solo para coordinar la reserva.',
     continueCta: 'Continuar',
     summaryYourDetails: 'Tus datos',
     summaryVehicle: 'Vehículo',
     trustLine: 'Es la agenda real del equipo.',
-    confirmCta: 'Confirmar visita',
+    confirmCta: 'Confirmar reserva',
     confirming: 'Confirmando…',
     bookingCodeLabel: 'código de reserva',
     saveCodeNote: 'Guarda el código: te lo pedimos al llegar.',
     doneCta: 'Listo',
     upcoming: 'Próximas',
     history: 'Historial',
-    noVisits: 'Todavía no tienes visitas agendadas.',
-    cancelVisitCta: 'Cancelar visita',
+    noVisits: 'Todavía no tienes reservas agendadas.',
+    cancelVisitCta: 'Cancelar reserva',
     statusScheduled: 'Agendada',
     statusCancelled: 'Cancelada',
     statusCompleted: 'Completada',
     cancelWarning: 'Es permanente. La hora se libera para otra persona.',
-    keepVisitCta: 'Mantener la visita',
+    keepVisitCta: 'Mantener la reserva',
     confirmCancelCta: 'Sí, cancelar',
     cancelling: 'Cancelando…',
     cancelledNote: 'Liberamos la hora.',
@@ -224,7 +230,7 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     viewVehicle: 'View the vehicle',
 
     bookVisit: 'Book a visit',
-    myVisits: 'My visits',
+    myVisits: 'My bookings',
     back: 'Back',
     stepLabel: 'Step',
     stepOf: 'of',
@@ -232,9 +238,9 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     stepTimeTitle: 'Pick a time',
     stepFormTitle: 'Your details',
     stepSummaryTitle: 'Review and confirm',
-    stepDoneTitle: 'Visit booked',
-    cancelTitle: 'Cancel visit',
-    cancelledTitle: 'Visit cancelled',
+    stepDoneTitle: 'Booking confirmed',
+    cancelTitle: 'Cancel booking',
+    cancelledTitle: 'Booking cancelled',
     prevMonth: 'Previous month',
     nextMonth: 'Next month',
     daysWithSlots: 'days with times',
@@ -245,9 +251,9 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     loading: 'Loading the calendar…',
     loadFailed: 'We could not load the calendar.',
     writeUsCta: 'Message us and we will tell you as soon as times open up',
-    writeUsDraft: 'Hi, I want to book a visit. Can you let me know when times open up?',
+    writeUsDraft: 'Hi, I want to book a time. Can you let me know when times open up?',
     otherDeviceQ: 'Booked on another device? Message us here and we will sort it out with you',
-    otherDeviceDraft: 'Hi, I booked a visit from another device and I want to see it.',
+    otherDeviceDraft: 'Hi, I booked a time from another device and I want to see it.',
     noTimesForDay: 'No times left that day.',
     slotTaken: 'Taken',
     fieldName: 'Name',
@@ -256,26 +262,26 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     fieldPhonePlaceholder: '+56 9 1234 5678',
     fieldEmail: 'Email (optional)',
     fieldEmailPlaceholder: 'you@email.com',
-    consentLabel: 'I agree to be contacted to arrange this visit',
-    privacyNote: 'We use your details only to arrange the visit.',
+    consentLabel: 'I agree to be contacted to arrange this booking',
+    privacyNote: 'We use your details only to arrange the booking.',
     continueCta: 'Continue',
     summaryYourDetails: 'Your details',
     summaryVehicle: 'Vehicle',
     trustLine: "This is the team's real calendar.",
-    confirmCta: 'Confirm visit',
+    confirmCta: 'Confirm booking',
     confirming: 'Confirming…',
     bookingCodeLabel: 'booking code',
     saveCodeNote: 'Save the code: we will ask for it when you arrive.',
     doneCta: 'Done',
     upcoming: 'Upcoming',
     history: 'History',
-    noVisits: 'You have no booked visits yet.',
-    cancelVisitCta: 'Cancel visit',
+    noVisits: 'You have no bookings yet.',
+    cancelVisitCta: 'Cancel booking',
     statusScheduled: 'Scheduled',
     statusCancelled: 'Cancelled',
     statusCompleted: 'Completed',
     cancelWarning: 'This is permanent. The time is released for someone else.',
-    keepVisitCta: 'Keep the visit',
+    keepVisitCta: 'Keep the booking',
     confirmCancelCta: 'Yes, cancel',
     cancelling: 'Cancelling…',
     cancelledNote: 'We released the time.',

@@ -1,5 +1,94 @@
 # @vitrina/widget
 
+## 0.7.0
+
+The widget wears the tenant's brand: their word for the booking flow, their
+typeface, their logo.
+
+### `bookingLabel` — the chip says what the tenant configured
+
+```js
+window.vitrinaChat = { /* … */ bookingLabel: 'Agendar demo' };
+```
+
+Used **verbatim**, in whatever language it is written in — it is the dealer's
+own word for their flow, not a translation key, so a chrome-language change
+leaves it alone. Trimmed; blank or over 40 characters falls back to the built-in
+"Agendar visita" / "Book a visit". Resolved from `GET /widget/config` too, so it
+is set in Vitrina and reaches installed widgets without anyone editing a page.
+
+Because the chip can now say "Agendar demo", the rest of the flow may no longer
+insist on a *visita*. Every string that would have contradicted a custom label is
+now neutral — see **Copy** below. The default chip copy is unchanged.
+
+### `font` — DM Sans and six more, or the native stack
+
+```js
+window.vitrinaChat = { /* … */ font: 'dmSans' };
+```
+
+`'system'` (the default) loads nothing and renders exactly as before. The other
+values — `dmSans`, `ibmPlexSans`, `poppins`, `nunitoSans`, `archivo`,
+`montserrat`, `saira` — load one Google Fonts stylesheet each.
+
+The mechanics matter on a third-party site. `@font-face` is not a selector, and
+browsers only match font-face rules declared in the **document's** font source —
+a face declared inside a shadow root is silently ignored. So the widget appends
+one `<link rel="stylesheet" data-vitrina-font="…">` to the host page's `<head>`
+(idempotent per family, across re-inits and across a `destroy()`/`init()` cycle)
+and applies the family *inside* the shadow styles, over a fallback stack that
+ends in the fonts the widget has always used.
+
+Nothing about the widget is deferred on that stylesheet. A dealer CSP that
+blocks it, a 404, an offline visitor: the text renders in the fallback stack and
+everything else behaves identically. Sites with a strict CSP that choose a
+non-system font need `style-src https://fonts.googleapis.com` and `font-src
+https://fonts.gstatic.com` — and need neither when `font` is `system`.
+
+### `logoUrl` — the tenant's mark in the panel header
+
+Top-level now (`logoUrl`), matching the shape `GET /widget/config` sends. The
+older `theme.logoUrl` still works; the top-level one wins when both are set, and
+inline still beats the server in either spelling.
+
+The header logo is also **no longer cropped**: it was a 28×28 `object-fit: cover`
+square, which turned every wide dealer wordmark into its middle third. It is now
+sized by height (22px, `object-fit: contain`, max 108px wide), so a wordmark
+reads. A missing, blank or non-http(s) URL means no logo at all — never a broken
+image, never an empty box.
+
+### Copy
+
+Neutral wording for the strings that would have contradicted a custom booking
+label. Only these changed:
+
+| Key                | es (was → now)                                    | en (was → now)                                    |
+| ------------------ | ------------------------------------------------- | ------------------------------------------------- |
+| `myVisits`         | Mis visitas → **Mis reservas**                     | My visits → **My bookings**                        |
+| `stepDoneTitle`    | Visita agendada → **Reserva confirmada**           | Visit booked → **Booking confirmed**               |
+| `cancelTitle`      | Cancelar visita → **Cancelar reserva**             | Cancel visit → **Cancel booking**                  |
+| `cancelledTitle`   | Visita cancelada → **Reserva cancelada**           | Visit cancelled → **Booking cancelled**            |
+| `confirmCta`       | Confirmar visita → **Confirmar reserva**           | Confirm visit → **Confirm booking**                |
+| `cancelVisitCta`   | Cancelar visita → **Cancelar reserva**             | Cancel visit → **Cancel booking**                  |
+| `keepVisitCta`     | Mantener la visita → **Mantener la reserva**       | Keep the visit → **Keep the booking**              |
+| `noVisits`         | …no tienes visitas agendadas → **…no tienes reservas agendadas** | You have no booked visits yet → **You have no bookings yet** |
+| `consentLabel`     | …coordinar esta visita → **…coordinar esta reserva** | …arrange this visit → **…arrange this booking**   |
+| `privacyNote`      | …coordinar la visita → **…coordinar la reserva**   | …arrange the visit → **…arrange the booking**      |
+| `writeUsDraft`     | …agendar una visita… → **…reservar una hora…**     | …book a visit… → **…book a time…**                 |
+| `otherDeviceDraft` | …reservé una visita… → **…reservé una hora…**      | …booked a visit… → **…booked a time…**             |
+
+`bookVisit` ("Agendar visita" / "Book a visit") is unchanged — it is the default
+the tenant label replaces.
+
+### Notes
+
+Purely additive on the config surface: every widget installed today renders
+byte-identically, because `font` defaults to `system` and the other two default
+to the behaviour they already had. The inline-wins precedence is the same one
+`theme` / `locale` / `welcomeMessage` have always followed, and all three new
+fields count as pinned appearance — a page that sets one is never held back
+waiting for `GET /widget/config`.
+
 ## 0.6.0
 
 The host page can open the agenda itself.

@@ -17,6 +17,7 @@
 // a corrupt or absent entry simply means we paint defaults for one frame.
 
 import type { RemoteWidgetConfig } from './config';
+import { isWidgetFont } from './fonts';
 import { safeLocalStorage, storageKey } from './storage';
 
 const KEY_SUFFIX = ':config';
@@ -52,6 +53,14 @@ export function coerceRemoteConfig(input: unknown): RemoteWidgetConfig | null {
     out.welcomeMessage = raw.welcomeMessage;
   }
   if (raw.locale === 'es' || raw.locale === 'en') out.locale = raw.locale;
+  // The three brand fields. All three arrive as `T | null` rather than being
+  // omitted, and null is "nothing to say" — a non-string is simply dropped, so
+  // it can never clobber the dealer's inline value or the built-in default.
+  if (typeof raw.bookingLabel === 'string') out.bookingLabel = raw.bookingLabel;
+  // An unknown font name means a server newer than this widget. Drop it here
+  // rather than caching it: the honest render is the system stack.
+  if (isWidgetFont(raw.font)) out.font = raw.font;
+  if (typeof raw.logoUrl === 'string') out.logoUrl = raw.logoUrl;
   // Booking gate. Only an explicit `true` survives — the server omits the field
   // when the tenant has bookings off, so `false`, `'true'`, `1` and everything
   // else are all "off". This coercion is also the localStorage read path, so

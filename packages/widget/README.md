@@ -61,7 +61,10 @@ const widget = init({
   // Appearance is managed in Vitrina and fetched at load. Set any of these only
   // to OVERRIDE it for this site — an inline value always wins.
   locale: 'es',                    // optional: 'es' | 'en' (auto-detected otherwise)
-  theme: { accent: '#2563eb', position: 'br', logoUrl: 'https://…/logo.png' },
+  theme: { accent: '#2563eb', position: 'br' },
+  logoUrl: 'https://…/logo.png',   // optional: your mark in the panel header
+  font: 'dmSans',                  // optional: 'system' (default) or a named family
+  bookingLabel: 'Agendar demo',    // optional: what the booking chip says
   welcomeMessage: 'Hola, ¿en qué te puedo ayudar?',
 });
 
@@ -91,8 +94,9 @@ script, and it auto-initializes:
 <script src="https://api.vitrinadev.com/widget.js" defer></script>
 ```
 
-That is the whole install. Appearance — colour, corner, logo, greeting,
-language — is managed in Vitrina (**Configuración › Conexiones › Web chat**) and
+That is the whole install. Appearance — colour, corner, logo, typeface,
+greeting, language, and what the booking chip is called — is managed in Vitrina
+(**Configuración › Conexiones › Web chat**) and
 fetched at load, so changing it never means editing this page again. You can
 still pin any of it inline, and an inline value always wins:
 
@@ -104,7 +108,10 @@ still pin any of it inline, and an inline value always wins:
     // optional, all overrides of what Vitrina serves:
     vehicleId: 'veh_123',
     locale: 'es',
-    theme: { accent: '#2563eb', position: 'br', logoUrl: 'https://…/logo.png' },
+    theme: { accent: '#2563eb', position: 'br' },
+    logoUrl: 'https://…/logo.png',
+    font: 'dmSans',
+    bookingLabel: 'Agendar demo',
     welcomeMessage: 'Hola, ¿en qué te puedo ayudar?',
   };
 </script>
@@ -138,11 +145,14 @@ is idempotent against a double-load, and never throws into the host page.
 | `locale`         | `'es' \| 'en'`                | no       | auto (`navigator`) | Widget chrome language. Falls back to `es` (Chilean market default).        |
 | `theme.accent`   | `string` (CSS color)          | no       | `#111827`          | Brand accent for the launcher + inbound bubbles. Sanitized; bad values fall back. |
 | `theme.position` | `'br' \| 'bl'`                | no       | `'br'`             | Launcher corner: bottom-right or bottom-left.                               |
-| `theme.logoUrl`  | `string` (http/https URL)     | no       | —                  | Optional logo in the panel header. Non-http(s) URLs are ignored.            |
+| `theme.logoUrl`  | `string` (http/https URL)     | no       | —                  | Older spelling of `logoUrl` below. Still honoured; the top-level one wins.  |
+| `logoUrl`        | `string` (http/https URL)     | no       | —                  | Logo in the panel header, ~22px tall, never cropped. Non-http(s) URLs are ignored — no logo, never a broken image. |
+| `font`           | `WidgetFont`                  | no       | `'system'`         | Typeface for the whole widget. See **Fonts** below. Unknown values fall back to `system`. |
+| `bookingLabel`   | `string`                      | no       | localized copy     | What the booking chip says, verbatim — e.g. `Agendar demo`. Trimmed; blank or over 40 chars falls back to the built-in copy. Only visible when the tenant has booking on. |
 | `welcomeMessage` | `string`                      | no       | localized greeting | Greeting shown before the visitor sends the first message.                  |
 | `remoteConfig`   | `boolean`                     | no       | `true`             | Fetch appearance from Vitrina at load. `false` = fully self-contained.      |
 
-### Booking ("Agendar visita")
+### Booking ("Agendar visita", or whatever you call it)
 
 There is no option for this. Booking is **server-gated per tenant**: `GET
 /widget/config` answers `bookingEnabled` and nothing on the page can turn it on,
@@ -155,6 +165,13 @@ A confirmed booking is kept in `localStorage` under
 returning visitor sees and cancels their own visit with no account. Those
 tokens are capabilities — the widget never renders one, never logs one, and
 drops any the server stops resolving.
+
+The chip's words come from the tenant: set `bookingLabel` (in Vitrina, or
+inline) and the chip says exactly that — "Agendar demo", "Reservar hora",
+"Book a test drive". It is used verbatim, in whatever language it is written in,
+and a chrome-language change never rewrites it. The rest of the flow's copy is
+deliberately neutral ("Mis reservas", "Confirmar reserva") so it still reads
+correctly next to a label that is not about a visit.
 
 Set `vehicleLabel` alongside `vehicleId` if you want the car named on the
 booking summary; without a label the widget shows no vehicle line at all rather
@@ -180,10 +197,58 @@ Message content is **never** parsed as HTML. A visitor's own text is written wit
 `innerHTML` in the package, so an injected `<img onerror=…>` in a reply is a
 text node, not an element — XSS-safe by construction rather than by escaping.
 
+### Fonts
+
+`font` picks the typeface for the entire widget. `system` (the default) loads
+**nothing** and uses the native stack. Any other value loads one Google Fonts
+stylesheet:
+
+| Value           | Family        |
+| --------------- | ------------- |
+| `system`        | native stack (default, no request) |
+| `dmSans`        | DM Sans       |
+| `ibmPlexSans`   | IBM Plex Sans |
+| `poppins`       | Poppins       |
+| `nunitoSans`    | Nunito Sans   |
+| `archivo`       | Archivo       |
+| `montserrat`    | Montserrat    |
+| `saira`         | Saira         |
+
+**How it works, and why it is not all inside the Shadow DOM.** A shadow root
+scopes selectors, but `@font-face` is not a selector — browsers only match
+font-face rules declared in the *document's* font source, so a face declared
+inside a shadow stylesheet is silently ignored. The widget therefore appends a
+single
+
+```html
+<link rel="stylesheet" data-vitrina-font="dmSans"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap">
+```
+
+to your `<head>` — once per family, idempotent across re-inits and across a
+`destroy()`/`init()` cycle — and applies the family *inside* the shadow styles.
+
+**It cannot break your page.** The stack it applies always ends in the same
+native fonts the widget has always used, so if the stylesheet is blocked by your
+CSP, 404s, or never arrives because the visitor is offline, the widget simply
+renders in the fallback stack. Nothing is deferred on the font, and Google's
+`display=swap` means text paints immediately either way.
+
+If your site sends a strict Content-Security-Policy and you choose a non-system
+font, allow the two Google Fonts origins:
+
+```
+style-src  https://api.vitrinadev.com https://fonts.googleapis.com;
+font-src   https://fonts.gstatic.com;
+```
+
+You do not need either directive when `font` is `system`.
+
 ### Where appearance comes from
 
-`locale`, `theme.*` and `welcomeMessage` are resolved **server-side** from the
-dealer's own Vitrina settings and fetched once at load (`GET /widget/config`).
+`locale`, `theme.*`, `logoUrl`, `font`, `bookingLabel` and `welcomeMessage` are
+resolved **server-side** from the dealer's own Vitrina settings and fetched once
+at load (`GET /widget/config`).
 That is what lets a dealer restyle their bubble from the admin UI and have
 already-installed widgets pick it up — within about a minute — instead of asking
 every site owner to re-paste a snippet.
