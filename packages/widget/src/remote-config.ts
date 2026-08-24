@@ -16,7 +16,13 @@
 // the dealer's page). Nothing here is a secret, and nothing here is load-bearing:
 // a corrupt or absent entry simply means we paint defaults for one frame.
 
-import type { RemoteWidgetConfig } from './config';
+import {
+  normalizeFaqs,
+  normalizeHomeSubtitle,
+  normalizeHomeTitle,
+  normalizeTeam,
+  type RemoteWidgetConfig,
+} from './config';
 import { isWidgetFont } from './fonts';
 import { safeLocalStorage, storageKey } from './storage';
 
@@ -67,6 +73,40 @@ export function coerceRemoteConfig(input: unknown): RemoteWidgetConfig | null {
   // without the line the flag would round-trip out of the cache as undefined
   // and the chip would flicker off on every repeat pageview.
   if (raw.bookingEnabled === true) out.bookingEnabled = true;
+
+  // Home / Help / team. Sanitized HERE as well as in resolveConfig, because
+  // this function is also the localStorage read path: a tampered cache entry
+  // must not be able to smuggle an unvalidated avatar URL or a 40kB "answer"
+  // into the panel. The sanitizers are pure and idempotent, so the second pass
+  // in resolveConfig changes nothing.
+  //
+  // An EMPTY result is dropped rather than emitted, so a server that sends
+  // `home: null` (or garbage) leaves the key absent — which is what lets the
+  // dealer's inline value, and then the default, still win.
+  const home = raw.home;
+  if (home && typeof home === 'object') {
+    const h = home as Record<string, unknown>;
+    const next: NonNullable<RemoteWidgetConfig['home']> = {};
+    if (h.enabled === true) next.enabled = true;
+    const title = normalizeHomeTitle(h.title);
+    if (title !== null) next.title = title;
+    const subtitle = normalizeHomeSubtitle(h.subtitle);
+    if (subtitle !== null) next.subtitle = subtitle;
+    if (Object.keys(next).length > 0) out.home = next;
+  }
+
+  const help = raw.help;
+  if (help && typeof help === 'object') {
+    const h = help as Record<string, unknown>;
+    const next: NonNullable<RemoteWidgetConfig['help']> = {};
+    if (h.enabled === true) next.enabled = true;
+    const faqs = normalizeFaqs(h.faqs);
+    if (faqs.length > 0) next.faqs = faqs;
+    if (Object.keys(next).length > 0) out.help = next;
+  }
+
+  const team = normalizeTeam(raw.team);
+  if (team.length > 0) out.team = team;
 
   return out;
 }

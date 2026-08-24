@@ -33,6 +33,51 @@ export interface WidgetTheme {
   logoUrl?: string;
 }
 
+/**
+ * The Home tab: an Intercom-style landing surface in front of the transcript.
+ *
+ * OFF unless `enabled` is explicitly true. A tenant who says nothing gets the
+ * widget they have always had — one view, no tab bar, not a single extra node.
+ */
+export interface WidgetHomeConfig {
+  /** Show the Home tab. Only an explicit `true` turns it on. */
+  enabled?: boolean;
+  /** Greeting headline. Trimmed; blank or over 80 chars falls back to "¡Hola! 👋". */
+  title?: string;
+  /** Line under the greeting. Trimmed; blank or over 120 chars falls back. */
+  subtitle?: string;
+}
+
+/** One question/answer pair on the Help tab. The answer is markdown. */
+export interface WidgetFaqItem {
+  q: string;
+  a: string;
+}
+
+/**
+ * The Help tab: a short FAQ accordion plus an escape hatch into the chat.
+ *
+ * Enabled means `enabled === true` AND at least one usable FAQ — a Help tab
+ * that opens onto nothing is worse than no Help tab.
+ */
+export interface WidgetHelpConfig {
+  enabled?: boolean;
+  /** Up to 20; malformed entries are dropped individually, never the whole list. */
+  faqs?: WidgetFaqItem[];
+}
+
+/**
+ * A face on the Home hero. Up to 5 are accepted and the first 3 are drawn, as
+ * an overlapping avatar stack — the "there are humans here" signal.
+ *
+ * `avatarUrl` is validated as an absolute http(s) URL; anything else means the
+ * member's initials on a deterministic colour instead of a broken image.
+ */
+export interface WidgetTeamMemberConfig {
+  name: string;
+  avatarUrl?: string | null;
+}
+
 export interface WidgetConfig {
   /**
    * Publishable widget key (`pk_...`, origin-locked — Vitrina ADR 0033).
@@ -85,10 +130,26 @@ export interface WidgetConfig {
   /** Greeting shown before the visitor sends the first message. */
   welcomeMessage?: string;
   /**
+   * The Home tab. Absent (or `enabled` not true) ⇒ no tab bar, no Home view,
+   * and the panel is exactly the single-view widget it has always been.
+   *
+   * Merged FIELD-WISE with the server's answer, like every other appearance
+   * field: a page can override the greeting and still let Vitrina decide
+   * whether Home is on at all.
+   */
+  home?: WidgetHomeConfig;
+  /** The Help tab (FAQ accordion). Same field-wise merge as `home`. */
+  help?: WidgetHelpConfig;
+  /**
+   * Faces for the Home hero's avatar stack. Inline REPLACES the server's list
+   * rather than merging into it — half of two teams is nobody's team.
+   */
+  team?: WidgetTeamMemberConfig[];
+  /**
    * Fetch the dealer's appearance from Vitrina at init (default `true`).
    *
    * With it on, `theme` / `welcomeMessage` / `locale` / `bookingLabel` /
-   * `font` / `logoUrl` can be managed from the
+   * `font` / `logoUrl` / `home` / `help` / `team` can be managed from the
    * Vitrina admin UI and reach this widget without anyone editing this page —
    * which is the point. Anything set HERE still wins, so these fields remain
    * per-site overrides rather than being taken away.
