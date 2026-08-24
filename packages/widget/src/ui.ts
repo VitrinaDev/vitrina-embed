@@ -276,13 +276,14 @@ const AVATAR_COLORS = [
   '#9a3412',
 ];
 
-/** FNV-ish name hash → one of AVATAR_COLORS. Stable, and never a network call. */
-function avatarColor(name: string): string {
-  let h = 0;
+/** FNV-1a over the name → a palette INDEX. Stable, and never a network call. */
+function avatarColorIndex(name: string): number {
+  let h = 0x811c9dc5;
   for (let i = 0; i < name.length; i += 1) {
-    h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    h ^= name.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
   }
-  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+  return h % AVATAR_COLORS.length;
 }
 
 /** "María Fernández" → "MF"; "Pedro" → "P". Never more than two letters. */
@@ -962,6 +963,12 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     avatarsEl.replaceChildren();
     const shown = team.slice(0, 3);
     avatarsEl.hidden = shown.length === 0;
+    // Eight colours and three overlapping circles: a plain hash pairs two of
+    // them often enough to look like a bug. The hash still picks the colour;
+    // a collision with the circle IMMEDIATELY to the left just steps one along.
+    // Both inputs (the name, its place in the roster) are stable, so a member
+    // keeps their colour across every repaint.
+    let prev = -1;
     for (const member of shown) {
       if (member.avatarUrl) {
         const img = document.createElement('img');
@@ -971,13 +978,19 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
         img.alt = member.name;
         img.loading = 'lazy';
         avatarsEl.appendChild(img);
+        // A photo between two initials breaks the adjacency the step-along
+        // exists to fix, so it also clears it.
+        prev = -1;
         continue;
       }
       // No usable URL ⇒ initials on a deterministic colour. Never a broken
       // <img>, and never a grey blank where a person should be.
+      let index = avatarColorIndex(member.name);
+      if (index === prev) index = (index + 1) % AVATAR_COLORS.length;
+      prev = index;
       const el = document.createElement('span');
       el.className = 'vtr-avatar vtr-avatar-initials';
-      el.style.setProperty('background-color', avatarColor(member.name));
+      el.style.setProperty('background-color', AVATAR_COLORS[index]);
       el.title = member.name;
       el.textContent = initialsOf(member.name);
       avatarsEl.appendChild(el);

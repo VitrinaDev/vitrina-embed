@@ -528,10 +528,17 @@ export const STYLES = `
 }
 .vtr-avatar + .vtr-avatar { margin-left: -8px; }
 
-/* The cards float over the bottom of the hero fade. */
-.vtr-home-cards { padding: 0 16px 16px; margin-top: -32px; display: grid; gap: 12px; }
+/* The cards float over the bottom of the hero fade.
+   minmax(0, 1fr) is load-bearing, not decoration: the recent-conversation
+   preview is a single nowrap line, so an auto-sized grid column takes its
+   min-content width and the card grows straight out through the panel. */
+.vtr-home-cards {
+  padding: 0 16px 16px; margin-top: -32px;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px;
+}
 .vtr-home-card {
-  display: flex; align-items: center; gap: 12px; text-align: left; width: 100%;
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  width: 100%; min-width: 0;
   padding: 14px 16px; cursor: pointer; font: inherit; color: var(--vtr-text);
   background: var(--vtr-surface); border: 1px solid var(--vtr-border); border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.06);
@@ -542,7 +549,7 @@ export const STYLES = `
 .vtr-home-card-title { font-size: 14px; font-weight: 600; line-height: 1.3; }
 .vtr-home-card-sub { font-size: 12.5px; line-height: 1.35; color: var(--vtr-muted); }
 .vtr-home-card-preview {
-  font-size: 12.5px; color: var(--vtr-muted);
+  min-width: 0; font-size: 12.5px; color: var(--vtr-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .vtr-home-card-icon { flex: none; display: flex; color: var(--vtr-accent); }
