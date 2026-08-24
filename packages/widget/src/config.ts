@@ -2,7 +2,16 @@
 // types.ts is FROZEN (contract); everything here is internal and free to evolve.
 
 import { resolveFont } from './fonts';
-import type { WidgetConfig, WidgetFont, WidgetLocale, WidgetTheme } from './types';
+import { validateHttpUrl } from './theme';
+import type {
+  WidgetConfig,
+  WidgetFont,
+  WidgetHelpConfig,
+  WidgetHomeConfig,
+  WidgetLocale,
+  WidgetTeamMemberConfig,
+  WidgetTheme,
+} from './types';
 
 // --- Private transport DTOs (mirror vitrina-app/src/api/schemas/widget-chat.ts
 //     and the `ok()` envelope in api/response.ts EXACTLY) --------------------
@@ -173,6 +182,36 @@ export type BookFailureReason =
 
 // --- Resolved config --------------------------------------------------------
 
+/** A sanitized FAQ pair, ready to paint. Both sides are non-blank. */
+export interface Faq {
+  q: string;
+  a: string;
+}
+
+/** A sanitized team member. `avatarUrl` is either an http(s) href or null. */
+export interface TeamMember {
+  name: string;
+  avatarUrl: string | null;
+}
+
+/** The Home tab, resolved. `enabled` decides whether the tab bar exists at all. */
+export interface ResolvedHome {
+  enabled: boolean;
+  /** null ⇒ the built-in, locale-driven greeting. */
+  title: string | null;
+  subtitle: string | null;
+}
+
+/**
+ * The Help tab, resolved. `enabled` is re-derived client-side as
+ * `flag && faqs.length > 0`: a tenant who switched Help on and then deleted
+ * every question gets no tab rather than an empty one.
+ */
+export interface ResolvedHelp {
+  enabled: boolean;
+  faqs: Faq[];
+}
+
 export interface ResolvedConfig {
   publicKey: string;
   /** Normalized: no trailing slash. Endpoints are `${apiBaseUrl}/widget/*`. */
@@ -198,6 +237,12 @@ export interface ResolvedConfig {
    * reachable, which is exactly today's widget.
    */
   bookingEnabled: boolean;
+  /** The Home tab. `enabled: false` ⇒ nothing about it is ever constructed. */
+  home: ResolvedHome;
+  /** The Help tab. `enabled: false` ⇒ nothing about it is ever constructed. */
+  help: ResolvedHelp;
+  /** Faces for the Home hero. Empty ⇒ no avatar stack. */
+  team: TeamMember[];
 }
 
 /**
@@ -236,6 +281,16 @@ export interface RemoteWidgetConfig {
    * Layered UNDER the same field passed inline, like everything else here.
    */
   logoUrl?: string;
+  /**
+   * The Home tab, server-owned. Merged FIELD-WISE under the inline `home`, so a
+   * page that overrides the greeting still lets Vitrina decide whether the tab
+   * exists.
+   */
+  home?: WidgetHomeConfig;
+  /** The Help tab (FAQ accordion), server-owned. Same field-wise merge. */
+  help?: WidgetHelpConfig;
+  /** Faces for the Home hero. An inline `team` replaces this list wholesale. */
+  team?: WidgetTeamMemberConfig[];
 }
 
 const INIT_ERROR = '[vitrina-widget] init() requires { publicKey, apiBaseUrl }.';
@@ -253,6 +308,101 @@ export function normalizeBookingLabel(input: unknown): string | null {
   const value = input.trim();
   if (value === '' || value.length > MAX_BOOKING_LABEL) return null;
   return value;
+}
+
+// --- Home / Help / team sanitizers ------------------------------------------
+//
+// Every one of these runs TWICE — once on the wire (remote-config.ts, which is
+// also the localStorage read path) and once here, over the merged object. They
+// are pure and idempotent, so the second pass costs nothing and the widget can
+// never paint a value that skipped the gate.
+//
+// The shape of the failure matters as much as the caps. A malformed FAQ entry
+// drops ITSELF, not the list: a dealer with one bad row still gets the other
+// nineteen answers on screen. A too-long title falls back to our copy rather
+// than being truncated mid-sentence.
+
+export const MAX_HOME_TITLE = 80;
+export const MAX_HOME_SUBTITLE = 120;
+export const MAX_FAQS = 20;
+export const MAX_FAQ_Q = 200;
+export const MAX_FAQ_A = 2000;
+export const MAX_TEAM = 5;
+export const MAX_TEAM_NAME = 40;
+
+/** Trim to a bounded, non-blank string, or null. */
+function boundedText(input: unknown, max: number): string | null {
+  if (typeof input !== 'string') return null;
+  const value = input.trim();
+  if (value === '' || value.length > max) return null;
+  return value;
+}
+
+/** Greeting headline for the Home hero, or null for the built-in copy. */
+export function normalizeHomeTitle(input: unknown): string | null {
+  return boundedText(input, MAX_HOME_TITLE);
+}
+
+/** Line under the Home greeting, or null for the built-in copy. */
+export function normalizeHomeSubtitle(input: unknown): string | null {
+  return boundedText(input, MAX_HOME_SUBTITLE);
+}
+
+/**
+ * Keep the usable FAQ pairs, in order, up to the cap. Anything that is not an
+ * object with two non-blank, in-bounds strings is dropped on its own.
+ */
+export function normalizeFaqs(input: unknown): Faq[] {
+  if (!Array.isArray(input)) return [];
+  const out: Faq[] = [];
+  for (const raw of input) {
+    if (out.length >= MAX_FAQS) break;
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as Record<string, unknown>;
+    const q = boundedText(item.q, MAX_FAQ_Q);
+    const a = boundedText(item.a, MAX_FAQ_A);
+    if (q === null || a === null) continue;
+    out.push({ q, a });
+  }
+  return out;
+}
+
+/**
+ * Keep the usable team members, in order, up to the cap. An avatar URL that is
+ * not absolute http(s) becomes null — which the UI renders as initials, never
+ * as a broken image.
+ */
+export function normalizeTeam(input: unknown): TeamMember[] {
+  if (!Array.isArray(input)) return [];
+  const out: TeamMember[] = [];
+  for (const raw of input) {
+    if (out.length >= MAX_TEAM) break;
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as Record<string, unknown>;
+    const name = boundedText(item.name, MAX_TEAM_NAME);
+    if (name === null) continue;
+    out.push({ name, avatarUrl: validateHttpUrl(item.avatarUrl as string | null | undefined) });
+  }
+  return out;
+}
+
+/**
+ * The Home tab, resolved from an already-merged object. `enabled` is opt-IN:
+ * only an explicit `true` builds the tab bar, so a server that starts sending
+ * `home: {}` tomorrow cannot restructure a live widget.
+ */
+export function resolveHome(input: WidgetHomeConfig | undefined): ResolvedHome {
+  return {
+    enabled: input?.enabled === true,
+    title: normalizeHomeTitle(input?.title),
+    subtitle: normalizeHomeSubtitle(input?.subtitle),
+  };
+}
+
+/** The Help tab, resolved. Enabled means the flag AND at least one usable FAQ. */
+export function resolveHelp(input: WidgetHelpConfig | undefined): ResolvedHelp {
+  const faqs = normalizeFaqs(input?.faqs);
+  return { enabled: input?.enabled === true && faqs.length > 0, faqs };
 }
 
 /** navigator.language heuristic → 'en' only when it clearly starts with 'en'. */
@@ -326,6 +476,12 @@ export function resolveConfig(
   // top-level one simply wins WITHIN each tier, and inline still beats remote.
   const logoUrl =
     config.logoUrl ?? config.theme?.logoUrl ?? remote?.logoUrl ?? remote?.theme?.logoUrl;
+  // Home and Help merge FIELD-WISE, exactly like `theme`: inline `home.title`
+  // beats the server's, and the server's `home.enabled` still applies when the
+  // page said nothing about it. `team` is an array and merges wholesale —
+  // interleaving two rosters would produce a team that does not exist.
+  const home = { ...defined(remote?.home), ...defined(config.home) };
+  const help = { ...defined(remote?.help), ...defined(config.help) };
   return {
     publicKey: config.publicKey,
     apiBaseUrl,
@@ -343,6 +499,9 @@ export function resolveConfig(
     // Deliberately NOT layered with an inline override: a booking surface that
     // calls routes the tenant has switched off would only ever paint a 404.
     bookingEnabled: remote?.bookingEnabled === true,
+    home: resolveHome(home),
+    help: resolveHelp(help),
+    team: normalizeTeam(config.team ?? remote?.team),
   };
 }
 
