@@ -22,7 +22,6 @@ export const STYLES = `
   --vtr-text: #111827;
   --vtr-muted: #6b7280;
   --vtr-border: #e5e7eb;
-  --vtr-bubble-in: var(--vtr-accent);
   --vtr-bubble-out: #f3f4f6;
   --vtr-danger: #b91c1c;
   --vtr-ok: #15803d;
@@ -48,7 +47,11 @@ export const STYLES = `
    the already-computed value — so the rule that reads it has to live on the
    same element that carries it. With nothing set, this resolves to the :host
    value: byte-identical to the stack the widget has always used. */
-.vtr-root { position: fixed; bottom: 20px; z-index: 2147483000; font-family: var(--vtr-font); }
+/* --vtr-bubble-in lives HERE for the same reason: var() substitutes at
+   computed-value time on the element that declares it. Declared on :host it
+   froze to the default accent before .vtr-root's setProperty could matter —
+   visitor bubbles never picked up the dealer accent. */
+.vtr-root { position: fixed; bottom: 20px; z-index: 2147483000; font-family: var(--vtr-font); --vtr-bubble-in: var(--vtr-accent); }
 .vtr-root[data-pos="br"] { right: 20px; }
 .vtr-root[data-pos="bl"] { left: 20px; }
 
