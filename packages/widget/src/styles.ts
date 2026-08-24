@@ -275,7 +275,7 @@ export const STYLES = `
    up: one screen, one thing to do, nothing tabbable behind it. */
 .vtr-actions {
   display: flex; flex-wrap: wrap; gap: 6px;
-  padding: 8px 12px 0;
+  padding: 8px 12px 10px;
 }
 .vtr-actions[hidden] { display: none; }
 .vtr-chip {
