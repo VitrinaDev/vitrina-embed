@@ -95,7 +95,8 @@ script, and it auto-initializes:
 ```
 
 That is the whole install. Appearance — colour, corner, logo, typeface,
-greeting, language, and what the booking chip is called — is managed in Vitrina
+greeting, language, what the booking chip is called, and whether the panel has
+Home and Help tabs — is managed in Vitrina
 (**Configuración › Conexiones › Web chat**) and
 fetched at load, so changing it never means editing this page again. You can
 still pin any of it inline, and an inline value always wins:
@@ -150,6 +151,9 @@ is idempotent against a double-load, and never throws into the host page.
 | `font`           | `WidgetFont`                  | no       | `'system'`         | Typeface for the whole widget. See **Fonts** below. Unknown values fall back to `system`. |
 | `bookingLabel`   | `string`                      | no       | localized copy     | What the booking chip says, verbatim — e.g. `Agendar demo`. Trimmed; blank or over 40 chars falls back to the built-in copy. Only visible when the tenant has booking on. |
 | `welcomeMessage` | `string`                      | no       | localized greeting | Greeting shown before the visitor sends the first message.                  |
+| `home`           | `{ enabled?, title?, subtitle? }` | no   | off                | The Home tab. See **Home and Help tabs** below. Off unless `enabled` is `true`. |
+| `help`           | `{ enabled?, faqs? }`         | no       | off                | The Help tab (FAQ accordion). Off unless `enabled` is `true` **and** at least one usable question survives. |
+| `team`           | `Array<{ name, avatarUrl? }>` | no       | `[]`               | Faces for the Home hero. Up to 5 accepted, first 3 drawn. Non-http(s) `avatarUrl` ⇒ initials. |
 | `remoteConfig`   | `boolean`                     | no       | `true`             | Fetch appearance from Vitrina at load. `false` = fully self-contained.      |
 
 ### Booking ("Agendar visita", or whatever you call it)
@@ -196,6 +200,59 @@ Message content is **never** parsed as HTML. A visitor's own text is written wit
 *constructs* DOM nodes and never produces an HTML string. There is no
 `innerHTML` in the package, so an injected `<img onerror=…>` in a reply is a
 text node, not an element — XSS-safe by construction rather than by escaping.
+
+### Home and Help tabs
+
+By default the panel is one view — the conversation — exactly as it has always
+been. Turn on `home` and/or `help` and it grows a tab bar:
+
+```json
+{
+  "home": { "enabled": true, "title": "¡Hola! 👋", "subtitle": "¿Cómo te podemos ayudar?" },
+  "help": {
+    "enabled": true,
+    "faqs": [
+      { "q": "¿Cómo agendo una visita?", "a": "Desde el botón **Agendar visita** eliges día y hora." },
+      { "q": "¿Cuáles son los horarios?", "a": "Lunes a sábado, 9:30 a 19:00." }
+    ]
+  },
+  "team": [
+    { "name": "María Fernández", "avatarUrl": "https://cdn.dealer.cl/maria.jpg" },
+    { "name": "Pedro Soto" }
+  ]
+}
+```
+
+That is the shape `GET /widget/config` sends, so this is set **in Vitrina** and
+reaches installed widgets without anyone editing a page. The same keys work
+inline as per-site overrides, and they merge field-wise: an inline
+`home.title` beats the server's while the server's `home.enabled` still decides
+whether the tab exists. `team` is the exception and replaces the server's list
+wholesale — interleaving two rosters would produce a team that does not exist.
+
+- **Home** is a hero in your accent colour (logo, an overlapping stack of up to
+  three faces, greeting) with cards floating over its fade: the last message
+  when there is a conversation to come back to, *Envíanos un mensaje* always,
+  and the booking card only for a tenant whose agenda is on — titled with
+  `bookingLabel`, never with our copy. `title` and `subtitle` are optional; both
+  fall back to localized defaults.
+- **Help** is an FAQ accordion. Answers are markdown (the same safe subset the
+  chat renders — bold, italics, links, code, lists) and, like everything else in
+  this package, become DOM nodes rather than an HTML string. Several answers can
+  stand open at once, and one sticky button at the bottom drops the visitor into
+  the composer.
+- **Where the visitor lands.** Home, unless replies were waiting behind a closed
+  panel — then Messages, because they came back to read something.
+
+Caps and failure modes, all of them per-item rather than all-or-nothing:
+`title` ≤ 80 chars, `subtitle` ≤ 120, up to 20 FAQs (`q` ≤ 200, `a` ≤ 2000),
+up to 5 team members (`name` ≤ 40). A malformed FAQ entry is dropped on its own
+and the rest still render; an over-long title falls back to the default instead
+of being truncated mid-sentence; an `avatarUrl` that is not an absolute http(s)
+URL becomes the member's initials on a stable colour, never a broken image.
+
+The panel is 400×704 (up from 360×520) whether or not you use the tabs, and
+still goes fullscreen at ≤480px.
 
 ### Fonts
 
@@ -246,7 +303,8 @@ You do not need either directive when `font` is `system`.
 
 ### Where appearance comes from
 
-`locale`, `theme.*`, `logoUrl`, `font`, `bookingLabel` and `welcomeMessage` are
+`locale`, `theme.*`, `logoUrl`, `font`, `bookingLabel`, `welcomeMessage`,
+`home`, `help` and `team` are
 resolved **server-side** from the dealer's own Vitrina settings and fetched once
 at load (`GET /widget/config`).
 That is what lets a dealer restyle their bubble from the admin UI and have
