@@ -81,7 +81,7 @@ function slot(ym: string, day: string, from: string, to: string, available: bool
 // This fixture used to pin day 12 of the current month, which made the suite
 // green for eleven days a month and red for the rest: after the 11th the visit
 // the happy path books lands in the PAST, so the visits badge counts zero
-// upcoming and "Mis visitas · 1" never arrives. Nothing about the widget was
+// upcoming and "Mis reservas · 1" never arrives. Nothing about the widget was
 // wrong — the calendar the test drove was.
 //
 // Everything below is computed from `now`, so the booked slot is always a real
@@ -397,7 +397,7 @@ describe('booking gate', () => {
   it('mounts the chip when the server says bookingEnabled', async () => {
     const w = await boot();
     expect(must('.vtr-chip-book').textContent).toBe('Agendar visita');
-    // "Mis visitas" stays away until this browser actually holds a booking.
+    // "Mis reservas" stays away until this browser actually holds a booking.
     expect((q('.vtr-chip-visits') as HTMLElement).hidden).toBe(true);
     w.destroy();
   });
@@ -460,7 +460,7 @@ describe('fecha → hora → datos → resumen → ok', () => {
     expect(shadowOf().innerHTML).not.toContain(TOKEN);
 
     // The chip now offers the visitor their own booking back.
-    await vi.waitFor(() => expect(must('.vtr-chip-visits').textContent).toBe('Mis visitas · 1'));
+    await vi.waitFor(() => expect(must('.vtr-chip-visits').textContent).toBe('Mis reservas · 1'));
     w.destroy();
   });
 
@@ -600,9 +600,9 @@ describe('slot taken mid-form', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Mis visitas + cancel — the keyring is the whole identity.
+// 4. Mis reservas + cancel — the keyring is the whole identity.
 // ---------------------------------------------------------------------------
-describe('mis visitas', () => {
+describe('mis reservas', () => {
   function seedRing(startsAt: string): void {
     globalThis.localStorage.setItem(
       BOOKINGS_KEY,
@@ -678,12 +678,12 @@ describe('mis visitas', () => {
       'Es permanente. La hora se libera para otra persona.',
     );
     // The PRIMARY button keeps the visit; cancelling is the quiet secondary.
-    expect(must('.vtr-bk-primary').textContent).toBe('Mantener la visita');
+    expect(must('.vtr-bk-primary').textContent).toBe('Mantener la reserva');
     expect(must('.vtr-bk-secondary').textContent).toBe('Sí, cancelar');
 
     must<HTMLButtonElement>('.vtr-bk-secondary').click();
     await vi.waitFor(() =>
-      expect(must('.vtr-bk-title').textContent).toBe('Visita cancelada'),
+      expect(must('.vtr-bk-title').textContent).toBe('Reserva cancelada'),
     );
     // The freed hour stays visible, struck through, and the only next step is
     // to book again.
@@ -734,12 +734,12 @@ describe('escape hatches', () => {
     expect(must('.vtr-booking').hidden).toBe(true);
     expect(must('.vtr-panel').getAttribute('data-booking')).toBeNull();
     expect(must<HTMLTextAreaElement>('.vtr-input').value).toBe(
-      'Hola, quiero agendar una visita. ¿Me avisan cuando haya horas?',
+      'Hola, quiero reservar una hora. ¿Me avisan cuando haya disponibilidad?',
     );
     w.destroy();
   });
 
-  it('offers the chat for the cross-device case on Mis visitas', async () => {
+  it('offers the chat for the cross-device case on Mis reservas', async () => {
     globalThis.localStorage.setItem(
       BOOKINGS_KEY,
       JSON.stringify([{ token: TOKEN, displayId: 'A-1', startsAt: new Date().toISOString() }]),
@@ -753,7 +753,7 @@ describe('escape hatches', () => {
     );
     must<HTMLButtonElement>('[data-bk-fallback="otherDeviceDraft"]').click();
     expect(must<HTMLTextAreaElement>('.vtr-input').value).toBe(
-      'Hola, reservé una visita desde otro dispositivo y quiero verla.',
+      'Hola, reservé una hora desde otro dispositivo y quiero verla.',
     );
     w.destroy();
   });

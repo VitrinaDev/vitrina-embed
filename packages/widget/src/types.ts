@@ -5,6 +5,25 @@
 
 export type WidgetLocale = 'es' | 'en';
 
+/**
+ * The typeface the widget paints itself in. A CLOSED set, not an arbitrary
+ * family name: each value maps to a Google Fonts stylesheet the widget injects
+ * into the host page's <head> (see ./fonts for why it cannot live in the shadow
+ * root). `system` is the default and loads nothing at all.
+ *
+ * An unknown value — a newer server offering a face this widget predates —
+ * resolves to `system` rather than to a family the browser cannot find.
+ */
+export type WidgetFont =
+  | 'system'
+  | 'dmSans'
+  | 'ibmPlexSans'
+  | 'poppins'
+  | 'nunitoSans'
+  | 'archivo'
+  | 'montserrat'
+  | 'saira';
+
 export interface WidgetTheme {
   /** Brand accent for the launcher + agent bubbles. Any CSS color. */
   accent?: string;
@@ -37,12 +56,39 @@ export interface WidgetConfig {
   vehicleLabel?: string;
   locale?: WidgetLocale;
   theme?: WidgetTheme;
+  /**
+   * What the booking chip over the composer says — "Agendar demo", "Reservar
+   * hora", "Book a test drive". Used VERBATIM, in whatever language it is
+   * written in: it is the tenant's own words, not a translation key, so it does
+   * not change when the chrome language does.
+   *
+   * Trimmed; blank or longer than 40 characters falls back to the built-in
+   * "Agendar visita" / "Book a visit". Omit for the default.
+   */
+  bookingLabel?: string;
+  /**
+   * Typeface for the whole widget. Default `system` — today's native stack,
+   * which loads nothing. Any other value injects ONE Google Fonts <link> into
+   * the host page's <head>; if it fails to load, the widget renders in the
+   * system stack and nothing breaks.
+   */
+  font?: WidgetFont;
+  /**
+   * Logo shown in the panel header, ~22px tall (absolute http(s) URL).
+   *
+   * The same slot as `theme.logoUrl`, hoisted to the top level because it is
+   * brand identity rather than a colour choice, and because that is the shape
+   * `GET /widget/config` sends. This wins over `theme.logoUrl` when both are
+   * set inline; an unusable URL simply means no logo, never a broken image.
+   */
+  logoUrl?: string;
   /** Greeting shown before the visitor sends the first message. */
   welcomeMessage?: string;
   /**
    * Fetch the dealer's appearance from Vitrina at init (default `true`).
    *
-   * With it on, `theme` / `welcomeMessage` / `locale` can be managed from the
+   * With it on, `theme` / `welcomeMessage` / `locale` / `bookingLabel` /
+   * `font` / `logoUrl` can be managed from the
    * Vitrina admin UI and reach this widget without anyone editing this page —
    * which is the point. Anything set HERE still wins, so these fields remain
    * per-site overrides rather than being taken away.
@@ -59,8 +105,8 @@ export interface WidgetInstance {
   open(): void;
   close(): void;
   /**
-   * Open the panel with the "Agendar visita" calendar already up, for a host
-   * page that has its own booking button.
+   * Open the panel with the booking calendar already up, for a host page that
+   * has its own booking button (whatever `bookingLabel` calls it).
    *
    * Returns `true` when the calendar is showing and `false` when the visitor
    * got the conversation instead — this tenant has booking off, or the widget

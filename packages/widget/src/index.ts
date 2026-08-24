@@ -32,7 +32,13 @@ import type { WidgetNotice } from './config';
 import type { WidgetConfig, WidgetInstance } from './types';
 import { createWidgetUI } from './ui';
 
-export type { WidgetConfig, WidgetInstance, WidgetTheme, WidgetLocale } from './types';
+export type {
+  WidgetConfig,
+  WidgetInstance,
+  WidgetTheme,
+  WidgetLocale,
+  WidgetFont,
+} from './types';
 
 /** Best-effort idempotency key for a sent message. */
 function newClientMessageId(): string {
@@ -224,6 +230,8 @@ export function init(config: WidgetConfig): WidgetInstance {
     locale: resolved.locale,
     theme: resolved.theme,
     welcomeMessage: resolved.welcomeMessage,
+    font: resolved.font,
+    bookingLabel: resolved.bookingLabel,
     hidden: awaitingFirstConfig,
     callbacks: {
       onRequestOpen: () => instanceOpen(),
@@ -296,6 +304,10 @@ export function init(config: WidgetConfig): WidgetInstance {
           // leaving.
           ui.setLocale(resolved.locale);
           ui.applyTheme(resolved.theme);
+          // After setLocale, which repaints the chip from our own copy: a tenant
+          // label must be the LAST word on what that button says.
+          ui.setBookingLabel(resolved.bookingLabel);
+          ui.applyFont(resolved.font);
           ui.setWelcomeMessage(resolved.welcomeMessage);
           // The gate is server-owned and can move in both directions: a dealer
           // who switches booking off mid-session gets the chip taken away

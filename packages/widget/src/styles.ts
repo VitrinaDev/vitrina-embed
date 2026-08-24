@@ -1,15 +1,23 @@
 // The widget's stylesheet — a single CONSTANT template string injected once into
 // the shadow root. It is NEVER built from user input: the only dynamic bits are
-// the `--vtr-accent` custom property (set via style.setProperty from a sanitized
-// color) and the `data-pos` attribute (a fixed 'br'|'bl'). Living inside the
-// shadow root, none of these rules leak to — or are overridden by — host CSS.
+// the `--vtr-accent` / `--vtr-font` custom properties (set via style.setProperty
+// from sanitized, closed-set values) and the `data-pos` attribute (a fixed
+// 'br'|'bl'). Living inside the shadow root, none of these rules leak to — or
+// are overridden by — host CSS.
+//
+// The one interpolation below is SYSTEM_FONT_STACK, a module constant that has
+// to be shared with fonts.ts (which builds the same stack as the fallback under
+// a web font). It is not user input and never has been.
 //
 // DEFAULT_ACCENT must match theme.ts (kept in the var() fallback below).
+
+import { SYSTEM_FONT_STACK } from './fonts';
 
 export const STYLES = `
 :host {
   all: initial;
   --vtr-accent: #111827;
+  --vtr-font: ${SYSTEM_FONT_STACK};
   --vtr-surface: #ffffff;
   --vtr-text: #111827;
   --vtr-muted: #6b7280;
@@ -18,7 +26,7 @@ export const STYLES = `
   --vtr-bubble-out: #f3f4f6;
   --vtr-danger: #b91c1c;
   --vtr-ok: #15803d;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--vtr-font);
   line-height: 1.4;
 }
 @media (prefers-color-scheme: dark) {
@@ -34,7 +42,13 @@ export const STYLES = `
 }
 * { box-sizing: border-box; }
 
-.vtr-root { position: fixed; bottom: 20px; z-index: 2147483000; }
+/* The font is re-declared HERE, not only on :host, because .vtr-root is where
+   the resolved stack is set (alongside --vtr-accent). A custom property set on
+   the root cannot reach a font-family declared on its parent — children inherit
+   the already-computed value — so the rule that reads it has to live on the
+   same element that carries it. With nothing set, this resolves to the :host
+   value: byte-identical to the stack the widget has always used. */
+.vtr-root { position: fixed; bottom: 20px; z-index: 2147483000; font-family: var(--vtr-font); }
 .vtr-root[data-pos="br"] { right: 20px; }
 .vtr-root[data-pos="bl"] { left: 20px; }
 
@@ -81,7 +95,11 @@ export const STYLES = `
   display: flex; align-items: center; gap: 10px;
   padding: 14px 16px; background: var(--vtr-accent); color: #fff;
 }
-.vtr-logo { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; background: rgba(255,255,255,0.15); }
+/* Sized by HEIGHT, never cropped: a dealer's logo is usually a wide wordmark,
+   and a square object-fit:cover box turned every one of them into a cropped
+   middle. contain + auto width lets a wordmark read and still bounds how much
+   of a 360px header it can take. */
+.vtr-logo { height: 22px; width: auto; max-width: 108px; border-radius: 4px; object-fit: contain; }
 /* The logo element is always in the DOM so a server-resolved one (ADR 0046) can
    land without re-ordering the header. Explicit rather than relying on the UA
    [hidden] rule, which any future display declaration here would silently beat. */

@@ -1,7 +1,8 @@
 // Config resolution + the PRIVATE transport-layer types. The public surface in
 // types.ts is FROZEN (contract); everything here is internal and free to evolve.
 
-import type { WidgetConfig, WidgetLocale, WidgetTheme } from './types';
+import { resolveFont } from './fonts';
+import type { WidgetConfig, WidgetFont, WidgetLocale, WidgetTheme } from './types';
 
 // --- Private transport DTOs (mirror vitrina-app/src/api/schemas/widget-chat.ts
 //     and the `ok()` envelope in api/response.ts EXACTLY) --------------------
@@ -183,6 +184,13 @@ export interface ResolvedConfig {
   theme: Required<Pick<WidgetTheme, 'position'>> & WidgetTheme;
   welcomeMessage: string | null;
   /**
+   * The tenant's own name for the booking chip, or null for the built-in copy.
+   * Already trimmed and length-checked — the UI paints it verbatim.
+   */
+  bookingLabel: string | null;
+  /** Always a value this widget can render; unknown names collapse to 'system'. */
+  font: WidgetFont;
+  /**
    * Whether this tenant takes bookings from the widget. SERVER-ONLY, and false
    * unless `GET /widget/config` said otherwise: a dealer's page cannot turn on
    * a feature their Vitrina tenant has not enabled, and the booking routes 404
@@ -212,9 +220,40 @@ export interface RemoteWidgetConfig {
    * which is also the default.
    */
   bookingEnabled?: true;
+  /**
+   * The tenant's own name for the booking chip ("Agendar demo").
+   *
+   * The wire type is `string | null` and null means "I have nothing to say" —
+   * the server sends it explicitly rather than omitting the key. The coercion
+   * drops null for exactly that reason, so an absent value and a null one are
+   * the same thing here: fall back to the built-in copy.
+   */
+  bookingLabel?: string;
+  /** The tenant's typeface. Absent (or unknown) ⇒ the system stack. */
+  font?: WidgetFont;
+  /**
+   * The tenant's logo, hoisted out of `theme` — the shape the server sends.
+   * Layered UNDER the same field passed inline, like everything else here.
+   */
+  logoUrl?: string;
 }
 
 const INIT_ERROR = '[vitrina-widget] init() requires { publicKey, apiBaseUrl }.';
+
+/**
+ * Longest booking label the chip can carry without wrapping into something that
+ * no longer reads as a button. Beyond it we keep the built-in copy rather than
+ * truncating: half of a dealer's sentence is worse than a coherent default.
+ */
+export const MAX_BOOKING_LABEL = 40;
+
+/** Trim a tenant-supplied booking label, or null when it is unusable. */
+export function normalizeBookingLabel(input: unknown): string | null {
+  if (typeof input !== 'string') return null;
+  const value = input.trim();
+  if (value === '' || value.length > MAX_BOOKING_LABEL) return null;
+  return value;
+}
 
 /** navigator.language heuristic → 'en' only when it clearly starts with 'en'. */
 function detectLocale(): WidgetLocale {
@@ -251,7 +290,10 @@ export function hasInlineAppearance(config: WidgetConfig): boolean {
   return (
     Object.keys(theme).length > 0 ||
     config?.welcomeMessage !== undefined ||
-    config?.locale !== undefined
+    config?.locale !== undefined ||
+    config?.bookingLabel !== undefined ||
+    config?.font !== undefined ||
+    config?.logoUrl !== undefined
   );
 }
 
@@ -279,14 +321,25 @@ export function resolveConfig(
     config.locale ?? remote?.locale ?? detectLocale();
   const theme = { ...defined(remote?.theme), ...defined(config.theme) };
   const welcome = config.welcomeMessage ?? remote?.welcomeMessage ?? null;
+  // The logo has TWO spellings: `theme.logoUrl` (where it has always lived) and
+  // the top-level `logoUrl` the server sends. Same slot, same sanitizer — the
+  // top-level one simply wins WITHIN each tier, and inline still beats remote.
+  const logoUrl =
+    config.logoUrl ?? config.theme?.logoUrl ?? remote?.logoUrl ?? remote?.theme?.logoUrl;
   return {
     publicKey: config.publicKey,
     apiBaseUrl,
     vehicleId: config.vehicleId ?? null,
     vehicleLabel: config.vehicleLabel ?? null,
     locale,
-    theme: { ...theme, position: theme.position ?? 'br' },
+    theme: {
+      ...theme,
+      position: theme.position ?? 'br',
+      ...(logoUrl !== undefined ? { logoUrl } : {}),
+    },
     welcomeMessage: welcome,
+    bookingLabel: normalizeBookingLabel(config.bookingLabel ?? remote?.bookingLabel),
+    font: resolveFont(config.font ?? remote?.font),
     // Deliberately NOT layered with an inline override: a booking surface that
     // calls routes the tenant has switched off would only ever paint a 404.
     bookingEnabled: remote?.bookingEnabled === true,

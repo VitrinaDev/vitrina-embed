@@ -5,8 +5,10 @@
 // XSS SAFETY (AC#6): message content reaches the DOM only as text nodes or as
 // elements built by ./markdown, which constructs nodes and never produces an
 // HTML string; ids and metadata go through dataset/setAttribute. There is NO
-// innerHTML anywhere, no eval, no remote script/style/asset (the only remote
-// assets are a validated logo <img> and validated http(s) link targets).
+// innerHTML anywhere and no eval. The remote assets are exactly three, all of
+// them inert: a validated logo <img>, validated http(s) link targets, and — in
+// the HOST document rather than the shadow root, because @font-face has to be —
+// one Google Fonts <link> per configured family (see ./fonts).
 
 import {
   createBookingUi,
@@ -15,11 +17,12 @@ import {
   type BookingViewState,
 } from './booking-ui';
 import type { WidgetMessage, WidgetNotice } from './config';
+import { ensureFontLoaded, fontStack } from './fonts';
 import { makeT, type StringKey, type Translate } from './i18n';
 import { renderMarkdown } from './markdown';
 import { STYLES } from './styles';
 import { resolveAccent, resolvePosition, validateLogoUrl } from './theme';
-import type { WidgetLocale, WidgetTheme } from './types';
+import type { WidgetFont, WidgetLocale, WidgetTheme } from './types';
 
 export type BannerState = 'none' | 'offline' | 'reconnecting' | 'error' | 'sending';
 
@@ -32,9 +35,9 @@ export interface WidgetUiCallbacks {
   onRequestClose(): void;
   /** Retry a failed send, re-using its ORIGINAL client message id (idempotent). */
   onRetry(clientMessageId: string): void;
-  /** "Agendar visita" chip. Absent ⇒ no booking surface is ever constructed. */
+  /** The booking chip. Absent ⇒ no booking surface is ever constructed. */
   onBookingOpen?(): void;
-  /** "Mis visitas · N" chip. */
+  /** "Mis reservas · N" chip. */
   onVisitsOpen?(): void;
   /** Everything the booking overlay reports. */
   booking?: BookingCallbacks;
@@ -70,6 +73,13 @@ export interface WidgetUiOptions {
   locale: WidgetLocale;
   theme: WidgetTheme;
   welcomeMessage: string | null;
+  /** Typeface. Omitted ⇒ 'system': nothing is loaded and nothing changes. */
+  font?: WidgetFont;
+  /**
+   * The tenant's own name for the booking chip, already normalized. null ⇒ the
+   * built-in "Agendar visita" / "Book a visit", which follows the locale.
+   */
+  bookingLabel?: string | null;
   callbacks: WidgetUiCallbacks;
   /**
    * Mount invisibly, awaiting `reveal()`. Used ONLY when the appearance is
@@ -108,6 +118,15 @@ export interface WidgetUi {
    * never be left half-themed.
    */
   applyTheme(theme: WidgetTheme): void;
+  /**
+   * Re-typeface a MOUNTED widget. Declares the family in the HOST document (the
+   * only place `@font-face` works — see ./fonts) and points the shadow styles at
+   * it. Idempotent: calling it twice with the same font loads nothing twice, and
+   * 'system' both loads nothing and restores the original stack exactly.
+   */
+  applyFont(font: WidgetFont): void;
+  /** Swap the booking chip's copy. null restores the built-in, locale-driven one. */
+  setBookingLabel(label: string | null): void;
   /** Swap the pre-conversation greeting, repainting it if it is on screen. */
   setWelcomeMessage(message: string | null): void;
   /** Swap the chrome language, re-rendering every static string in place. */
@@ -180,6 +199,10 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   let t: Translate = opts.t;
   let currentLocale: WidgetLocale = opts.locale;
   let welcomeMessage: string | null = opts.welcomeMessage;
+  // The tenant's own word for the booking flow. NOT a translation key: it is
+  // whatever the dealer typed, in whatever language, and a locale swap leaves it
+  // alone on purpose.
+  let bookingLabel: string | null = opts.bookingLabel ?? null;
 
   const host = document.createElement('div');
   // Defensive light-DOM styles: the shadow root protects everything INSIDE it,
@@ -218,6 +241,29 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   }
   applyPosition(theme.position);
   root.style.setProperty('--vtr-accent', resolveAccent(theme.accent));
+
+  /**
+   * Point the widget at a typeface. Two halves, and BOTH are needed:
+   *
+   *   1. the face is declared in the host document (`ensureFontLoaded`), because
+   *      a shadow root cannot host an @font-face the engine will honour;
+   *   2. the family is applied inside the shadow styles, via `--vtr-font`.
+   *
+   * The stack always ends in the system fonts, so half 1 failing — a dealer CSP,
+   * an offline visitor, a blocked CDN — costs the widget nothing but the face.
+   * 'system' REMOVES the property rather than setting an equal value, so the
+   * widget falls back to the :host declaration it has always had.
+   */
+  function applyFont(font: WidgetFont): void {
+    ensureFontLoaded(font);
+    if (font === 'system') {
+      root.style.removeProperty('--vtr-font');
+      return;
+    }
+    root.style.setProperty('--vtr-font', fontStack(font));
+  }
+  applyFont(opts.font ?? 'system');
+
   if (opts.hidden) root.style.setProperty('visibility', 'hidden');
 
   // --- Launcher ---
@@ -522,6 +568,11 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   let bookingOpen = false;
   let visitInfo = { hasBookings: false, upcoming: 0 };
 
+  /** What the booking chip says: the tenant's words, else the built-in copy. */
+  function bookChipText(): string {
+    return bookingLabel ?? t('bookVisit');
+  }
+
   function paintVisitsChip(): void {
     if (!visitsBtn) return;
     visitsBtn.hidden = !visitInfo.hasBookings;
@@ -537,7 +588,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     bookBtn = document.createElement('button');
     bookBtn.className = 'vtr-chip vtr-chip-book';
     bookBtn.type = 'button';
-    bookBtn.textContent = t('bookVisit');
+    bookBtn.textContent = bookChipText();
 
     visitsBtn = document.createElement('button');
     visitsBtn.className = 'vtr-chip vtr-chip-visits';
@@ -664,6 +715,15 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       root.style.setProperty('--vtr-accent', resolveAccent(next.accent));
       applyLogo(next.logoUrl);
     },
+    applyFont,
+    setBookingLabel(label: string | null): void {
+      const next = label ?? null;
+      if (next === bookingLabel) return;
+      bookingLabel = next;
+      // Only if the chip exists. A tenant without booking must not gain one for
+      // having been told what it would have been called.
+      if (bookBtn) bookBtn.textContent = bookChipText();
+    },
     setWelcomeMessage(message: string | null): void {
       if (message === welcomeMessage) return;
       welcomeMessage = message;
@@ -738,7 +798,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       // The booking surface is chrome too: a language swap that left the
       // calendar in Spanish would be the same half-translated panel this
       // method exists to prevent.
-      if (bookBtn) bookBtn.textContent = t('bookVisit');
+      // The chip follows the locale ONLY while it is using our copy: a tenant
+      // label is the dealer's own word, not a string we are entitled to swap.
+      if (bookBtn) bookBtn.textContent = bookChipText();
       paintVisitsChip();
       bookingUi?.setLocale();
     },
