@@ -100,6 +100,7 @@ export const STYLES = `
 .vtr-panel[hidden] { display: none; }
 
 .vtr-header {
+  position: relative;
   display: flex; align-items: center; gap: 10px;
   padding: 14px 16px; background: var(--vtr-accent); color: #fff;
 }
@@ -112,8 +113,17 @@ export const STYLES = `
    land without re-ordering the header. Explicit rather than relying on the UA
    [hidden] rule, which any future display declaration here would silently beat. */
 .vtr-logo[hidden] { display: none; }
-.vtr-title { font-weight: 600; font-size: 15px; flex: 1; margin: 0; }
+/* Absolutely centered so the title sits at the header's TRUE middle no matter
+   how wide the logo (up to 108px) or the close button are — flex order would
+   center it between them, visibly off-center next to a wide wordmark. */
+.vtr-title {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  max-width: 55%; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 600; font-size: 15px; margin: 0;
+}
 .vtr-close {
+  margin-left: auto;
   background: transparent; border: none; color: #fff; cursor: pointer;
   width: 32px; height: 32px; border-radius: 8px; font-size: 20px; line-height: 1;
   display: flex; align-items: center; justify-content: center;
@@ -564,6 +574,7 @@ export const STYLES = `
 
 /* Help. Compact header, scrolling accordion, one sticky way out. */
 .vtr-vhead {
+  position: relative;
   display: flex; align-items: center; gap: 10px;
   padding: 13px 16px; background: var(--vtr-surface); color: var(--vtr-text);
 }
