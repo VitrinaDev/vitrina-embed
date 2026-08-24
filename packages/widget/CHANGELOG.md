@@ -1,5 +1,12 @@
 # @vitrina/widget
 
+## 0.8.2
+
+The header title ("Conversemos") is now absolutely centered in both header
+shapes — the legacy accent band and the compact tabs/help headers — instead of
+sitting left of center next to the logo. Long titles ellipsize at 55% of the
+header width; the close button keeps its right edge via margin-left:auto.
+
 ## 0.8.1
 
 Spacing fix: the entry-chip row (`.vtr-actions`, e.g. "Agendar visita" /
