@@ -232,6 +232,11 @@ export function init(config: WidgetConfig): WidgetInstance {
     welcomeMessage: resolved.welcomeMessage,
     font: resolved.font,
     bookingLabel: resolved.bookingLabel,
+    // A repeat visitor's cached config already knows whether this tenant has
+    // the tabs, so they paint with the panel rather than a round trip after it.
+    home: resolved.home,
+    help: resolved.help,
+    team: resolved.team,
     hidden: awaitingFirstConfig,
     callbacks: {
       onRequestOpen: () => instanceOpen(),
@@ -309,6 +314,12 @@ export function init(config: WidgetConfig): WidgetInstance {
           ui.setBookingLabel(resolved.bookingLabel);
           ui.applyFont(resolved.font);
           ui.setWelcomeMessage(resolved.welcomeMessage);
+          // The tab surfaces, AFTER setLocale so their built-in copy lands in
+          // the language we just switched to — and, like the booking label,
+          // with the tenant's own words as the last word over ours.
+          ui.setTeam(resolved.team);
+          ui.setHomeConfig(resolved.home);
+          ui.setHelpConfig(resolved.help);
           // The gate is server-owned and can move in both directions: a dealer
           // who switches booking off mid-session gets the chip taken away
           // rather than a chip that opens a 404.
