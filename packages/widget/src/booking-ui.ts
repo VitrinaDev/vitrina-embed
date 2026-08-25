@@ -90,6 +90,12 @@ export interface BookingViewState {
   target: BookingVisitView | null;
   /** Host-supplied vehicle title; rendered only when present. */
   vehicleLabel: string | null;
+  /**
+   * The server advertised a Turnstile site key: the resumen pane reserves a
+   * slot for the challenge and announces it via `onTurnstileSlot` after every
+   * paint of that step, so the controller can (re)mount a fresh widget there.
+   */
+  turnstileRequired: boolean;
 }
 
 export interface BookingCallbacks {
@@ -113,6 +119,8 @@ export interface BookingCallbacks {
   /** Drop into the chat with a draft — the cross-device and waitlist escapes. */
   onChatFallback(draftKey: 'writeUsDraft' | 'otherDeviceDraft'): void;
   onRetry(): void;
+  /** The resumen pane just painted its Turnstile slot — mount into it. */
+  onTurnstileSlot(el: HTMLElement): void;
 }
 
 export interface BookingUi {
@@ -564,6 +572,13 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
     );
     card.appendChild(who);
     wrap.appendChild(card);
+    if (state.turnstileRequired) {
+      // The challenge container. Painted EVERY time the pane renders and
+      // announced after `setBody` mounts it — the controller mounts a fresh
+      // Turnstile widget per paint, which is also how a consumed/rejected
+      // token gets replaced (they are single-use).
+      wrap.appendChild(el('div', 'vtr-bk-turnstile'));
+    }
     wrap.appendChild(el('div', 'vtr-bk-note', t()('trustLine')));
     return wrap;
   }
@@ -763,9 +778,12 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
           setBody(datosEl);
           syncForm(state);
           break;
-        case 'resumen':
+        case 'resumen': {
           setBody(renderResumen(state));
+          const slot = root.querySelector<HTMLElement>('.vtr-bk-turnstile');
+          if (slot) callbacks.onTurnstileSlot(slot);
           break;
+        }
         case 'ok':
           setBody(renderOk(state));
           break;

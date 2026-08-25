@@ -396,6 +396,9 @@ export const STYLES = `
 .vtr-bk-dot { width: 4px; height: 4px; border-radius: 999px; background: var(--vtr-accent); }
 .vtr-bk-count { font-size: 12px; color: var(--vtr-muted); }
 .vtr-bk-note, .vtr-ha-note { font-size: 12px; line-height: 1.5; color: var(--vtr-muted); }
+/* Turnstile slot on the resumen pane. min-height matches the rendered
+   challenge so the confirm button doesn't jump when the iframe arrives. */
+.vtr-bk-turnstile { margin: 10px 0 2px; min-height: 65px; display: flex; justify-content: center; }
 .vtr-bk-empty { display: flex; flex-direction: column; gap: 6px; }
 .vtr-bk-empty-title, .vtr-ha-oktitle { font-size: 13.5px; font-weight: 600; }
 .vtr-bk-warn { font-size: 13px; line-height: 1.5; color: var(--vtr-danger); }

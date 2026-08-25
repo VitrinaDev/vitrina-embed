@@ -15,6 +15,7 @@
 // once José enables AI later — no widget change needed.
 
 import { createBookingController, type BookingController } from './booking-controller';
+import { createTurnstileGate, type TurnstileGate } from './turnstile';
 import { createBookingStore } from './booking-store';
 import { hasInlineAppearance, resolveConfig, resolveHomeCards, type ResolvedHomeCards } from './config';
 import {
@@ -185,6 +186,8 @@ export function init(config: WidgetConfig): WidgetInstance {
   let booking: BookingController | null = null;
   let bookingEnabled = false;
 
+  let turnstileGate: TurnstileGate | null = null;
+
   function ensureBookingController(): BookingController {
     if (!booking) {
       booking = createBookingController({
@@ -209,6 +212,12 @@ export function init(config: WidgetConfig): WidgetInstance {
         onClose: () => {
           if (!destroyed) ui.closeBooking();
         },
+        // One gate per controller: created iff the server advertised a site
+        // key, torn down with the controller. Null keeps the pre-Turnstile
+        // behaviour byte-for-byte (tokenless POST, server fails open).
+        turnstile: resolved.turnstileSiteKey
+          ? (turnstileGate ??= createTurnstileGate(resolved.turnstileSiteKey))
+          : null,
       });
     }
     return booking;
@@ -364,6 +373,7 @@ export function init(config: WidgetConfig): WidgetInstance {
         onConfirmCancel: () => ensureBookingController().callbacks.onConfirmCancel(),
         onBookAgain: () => ensureBookingController().callbacks.onBookAgain(),
         onChatFallback: (key) => ensureBookingController().callbacks.onChatFallback(key),
+        onTurnstileSlot: (el) => ensureBookingController().callbacks.onTurnstileSlot(el),
         onRetry: () => ensureBookingController().callbacks.onRetry(),
       },
       onHomeAction: (kind) => {
@@ -791,6 +801,10 @@ export function init(config: WidgetConfig): WidgetInstance {
       if (booking) {
         booking.destroy();
         booking = null;
+      }
+      if (turnstileGate) {
+        turnstileGate.destroy();
+        turnstileGate = null;
       }
       if (homeActions) {
         homeActions.destroy();

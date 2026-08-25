@@ -718,6 +718,9 @@ export class VitrinaTransport {
     email?: string;
     vehicleId?: string | null;
     notes?: string;
+    /** Cloudflare Turnstile token; omitted when the tenant's config carries
+     *  no site key (the server then fails open — or 400s, its call). */
+    turnstileToken?: string;
   }): Promise<CallResult<BookingResult>> {
     const body: Record<string, unknown> = {
       starts_at: input.startsAt,
@@ -729,6 +732,7 @@ export class VitrinaTransport {
     if (input.email) body.email = input.email;
     if (input.vehicleId) body.vehicle_id = input.vehicleId;
     if (input.notes) body.notes = input.notes;
+    if (input.turnstileToken) body.turnstile_token = input.turnstileToken;
 
     const res = await this.call<unknown>('/widget/appointments', {
       method: 'POST',

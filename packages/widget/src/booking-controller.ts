@@ -21,6 +21,7 @@ import type {
 } from './booking-ui';
 import { formatDayLong } from './booking-ui';
 import type { AvailabilitySlot, VitrinaTransport } from './transport';
+import type { TurnstileGate } from './turnstile';
 import type { WidgetLocale } from './types';
 
 /** Only the four booking methods — the rest of the transport is none of our business. */
@@ -43,6 +44,12 @@ export interface BookingControllerDeps {
   onChatFallback(draftKey: 'writeUsDraft' | 'otherDeviceDraft'): void;
   /** Close the overlay, leaving the transcript exactly where it was. */
   onClose(): void;
+  /**
+   * The Turnstile gate, or null when the server advertised no site key. Null
+   * ⇒ bookings POST tokenless and the server fails open, exactly as before
+   * this field existed.
+   */
+  turnstile: TurnstileGate | null;
 }
 
 export interface BookingController {
@@ -189,6 +196,7 @@ export function createBookingController(deps: BookingControllerDeps): BookingCon
     visits: [],
     target: null,
     vehicleLabel: null,
+    turnstileRequired: deps.turnstile !== null,
   };
 
   function render(): void {
@@ -378,6 +386,12 @@ export function createBookingController(deps: BookingControllerDeps): BookingCon
     render();
 
     const vehicle = deps.getVehicle();
+    // The gate resolves instantly when the visitor already passed the
+    // challenge on the resumen pane; otherwise it waits for them to. Null
+    // (no script, no mount, timeout) sends nothing — the server's verdict
+    // stays the single source of truth.
+    const turnstileToken = deps.turnstile ? await deps.turnstile.token() : null;
+    if (destroyed || gen !== generation) return;
     const res = await transport.bookAppointment({
       startsAt: slot.startsAt,
       endsAt: slot.endsAt,
@@ -385,6 +399,7 @@ export function createBookingController(deps: BookingControllerDeps): BookingCon
       phone: state.form.phone.trim() || undefined,
       email: state.form.email.trim() || undefined,
       vehicleId: vehicle.id,
+      turnstileToken: turnstileToken ?? undefined,
     });
     if (destroyed || gen !== generation) return;
     state.submitting = false;
@@ -422,6 +437,19 @@ export function createBookingController(deps: BookingControllerDeps): BookingCon
       if (state.selectedDay) state.daySlots = slotsForDay(state.selectedDay);
       state.step = 'hora';
       state.error = res.reason === 'slot_taken' ? 'errSlotTaken' : 'errVehicleTaken';
+      render();
+      return;
+    }
+    // A Turnstile refusal renders its own line, and the render itself
+    // re-paints the resumen pane — which remounts a FRESH challenge (tokens
+    // are single-use, so a retry with the rejected one could only fail).
+    if (
+      res.reason === 'missing_token' ||
+      res.reason === 'invalid_token' ||
+      res.reason === 'timeout_or_duplicate' ||
+      res.reason === 'outage'
+    ) {
+      state.error = 'errVerification';
       render();
       return;
     }
@@ -523,6 +551,9 @@ export function createBookingController(deps: BookingControllerDeps): BookingCon
     },
     onConfirm: () => {
       void confirm();
+    },
+    onTurnstileSlot: (el: HTMLElement) => {
+      deps.turnstile?.mountFresh(el);
     },
     onDone: () => deps.onClose(),
     onAskCancel: (ref: string) => {
