@@ -1,5 +1,12 @@
 # @vitrina/widget
 
+## 0.9.1
+
+Home header redesign (founder feedback): the accent gradient hero is gone.
+The brand accent is now a slim 5px top line on the panel (tabs mode); the
+Home header sits on the surface with regular text colors and a hairline
+under it, and the cards flow below instead of floating over a fade.
+
 ## 0.9.0
 
 Three automotive quick actions on the Home screen — **comprar un auto**,

@@ -545,16 +545,27 @@ select.vtr-ha-input { cursor: pointer; }
 }
 .vtr-tab-dot[hidden] { display: none; }
 
-/* Home */
+/* Home. The brand accent is a slim TOP LINE on the panel (tabs mode), not a
+   painted hero: the header below it stays on the surface with regular text
+   colors (0.9.1 — the gradient hero read as heavy; founder feedback). The
+   panel's overflow:hidden clips the bar to the rounded corners. */
+.vtr-panel[data-tabs]::before {
+  content: ''; display: block; flex: none; height: 5px;
+  background: var(--vtr-accent);
+}
 .vtr-home-scroll { flex: 1; min-height: 0; overflow-y: auto; }
 .vtr-home-hero {
-  padding: 20px 20px 48px; color: #fff;
-  background: linear-gradient(180deg, var(--vtr-accent) 0%, var(--vtr-accent) 55%, transparent 100%);
+  padding: 16px 20px 18px; color: var(--vtr-text);
+  background: var(--vtr-surface);
+  border-bottom: 1px solid var(--vtr-border);
 }
 .vtr-home-top { display: flex; align-items: center; gap: 10px; }
 .vtr-home-spacer { flex: 1; }
-.vtr-home-title { margin: 20px 0 0; font-size: 22px; font-weight: 700; line-height: 1.25; }
-.vtr-home-sub { margin: 6px 0 0; font-size: 15px; line-height: 1.4; opacity: 0.92; }
+/* The hero close/avatar chrome sits on surface now, not on accent. */
+.vtr-home-hero .vtr-close { color: var(--vtr-text); }
+.vtr-home-hero .vtr-close:hover { background: var(--vtr-bubble-out); }
+.vtr-home-title { margin: 18px 0 0; font-size: 22px; font-weight: 700; line-height: 1.25; }
+.vtr-home-sub { margin: 6px 0 0; font-size: 15px; line-height: 1.4; color: var(--vtr-muted); }
 
 /* The avatar stack: the "there are humans here" signal, in 28px. */
 .vtr-avatars { display: flex; align-items: center; }
@@ -570,12 +581,13 @@ select.vtr-ha-input { cursor: pointer; }
 }
 .vtr-avatar + .vtr-avatar { margin-left: -8px; }
 
-/* The cards float over the bottom of the hero fade.
-   minmax(0, 1fr) is load-bearing, not decoration: the recent-conversation
-   preview is a single nowrap line, so an auto-sized grid column takes its
-   min-content width and the card grows straight out through the panel. */
+/* Cards sit in normal flow under the hero's hairline (no hero fade to float
+   over since 0.9.1). minmax(0, 1fr) is load-bearing, not decoration: the
+   recent-conversation preview is a single nowrap line, so an auto-sized grid
+   column takes its min-content width and the card grows straight out through
+   the panel. */
 .vtr-home-cards {
-  padding: 0 16px 16px; margin-top: -32px;
+  padding: 16px 16px;
   display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px;
 }
 .vtr-home-card {
