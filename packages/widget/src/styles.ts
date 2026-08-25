@@ -301,55 +301,59 @@ export const STYLES = `
 .vtr-chip[hidden] { display: none; }
 .vtr-panel[data-booking] .vtr-composer,
 .vtr-panel[data-booking] .vtr-actions,
-.vtr-panel[data-booking] .vtr-tabs { display: none; }
+.vtr-panel[data-booking] .vtr-tabs,
+.vtr-panel[data-home-action] .vtr-composer,
+.vtr-panel[data-home-action] .vtr-actions,
+.vtr-panel[data-home-action] .vtr-tabs { display: none; }
 
 /* The overlay itself. Covers the panel, does NOT replace it — the transcript is
    still in the DOM underneath, untouched, and closing is a hidden flip. */
-.vtr-booking {
+.vtr-booking, .vtr-ha {
   position: absolute; inset: 0; z-index: 1;
   background: var(--vtr-surface); color: var(--vtr-text);
   display: flex; flex-direction: column; overflow: hidden;
 }
-.vtr-booking[hidden] { display: none; }
+.vtr-booking[hidden], .vtr-ha[hidden] { display: none; }
 
-.vtr-bk-head {
+.vtr-bk-head, .vtr-ha-head {
   display: flex; align-items: center; gap: 8px;
   padding: 14px 16px; background: var(--vtr-accent); color: #fff;
 }
-.vtr-bk-title { font-weight: 600; font-size: 15px; flex: 1; }
-.vtr-bk-back, .vtr-bk-close {
+.vtr-bk-title, .vtr-ha-title { font-weight: 600; font-size: 15px; flex: 1; }
+.vtr-bk-back, .vtr-bk-close, .vtr-ha-back, .vtr-ha-close {
   background: transparent; border: none; color: #fff; cursor: pointer;
   width: 30px; height: 30px; border-radius: 8px; padding: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 20px; line-height: 1;
 }
-.vtr-bk-back svg { width: 20px; height: 20px; }
-.vtr-bk-back:hover, .vtr-bk-close:hover { background: rgba(255,255,255,0.18); }
-.vtr-bk-back[hidden] { display: none; }
+.vtr-bk-back svg, .vtr-ha-back svg { width: 20px; height: 20px; }
+.vtr-bk-back:hover, .vtr-bk-close:hover,
+.vtr-ha-back:hover, .vtr-ha-close:hover { background: rgba(255,255,255,0.18); }
+.vtr-bk-back[hidden], .vtr-ha-back[hidden] { display: none; }
 
-.vtr-bk-step {
+.vtr-bk-step, .vtr-ha-step {
   padding: 8px 16px 0; font-size: 11px; font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--vtr-muted);
 }
-.vtr-bk-step[hidden] { display: none; }
+.vtr-bk-step[hidden], .vtr-ha-step[hidden] { display: none; }
 
-.vtr-bk-body {
+.vtr-bk-body, .vtr-ha-body {
   flex: 1; overflow-y: auto; padding: 12px 16px;
   display: flex; flex-direction: column; gap: 10px;
 }
 
-.vtr-bk-foot {
+.vtr-bk-foot, .vtr-ha-foot {
   display: flex; flex-direction: column; gap: 8px;
   padding: 10px 16px 14px; border-top: 1px solid var(--vtr-border);
 }
 .vtr-bk-foot[hidden] { display: none; }
-.vtr-bk-error { font-size: 12px; color: var(--vtr-danger); text-align: center; }
-.vtr-bk-error[hidden] { display: none; }
-.vtr-bk-primary {
+.vtr-bk-error, .vtr-ha-error { font-size: 12px; color: var(--vtr-danger); text-align: center; }
+.vtr-bk-error[hidden], .vtr-ha-error[hidden] { display: none; }
+.vtr-bk-primary, .vtr-ha-primary {
   background: var(--vtr-accent); color: #fff; border: none; cursor: pointer;
   border-radius: 10px; height: 42px; font: inherit; font-weight: 600; font-size: 14px;
 }
-.vtr-bk-primary:disabled { opacity: 0.45; cursor: default; }
+.vtr-bk-primary:disabled, .vtr-ha-primary:disabled { opacity: 0.45; cursor: default; }
 .vtr-bk-primary[hidden] { display: none; }
 .vtr-bk-secondary {
   background: transparent; color: var(--vtr-danger); cursor: pointer;
@@ -391,9 +395,9 @@ export const STYLES = `
 /* The ember dot: the whole trust device on a thin agenda. */
 .vtr-bk-dot { width: 4px; height: 4px; border-radius: 999px; background: var(--vtr-accent); }
 .vtr-bk-count { font-size: 12px; color: var(--vtr-muted); }
-.vtr-bk-note { font-size: 12px; line-height: 1.5; color: var(--vtr-muted); }
+.vtr-bk-note, .vtr-ha-note { font-size: 12px; line-height: 1.5; color: var(--vtr-muted); }
 .vtr-bk-empty { display: flex; flex-direction: column; gap: 6px; }
-.vtr-bk-empty-title { font-size: 13.5px; font-weight: 600; }
+.vtr-bk-empty-title, .vtr-ha-oktitle { font-size: 13.5px; font-weight: 600; }
 .vtr-bk-warn { font-size: 13px; line-height: 1.5; color: var(--vtr-danger); }
 
 /* Low-tone exit to a human, present at every dead end. */
@@ -421,20 +425,45 @@ export const STYLES = `
 .vtr-bk-slot:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 1px; }
 
 /* Form */
-.vtr-bk-form { display: flex; flex-direction: column; gap: 10px; }
-.vtr-bk-label { display: flex; flex-direction: column; gap: 4px; }
-.vtr-bk-label-text { font-size: 12px; color: var(--vtr-muted); }
-.vtr-bk-input {
+.vtr-bk-form, .vtr-ha-form { display: flex; flex-direction: column; gap: 10px; }
+.vtr-bk-label, .vtr-ha-label { display: flex; flex-direction: column; gap: 4px; }
+.vtr-bk-label-text, .vtr-ha-label-text { font-size: 12px; color: var(--vtr-muted); }
+.vtr-bk-input, .vtr-ha-input {
   border: 1px solid var(--vtr-border); border-radius: 10px; padding: 9px 11px;
   font: inherit; font-size: 14px;
   background: var(--vtr-surface); color: var(--vtr-text);
 }
-.vtr-bk-input:focus { outline: 2px solid var(--vtr-accent); outline-offset: -1px; }
-.vtr-bk-consent {
+.vtr-bk-input:focus, .vtr-ha-input:focus { outline: 2px solid var(--vtr-accent); outline-offset: -1px; }
+.vtr-bk-consent, .vtr-ha-consent {
   display: flex; align-items: flex-start; gap: 8px;
   font-size: 12.5px; line-height: 1.45; cursor: pointer;
 }
-.vtr-bk-check { width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--vtr-accent); flex: none; }
+.vtr-bk-check, .vtr-ha-check { width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--vtr-accent); flex: none; }
+
+/* Home quick actions (0.9.0). Everything above is shared with the booking
+   overlay; only what these forms alone need is declared here. */
+.vtr-ha-area { min-height: 74px; resize: vertical; }
+select.vtr-ha-input { cursor: pointer; }
+.vtr-ha-pick {
+  display: flex; align-items: center; justify-content: center; height: 40px;
+  border: 1px dashed var(--vtr-border); border-radius: 10px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--vtr-accent);
+}
+.vtr-ha-pick:hover { border-color: var(--vtr-accent); background: var(--vtr-bubble-out); }
+.vtr-ha-pick:focus-within { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+/* Hidden, never display:none — the label click has to reach a live control. */
+.vtr-ha-fileinput { width: 0; height: 0; opacity: 0; overflow: hidden; }
+.vtr-ha-files { display: flex; flex-direction: column; gap: 6px; }
+.vtr-ha-file {
+  display: flex; align-items: center; gap: 8px; font-size: 12.5px;
+  border: 1px solid var(--vtr-border); border-radius: 9px; padding: 6px 10px;
+}
+.vtr-ha-filename { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vtr-ha-fileremove {
+  flex: none; background: transparent; border: none; cursor: pointer; padding: 0 2px;
+  font: inherit; font-size: 17px; line-height: 1; color: var(--vtr-muted);
+}
+.vtr-ha-fileremove:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
 
 /* Summary + confirmation */
 .vtr-bk-card {
@@ -447,7 +476,7 @@ export const STYLES = `
 .vtr-bk-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
 .vtr-bk-rowkey { color: var(--vtr-muted); flex: none; }
 .vtr-bk-rowval { text-align: right; }
-.vtr-bk-done svg { width: 44px; height: 44px; color: var(--vtr-ok); }
+.vtr-bk-done svg, .vtr-ha-done svg { width: 44px; height: 44px; color: var(--vtr-ok); }
 .vtr-bk-codelabel {
   font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--vtr-muted);
 }
