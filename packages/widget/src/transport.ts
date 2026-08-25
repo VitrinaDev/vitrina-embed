@@ -15,6 +15,10 @@
 //   GET    /widget/appointments/:token                -> {data:<appointment>}
 //   DELETE /widget/appointments/:token                -> {data:<cancelled appointment>}
 //
+// Consignment intake (0.9.0), the one MULTIPART route — the visitor's photos
+// ride with the fields, so the browser sets Content-Type and its boundary:
+//   POST /widget/consignments   multipart/form-data  -> 201 received / 200 duplicate
+//
 // Auth on EVERY call: Authorization: Bearer <pk_...>. Visitor-scoped calls add
 // X-Vitrina-Visitor: <vt_...>. NEVER credentials:'include' and NEVER any header
 // outside the fixed CORS allow-list (Authorization, Content-Type, X-Vitrina-Visitor)
@@ -64,6 +68,28 @@ export interface SendInput {
 }
 
 export type SendOutcome = SendResult | { error: true; status: number | null };
+
+/**
+ * What the ledger did with a consignment intake.
+ *
+ *   received  — a new row was written (201)
+ *   duplicate — this car is already on the ledger (200); the visitor's ask is
+ *               satisfied either way, so the UI treats it as a success
+ */
+export type ConsignmentStatus = 'received' | 'duplicate';
+
+/**
+ * Why an intake did not land.
+ *
+ *   photos  — 415: the server would not take one of the files
+ *   invalid — any other refusal; retryable, and the form is preserved
+ *   network — the request never reached anyone
+ */
+export type ConsignmentFailure = 'photos' | 'invalid' | 'network';
+
+export type ConsignmentOutcome =
+  | { ok: true; status: ConsignmentStatus }
+  | { ok: false; reason: ConsignmentFailure };
 
 /**
  * The result of a history read. DISCRIMINATED, and that is the whole point: the
@@ -564,6 +590,61 @@ export class VitrinaTransport {
     }
     if (res.ok) return { ok: true, messages: res.data?.messages ?? [] };
     return { ok: false, status: res.status };
+  }
+
+  // --- Consignment intake (0.9.0) -------------------------------------------
+
+  /**
+   * Post the "vender tu auto" intake to `POST /widget/consignments`.
+   *
+   * THE ONLY MULTIPART CALL IN THIS FILE, and the reason it does not go through
+   * `call()`: the visitor's photos ride with the fields, so the body is a
+   * FormData and the browser — not us — has to set `Content-Type`, because only
+   * it knows the multipart boundary. Setting the header by hand produces a body
+   * the server cannot parse, which is why `authHeaders({ json: false })` is
+   * load-bearing here rather than a detail.
+   *
+   * Everything else is the same pipeline as every other call: `Authorization:
+   * Bearer pk_`, `?siteKey=` for the preflight, no visitor token (an intake is
+   * not visitor-scoped — it is authorised by the key plus the origin lock), no
+   * credentials, and never a throw.
+   *
+   * 201 and 200 are BOTH successes: a duplicate means the dealer already has
+   * this car, which is the visitor's ask satisfied, not an error to show them.
+   */
+  async submitConsignment(
+    fields: Record<string, string>,
+    photos: File[],
+  ): Promise<ConsignmentOutcome> {
+    const body = new FormData();
+    for (const [key, value] of Object.entries(fields)) body.append(key, value);
+    // One repeated field rather than fotos[0], fotos[1]…: it is what a multipart
+    // parser reads back as a list without anyone agreeing on an index syntax.
+    for (const photo of photos) body.append('fotos', photo);
+
+    let res: Response;
+    try {
+      res = await fetch(this.url('/widget/consignments'), {
+        method: 'POST',
+        headers: this.authHeaders({ withVisitor: false, json: false }),
+        body,
+      });
+    } catch {
+      return { ok: false, reason: 'network' };
+    }
+    if (res.status === 415) return { ok: false, reason: 'photos' };
+    if (!res.ok) return { ok: false, reason: 'invalid' };
+    // The status code already says which it was; the body is read only in case
+    // a server answers 200 for a fresh row and names the outcome itself.
+    let status: ConsignmentStatus = res.status === 200 ? 'duplicate' : 'received';
+    try {
+      const json = (await res.json()) as { data?: { status?: unknown } } | null;
+      const said = json?.data?.status;
+      if (said === 'duplicate' || said === 'received') status = said;
+    } catch {
+      /* no body, or not JSON — the status code is all we get, and it is enough */
+    }
+    return { ok: true, status };
   }
 
   // --- Booking (S15-21) -----------------------------------------------------
