@@ -16,7 +16,11 @@
 
 import { createBookingController, type BookingController } from './booking-controller';
 import { createBookingStore } from './booking-store';
-import { hasInlineAppearance, resolveConfig } from './config';
+import { hasInlineAppearance, resolveConfig, resolveHomeCards, type ResolvedHomeCards } from './config';
+import {
+  createHomeActionsController,
+  type HomeActionsController,
+} from './home-actions-controller';
 import { makeT } from './i18n';
 import { createRemoteConfigCache } from './remote-config';
 import { createTokenStore } from './token-store';
@@ -29,7 +33,7 @@ import {
   type WidgetMessage,
 } from './transport';
 import type { WidgetNotice } from './config';
-import type { WidgetConfig, WidgetInstance } from './types';
+import type { WidgetConfig, WidgetHomeAction, WidgetInstance } from './types';
 import { createWidgetUI } from './ui';
 
 export type {
@@ -38,7 +42,19 @@ export type {
   WidgetTheme,
   WidgetLocale,
   WidgetFont,
+  WidgetHomeAction,
 } from './types';
+
+/**
+ * Who the visitor is, as a form told us. Rides with the message the form
+ * composed — the webchat ingress puts it on the lead, which is the whole point
+ * of asking for a name and a phone before sending anything.
+ */
+interface SendIdentity {
+  name?: string;
+  email?: string;
+  phone?: string;
+}
 
 /** Best-effort idempotency key for a sent message. */
 function newClientMessageId(): string {
@@ -96,6 +112,13 @@ export function init(config: WidgetConfig): WidgetInstance {
   // Live-only transcript notices ("an advisor joined"). Never persisted, never
   // replayed on reload — see WidgetNotice.
   let notices: WidgetNotice[] = [];
+  /**
+   * Who sent a given message, when a quick-action form said so. Kept by client
+   * message id rather than folded into the text so a RETRY re-sends the same
+   * name and phone — a lead that loses its phone number on the second attempt
+   * is a lead nobody can answer.
+   */
+  const identities = new Map<string, SendIdentity>();
 
   /**
    * Show or hide the "a reply is being composed" indicator.
@@ -225,6 +248,72 @@ export function init(config: WidgetConfig): WidgetInstance {
     }
   }
 
+  // --- Home quick actions (0.9.0) -------------------------------------------
+  //
+  // Same lazy contract as booking: the controller is created the first time a
+  // card is on. A tenant with all three off never constructs a form, never
+  // reaches a consignment code path, and gets the widget it has always had.
+  let homeActions: HomeActionsController | null = null;
+  let homeCards: ResolvedHomeCards = resolveHomeCards(resolved.home.cards);
+
+  function ensureHomeActionsController(): HomeActionsController {
+    if (!homeActions) {
+      homeActions = createHomeActionsController({
+        transport,
+        getT: () => makeT(resolved.locale),
+        sendMessage: (input) => sendFormMessage(input),
+        onRender: (state) => {
+          if (!destroyed) ui.renderHomeAction(state);
+        },
+        onSent: () => {
+          if (destroyed) return;
+          // The message is in the transcript, so THAT is the confirmation:
+          // uncover it rather than inventing a success screen the visitor
+          // would have to dismiss before seeing the reply they are waiting for.
+          ui.closeHomeAction();
+          ui.showMessages();
+        },
+        onClose: () => {
+          if (!destroyed) ui.closeHomeAction();
+        },
+      });
+    }
+    return homeActions;
+  }
+
+  /**
+   * A host page asked for a form before the server had answered whether this
+   * tenant offers it. Held rather than dropped, exactly like a pending booking:
+   * a "Vende tu auto" button on a storefront hero is clicked in the first few
+   * hundred milliseconds of a cold load more often than anyone expects.
+   */
+  let pendingHomeAction: WidgetHomeAction | null = null;
+
+  /** Put one quick-action form up over the (already open) panel. */
+  function showHomeAction(kind: WidgetHomeAction): void {
+    pendingHomeAction = null;
+    ui.openHomeAction(kind);
+    ensureHomeActionsController().open(kind);
+  }
+
+  /** Reflect the tenant's card gates. Idempotent, and safe in both directions. */
+  function applyHomeCards(cards: ResolvedHomeCards): void {
+    if (destroyed) return;
+    homeCards = cards;
+    ui.setHomeCards(cards);
+    // The answer arrived after the ask. Honour it — but only while the panel is
+    // still open: a visitor who walked away must not have a form appear under
+    // their cursor a second later.
+    if (pendingHomeAction && cards[pendingHomeAction]) {
+      if (panelOpen) showHomeAction(pendingHomeAction);
+      pendingHomeAction = null;
+      return;
+    }
+    // A card that went away takes its form with it, rather than leaving a
+    // half-filled intake pointing at a route the tenant just switched off.
+    if (!cards.buy && !cards.sell && !cards.search) pendingHomeAction = null;
+  }
+
   const ui = createWidgetUI({
     t,
     locale: resolved.locale,
@@ -277,12 +366,29 @@ export function init(config: WidgetConfig): WidgetInstance {
         onChatFallback: (key) => ensureBookingController().callbacks.onChatFallback(key),
         onRetry: () => ensureBookingController().callbacks.onRetry(),
       },
+      onHomeAction: (kind) => {
+        if (!homeCards[kind]) return;
+        showHomeAction(kind);
+      },
+      // Bound through a getter for the same reason as booking's: the overlay is
+      // only built on the first setHomeCards with a card on, always after this.
+      homeActions: {
+        onClose: () => ensureHomeActionsController().callbacks.onClose(),
+        onBack: () => ensureHomeActionsController().callbacks.onBack(),
+        onFormChange: (patch) => ensureHomeActionsController().callbacks.onFormChange(patch),
+        onPickPhotos: (files) => ensureHomeActionsController().callbacks.onPickPhotos(files),
+        onRemovePhoto: (index) => ensureHomeActionsController().callbacks.onRemovePhoto(index),
+        onPrimary: (honeypot) => ensureHomeActionsController().callbacks.onPrimary(honeypot),
+      },
     },
   });
   ui.mount();
   // A repeat visitor's cached config already knows the answer, so the chip is
   // there on the first paint rather than popping in a round trip later.
   if (resolved.bookingEnabled) applyBookingGate(true);
+  // Same for the quick-action cards — and `setHomeCards` is a no-op that
+  // constructs nothing when all three are off, which is every tenant today.
+  applyHomeCards(homeCards);
 
   // --- Server-resolved appearance (ADR 0046) --------------------------------
   let revealTimer: ReturnType<typeof setTimeout> | null = null;
@@ -320,6 +426,11 @@ export function init(config: WidgetConfig): WidgetInstance {
           ui.setTeam(resolved.team);
           ui.setHomeConfig(resolved.home);
           ui.setHelpConfig(resolved.help);
+          // The quick-action gates ride on `home` but are applied on their own,
+          // like the booking gate: they can move in both directions, and a card
+          // switched off mid-session is taken away rather than left opening a
+          // form the tenant no longer answers.
+          applyHomeCards(resolveHomeCards(resolved.home.cards));
           // The gate is server-owned and can move in both directions: a dealer
           // who switches booking off mid-session gets the chip taken away
           // rather than a chip that opens a 404.
@@ -461,6 +572,9 @@ export function init(config: WidgetConfig): WidgetInstance {
       honeypot,
       clientMessageId,
       vehicleId: vehicleId ?? undefined,
+      // Present only for a message a form composed. A composer message carries
+      // no identity, and inventing one would put an empty name on every lead.
+      ...(identities.get(clientMessageId) ?? {}),
     });
     if (destroyed) return;
     if ('error' in res && res.error) {
@@ -476,17 +590,30 @@ export function init(config: WidgetConfig): WidgetInstance {
     await refreshHistory();
   }
 
-  async function sendFlow(text: string, honeypot: string): Promise<void> {
-    if (destroyed) return;
+  /**
+   * Put `text` in the transcript as the visitor's own message and return its
+   * client id — or null when there is no session to put it in.
+   *
+   * Split out of sendFlow because the quick-action forms need exactly this half:
+   * once the message is a real entry in the list, their overlay's job is done
+   * and the visitor should be looking at their thread. What happens to the POST
+   * afterwards is reported where every other send is — on the message itself.
+   */
+  async function beginSend(
+    text: string,
+    identity?: SendIdentity,
+  ): Promise<string | null> {
+    if (destroyed) return null;
     // Ensure the session (and its initial history paint) first, THEN echo — the
     // bootstrap's own renderMessages must not race the echo we are about to add.
     await ensureSession();
-    if (destroyed) return;
+    if (destroyed) return null;
     if (!bootstrapped) {
       setConnection('offline');
-      return;
+      return null;
     }
     const clientMessageId = newClientMessageId();
+    if (identity) identities.set(clientMessageId, identity);
     // The echo is a REAL ENTRY in the message list, not a DOM artifact. Every
     // repaint rebuilds the panel from this array, so nothing can wipe it.
     messages = [
@@ -502,7 +629,36 @@ export function init(config: WidgetConfig): WidgetInstance {
       },
     ];
     ui.renderMessages(messages, notices);
+    return clientMessageId;
+  }
+
+  async function sendFlow(text: string, honeypot: string): Promise<void> {
+    const clientMessageId = await beginSend(text);
+    if (clientMessageId === null) return;
     await deliver(clientMessageId, text, honeypot);
+  }
+
+  /**
+   * A quick-action form's message. Resolves TRUE once the message is in the
+   * transcript — the delivery runs on after that, so the visitor is handed
+   * their own thread instead of a spinner, and a failure lands on the retry
+   * control the transcript already has.
+   */
+  async function sendFormMessage(input: {
+    text: string;
+    honeypot: string;
+    name: string;
+    phone: string;
+    email: string;
+  }): Promise<boolean> {
+    const identity: SendIdentity = {};
+    if (input.name) identity.name = input.name;
+    if (input.phone) identity.phone = input.phone;
+    if (input.email) identity.email = input.email;
+    const clientMessageId = await beginSend(input.text, identity);
+    if (clientMessageId === null) return false;
+    void deliver(clientMessageId, input.text, input.honeypot);
+    return true;
   }
 
   /**
@@ -548,9 +704,11 @@ export function init(config: WidgetConfig): WidgetInstance {
   function instanceClose(): void {
     if (destroyed) return;
     panelOpen = false;
-    // Closing the panel withdraws a booking that has not opened yet. The intent
-    // belongs to the moment it was expressed, not to the next pageview.
+    // Closing the panel withdraws a booking — or a quick-action form — that has
+    // not opened yet. The intent belongs to the moment it was expressed, not to
+    // the next pageview.
     pendingBookingOpen = false;
+    pendingHomeAction = null;
     ui.closePanel();
   }
 
@@ -583,10 +741,39 @@ export function init(config: WidgetConfig): WidgetInstance {
     return false;
   }
 
+  /**
+   * Open ONE quick-action form directly, skipping the card the visitor would
+   * otherwise have to find inside the panel.
+   *
+   * Same contract as `openBooking()`, for the same reason: the storefront
+   * template already has "Vende tu auto" on its hero, and routing that click
+   * through open() would answer it with a chat panel and leave the visitor to
+   * hunt for the form. The panel opens either way, so `false` says "they got
+   * the conversation", never "nothing happened".
+   *
+   * An unknown kind is the one case that opens nothing at all: there is no
+   * honest panel-shaped answer to a call the widget cannot understand.
+   */
+  function instanceOpenHomeAction(kind: WidgetHomeAction): boolean {
+    if (destroyed) return false;
+    if (kind !== 'buy' && kind !== 'sell' && kind !== 'search') return false;
+    instanceOpen();
+    if (homeCards[kind]) {
+      showHomeAction(kind);
+      return true;
+    }
+    // Either this tenant has that card off — in which case the panel is the
+    // whole answer — or GET /widget/config is still in flight, in which case
+    // applyHomeCards finishes the job.
+    pendingHomeAction = kind;
+    return false;
+  }
+
   return {
     open: instanceOpen,
     close: instanceClose,
     openBooking: instanceOpenBooking,
+    openHomeAction: instanceOpenHomeAction,
     setVehicle(id: string | null, label?: string | null): void {
       // Live server-side: the next send() carries it as `vehicle_id`, which the
       // webchat ingress persists onto the inbound message's metadata so the
@@ -605,6 +792,11 @@ export function init(config: WidgetConfig): WidgetInstance {
         booking.destroy();
         booking = null;
       }
+      if (homeActions) {
+        homeActions.destroy();
+        homeActions = null;
+      }
+      identities.clear();
       if (typingTimer) {
         clearTimeout(typingTimer);
         typingTimer = null;

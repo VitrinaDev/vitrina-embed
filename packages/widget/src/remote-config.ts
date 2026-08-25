@@ -92,6 +92,19 @@ export function coerceRemoteConfig(input: unknown): RemoteWidgetConfig | null {
     if (title !== null) next.title = title;
     const subtitle = normalizeHomeSubtitle(h.subtitle);
     if (subtitle !== null) next.subtitle = subtitle;
+    // The quick-action gates. Only an explicit `true` survives, per card: the
+    // server omits a card it has off, so `false`, `'true'`, `1` and everything
+    // else all mean off. Dropping an empty bag keeps "the server said nothing"
+    // distinguishable from "the server said no" for the field-wise merge.
+    const cards = h.cards;
+    if (cards && typeof cards === 'object') {
+      const c = cards as Record<string, unknown>;
+      const kept: NonNullable<NonNullable<RemoteWidgetConfig['home']>['cards']> = {};
+      if (c.buy === true) kept.buy = true;
+      if (c.sell === true) kept.sell = true;
+      if (c.search === true) kept.search = true;
+      if (Object.keys(kept).length > 0) next.cards = kept;
+    }
     if (Object.keys(next).length > 0) out.home = next;
   }
 

@@ -1,5 +1,89 @@
 # @vitrina/widget
 
+## 0.9.0
+
+Three automotive quick actions on the Home screen — **comprar un auto**,
+**vender tu auto** and **lo buscamos por ti** — each a card that opens a short
+form inside the panel, and each off unless the tenant turns it on.
+
+### Nothing changes for a tenant with no cards
+
+The load-bearing property, again. With no `home.cards`, `setHomeCards` builds
+nothing: no card, no `.vtr-ha` overlay, no `data-home-action`, and
+`resolveConfig().home` resolves to the same three-key object 0.8.x resolved to.
+A tenant with Home off and no cards gets `header → messages → typing → banner →
+composer → footer`, node for node, and the suite asserts that list.
+
+`openBooking()`, `bookingLabel` and the tabs keep their semantics exactly.
+
+### `home.cards` — the config surface
+
+```json
+{ "home": { "enabled": true, "cards": { "buy": true, "sell": true, "search": true } } }
+```
+
+Opt-IN per card: only an explicit `true` counts, and the bag merges FIELD-WISE
+under an inline `home.cards`, so a page can force one card on and still let
+Vitrina decide the other two. Which cards a vertical turns on by default is the
+server's decision — the widget renders what resolves.
+
+### Two destinations, deliberately different
+
+**Buy** and **search** are one screen each (nombre · teléfono · email? · what
+you are after · presupuesto · consent) and they are **messages**: the form
+composes one, sends it down the ordinary pipeline with the visitor's name,
+phone and email attached, and then gets out of the way — the overlay closes,
+Mensajes opens, and the reply arrives in the thread the visitor is already
+looking at. There is no second success screen, because the conversation is the
+confirmation. A send that cannot start keeps the form and every word in it.
+
+**Sell** is an **intake**, four steps — *Tu auto* (patente, marca, modelo, año,
+kilómetros) → *Detalles* (versión?, precio esperado?, plazo de venta, región,
+comentarios?) → *Fotos* (optional and skippable, ≤8 files, ≤10 MB each,
+client-validated with the rejected one named rather than silently dropped) →
+*Tus datos* (nombre, teléfono o email, consent) — posting `multipart/form-data`
+to `POST /widget/consignments` with the photos under a repeated `fotos` field.
+`201 received` and `200 duplicate` are the SAME success screen: the dealer
+already having the car is our bookkeeping, not the visitor's problem. A 415
+names the photos; anything else is a plain retry with the form intact.
+
+Numbers are read the way Chileans type them — `42.000` and `$8.500.000` reach
+the wire as `42000` and `8500000` — and the patente is upper-cased so `bcdf12`
+and `BCDF12` are one car on the ledger.
+
+### `openHomeAction(kind)` — for a page that already has the button
+
+```js
+// true  → the visitor is looking at that form
+// false → they got the conversation panel instead (that card is off, or
+//         GET /widget/config has not answered yet — in which case the form
+//         still opens by itself once it does, unless the panel was closed)
+const onForm = window.vitrinaChatInstance?.openHomeAction('sell') ?? false;
+```
+
+Same contract as `openBooking()`, deferred intent included, so a storefront
+hero's "Vende tu auto" is one call rather than a second implementation of the
+form. The gate is the CARD, not the Home tab: a tenant whose panel opens
+straight into the conversation can still be driven to the intake.
+
+### Consent, recorded rather than implied
+
+The consignment intake sends the consent trio together — `consent_granted`,
+`consent_source_url` (the host page, ≤2048 chars) and
+`consent_text_version: "widget-0.9"` — because Ley 21.719 asks WHICH text was
+shown, not merely that a box was ticked. The version string changes when the
+copy does, and never otherwise.
+
+### Also
+
+- New i18n copy in both locales (parity test still exhaustive), a honeypot in
+  the overlay chrome so all three forms carry `hp_website`, and three new
+  stroked glyphs (car, price tag, magnifier).
+- `submitConsignment()` on the transport: the package's first multipart call —
+  the browser sets `Content-Type` and its boundary, and we send only
+  `Authorization` plus the usual `?siteKey=`.
+- No Turnstile client code, matching the booking precedent (see the PR notes).
+
 ## 0.8.2
 
 The header title ("Conversemos") is now absolutely centered in both header

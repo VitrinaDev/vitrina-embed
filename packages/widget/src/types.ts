@@ -34,6 +34,23 @@ export interface WidgetTheme {
 }
 
 /**
+ * The three automotive quick actions on the Home screen (0.9.0). Each one is a
+ * card that opens a short form inside the panel:
+ *
+ *   buy    — "Comprar un auto": what are you after, and how do we reach you
+ *   sell   — "Vender tu auto": the consignment intake (plate, make, photos…)
+ *   search — "¿No encuentras el auto que buscas?": we go and find it
+ *
+ * Every card is OFF unless something says `true`. Which ones a vertical turns on
+ * by default is the SERVER's decision — the widget renders what resolves.
+ */
+export interface WidgetHomeCardsConfig {
+  buy?: boolean;
+  sell?: boolean;
+  search?: boolean;
+}
+
+/**
  * The Home tab: an Intercom-style landing surface in front of the transcript.
  *
  * OFF unless `enabled` is explicitly true. A tenant who says nothing gets the
@@ -46,7 +63,16 @@ export interface WidgetHomeConfig {
   title?: string;
   /** Line under the greeting. Trimmed; blank or over 120 chars falls back. */
   subtitle?: string;
+  /**
+   * The automotive quick-action cards. Merged FIELD-WISE like the rest of
+   * `home`, so a page can force one card on and still let Vitrina decide the
+   * others.
+   */
+  cards?: WidgetHomeCardsConfig;
 }
+
+/** Which quick-action flow a card (or `openHomeAction`) opens. */
+export type WidgetHomeAction = 'buy' | 'sell' | 'search';
 
 /** One question/answer pair on the Help tab. The answer is markdown. */
 export interface WidgetFaqItem {
@@ -178,6 +204,20 @@ export interface WidgetInstance {
    * The panel opens in every case, so `false` is a fallback, never a failure.
    */
   openBooking(): boolean;
+  /**
+   * Open one of the Home quick-action forms directly — "Comprar un auto",
+   * "Vender tu auto", "Lo buscamos por ti" — for a host page that has its own
+   * button for the same ask (a storefront template's "Vende tu auto" hero CTA).
+   *
+   * Returns `true` when that form is showing and `false` when the visitor got
+   * the conversation instead — this tenant has that card off, or the widget has
+   * not yet heard back from `GET /widget/config` (in that case the form still
+   * opens on its own the moment the answer arrives, as long as the visitor has
+   * not closed the panel meanwhile).
+   *
+   * The panel opens in every case, so `false` is a fallback, never a failure.
+   */
+  openHomeAction(kind: WidgetHomeAction): boolean;
   /**
    * Point the current conversation — and any booking started after it — at a
    * vehicle (e.g. on SPA route change).

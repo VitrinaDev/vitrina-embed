@@ -56,6 +56,99 @@ export interface WidgetStrings {
   /** Sticky escape hatch at the bottom of the Help tab. */
   helpCta: string;
 
+  // --- Home quick actions (0.9.0) -------------------------------------------
+  // Three cards on Home and the forms behind them. `ha` = home action, matching
+  // the `.vtr-ha` overlay these strings are painted into.
+  //
+  // Tone is the booking flow's: es-CL, "tú", never "usted", and every line says
+  // something the visitor can act on.
+
+  /** The three cards. Title + sub, in the order they are painted. */
+  homeBuyTitle: string;
+  homeBuySub: string;
+  homeSellTitle: string;
+  homeSellSub: string;
+  homeSearchTitle: string;
+  homeSearchSub: string;
+
+  /** Overlay titles. Buy and sell reuse their card titles; search cannot — its
+   *  card title is a question, which does not read as a header. */
+  haSearchTitle: string;
+  /** The four sell steps. Step 4 reuses `stepFormTitle` ("Tus datos"). */
+  haSellCarTitle: string;
+  haSellDetailsTitle: string;
+  haSellPhotosTitle: string;
+  haSellOkTitle: string;
+  haSellOkNote: string;
+
+  /** Shared consent pair. Same register as the booking one, different ask. */
+  haConsentLabel: string;
+  haPrivacyNote: string;
+
+  /** Buy + search fields. */
+  haBuyWanted: string;
+  haBuyWantedPlaceholder: string;
+  haSearchWanted: string;
+  haSearchWantedPlaceholder: string;
+  haBudget: string;
+  haBudgetPlaceholder: string;
+  haYear: string;
+  haYearPlaceholder: string;
+  haNotes: string;
+  haNotesPlaceholder: string;
+
+  /** Sell fields. */
+  haPlate: string;
+  haPlatePlaceholder: string;
+  haMake: string;
+  haMakePlaceholder: string;
+  haModel: string;
+  haModelPlaceholder: string;
+  haCarYear: string;
+  haKm: string;
+  haKmPlaceholder: string;
+  haVersion: string;
+  haVersionPlaceholder: string;
+  haPrice: string;
+  haPricePlaceholder: string;
+  haDeadline: string;
+  haDeadline7d: string;
+  haDeadline15d: string;
+  haDeadline30d: string;
+  haDeadlineQuote: string;
+  haRegion: string;
+  /** First option of both selects — a placeholder, never a silent default. */
+  haSelectPlaceholder: string;
+  /** Photos step: the ask, the picker's own words, and the promise that
+   *  skipping costs nothing. */
+  haPhotosLabel: string;
+  haPhotosPick: string;
+  haPhotosNote: string;
+  /** Accessible name on the × next to a chosen file. */
+  haPhotoRemove: string;
+
+  /** The composed chat message for buy / search. Assembled line by line so the
+   *  dealer's inbox reads the same sentence in either language. */
+  haMsgBuy: string;
+  haMsgBuyWanted: string;
+  haMsgBudget: string;
+  haMsgBudgetTbd: string;
+  haMsgSearch: string;
+  haMsgSearchCar: string;
+  haMsgNotes: string;
+
+  /** Refusals. One line each, and every one of them is retryable. */
+  haErrPlate: string;
+  haErrYear: string;
+  haErrKm: string;
+  haErrPrice: string;
+  haErrContact: string;
+  haErrPhotoTooLarge: string;
+  haErrPhotoTooMany: string;
+  haErrPhotos: string;
+  haErrSend: string;
+  haErrConsignment: string;
+
   // --- Booking (S15-21) -----------------------------------------------------
   // Tone: es-CL, "tú", never "usted". Copy states facts the visitor can act on;
   // no screen is ever empty and mute.
@@ -182,6 +275,78 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     tabHelp: 'Ayuda',
     helpCta: '¿No encontraste lo que buscabas? Escríbenos',
 
+    homeBuyTitle: 'Comprar un auto',
+    homeBuySub: 'Cuéntanos qué estás buscando',
+    homeSellTitle: 'Vender tu auto',
+    homeSellSub: 'Te ayudamos a venderlo',
+    homeSearchTitle: '¿No encuentras el auto que buscas?',
+    homeSearchSub: '¡Lo buscamos por ti!',
+
+    haSearchTitle: 'Lo buscamos por ti',
+    haSellCarTitle: 'Tu auto',
+    haSellDetailsTitle: 'Detalles',
+    haSellPhotosTitle: 'Fotos',
+    haSellOkTitle: 'Datos recibidos',
+    haSellOkNote: 'Recibimos los datos de tu auto — te contactaremos pronto.',
+
+    haConsentLabel: 'Autorizo que me contacten por esta solicitud',
+    haPrivacyNote: 'Usamos tus datos solo para responderte.',
+
+    haBuyWanted: '¿Qué auto buscas?',
+    haBuyWantedPlaceholder: 'Marca, modelo, año…',
+    haSearchWanted: '¿Qué auto quieres que busquemos?',
+    haSearchWantedPlaceholder: 'Marca y modelo',
+    haBudget: 'Presupuesto (opcional)',
+    haBudgetPlaceholder: 'Hasta $10.000.000',
+    haYear: 'Año (opcional)',
+    haYearPlaceholder: '2019',
+    haNotes: 'Comentarios (opcional)',
+    haNotesPlaceholder: '¿Algo más que debamos saber?',
+
+    haPlate: 'Patente',
+    haPlatePlaceholder: 'ABCD12',
+    haMake: 'Marca',
+    haMakePlaceholder: 'Toyota',
+    haModel: 'Modelo',
+    haModelPlaceholder: 'Yaris',
+    haCarYear: 'Año',
+    haKm: 'Kilómetros',
+    haKmPlaceholder: '42.000',
+    haVersion: 'Versión (opcional)',
+    haVersionPlaceholder: 'XLI 1.5',
+    haPrice: 'Precio esperado (opcional)',
+    haPricePlaceholder: '$8.500.000',
+    haDeadline: '¿Cuándo quieres venderlo?',
+    haDeadline7d: 'Esta semana',
+    haDeadline15d: 'En 15 días',
+    haDeadline30d: 'Este mes',
+    haDeadlineQuote: 'Solo cotizando',
+    haRegion: 'Región',
+    haSelectPlaceholder: 'Selecciona',
+    haPhotosLabel: 'Agrega hasta 8 fotos (opcional)',
+    haPhotosPick: 'Elegir fotos',
+    haPhotosNote: 'También puedes enviarlas después por chat.',
+    haPhotoRemove: 'Quitar foto',
+
+    haMsgBuy: '🚗 Quiero comprar un auto',
+    haMsgBuyWanted: 'Busco:',
+    haMsgBudget: 'Presupuesto:',
+    haMsgBudgetTbd: 'por definir',
+    haMsgSearch: '🔎 Lo buscamos por ti',
+    haMsgSearchCar: 'Auto:',
+    haMsgNotes: 'Notas:',
+
+    haErrPlate: 'Revisa la patente.',
+    haErrYear: 'Revisa el año.',
+    haErrKm: 'Revisa el kilometraje.',
+    haErrPrice: 'Revisa el precio.',
+    haErrContact: 'Déjanos un teléfono o un correo.',
+    haErrPhotoTooLarge: 'Cada foto debe pesar menos de 10 MB.',
+    haErrPhotoTooMany: 'Puedes enviar hasta 8 fotos.',
+    haErrPhotos: 'No pudimos subir esas fotos. Prueba con imágenes JPG o PNG.',
+    haErrSend: 'No pudimos enviar. Reintenta.',
+    haErrConsignment: 'No pudimos enviar los datos. Reintenta.',
+
     bookVisit: 'Agendar visita',
     myVisits: 'Mis reservas',
     back: 'Volver',
@@ -273,6 +438,78 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     tabMessages: 'Messages',
     tabHelp: 'Help',
     helpCta: "Didn't find what you were looking for? Write to us",
+
+    homeBuyTitle: 'Buy a car',
+    homeBuySub: "Tell us what you're looking for",
+    homeSellTitle: 'Sell your car',
+    homeSellSub: "We'll help you sell it",
+    homeSearchTitle: "Can't find the car you want?",
+    homeSearchSub: "We'll find it for you!",
+
+    haSearchTitle: "We'll find it for you",
+    haSellCarTitle: 'Your car',
+    haSellDetailsTitle: 'Details',
+    haSellPhotosTitle: 'Photos',
+    haSellOkTitle: 'Details received',
+    haSellOkNote: "We got your car's details — we will contact you soon.",
+
+    haConsentLabel: 'I agree to be contacted about this request',
+    haPrivacyNote: 'We use your details only to reply to you.',
+
+    haBuyWanted: 'What car are you looking for?',
+    haBuyWantedPlaceholder: 'Make, model, year…',
+    haSearchWanted: 'What car should we find for you?',
+    haSearchWantedPlaceholder: 'Make and model',
+    haBudget: 'Budget (optional)',
+    haBudgetPlaceholder: 'Up to $10,000,000',
+    haYear: 'Year (optional)',
+    haYearPlaceholder: '2019',
+    haNotes: 'Comments (optional)',
+    haNotesPlaceholder: 'Anything else we should know?',
+
+    haPlate: 'Licence plate',
+    haPlatePlaceholder: 'ABCD12',
+    haMake: 'Make',
+    haMakePlaceholder: 'Toyota',
+    haModel: 'Model',
+    haModelPlaceholder: 'Yaris',
+    haCarYear: 'Year',
+    haKm: 'Kilometres',
+    haKmPlaceholder: '42,000',
+    haVersion: 'Trim (optional)',
+    haVersionPlaceholder: 'XLI 1.5',
+    haPrice: 'Asking price (optional)',
+    haPricePlaceholder: '$8,500,000',
+    haDeadline: 'When do you want to sell it?',
+    haDeadline7d: 'This week',
+    haDeadline15d: 'In 15 days',
+    haDeadline30d: 'This month',
+    haDeadlineQuote: 'Just getting a quote',
+    haRegion: 'Region',
+    haSelectPlaceholder: 'Select',
+    haPhotosLabel: 'Add up to 8 photos (optional)',
+    haPhotosPick: 'Choose photos',
+    haPhotosNote: 'You can also send them later by chat.',
+    haPhotoRemove: 'Remove photo',
+
+    haMsgBuy: '🚗 I want to buy a car',
+    haMsgBuyWanted: 'Looking for:',
+    haMsgBudget: 'Budget:',
+    haMsgBudgetTbd: 'to be defined',
+    haMsgSearch: '🔎 Find it for me',
+    haMsgSearchCar: 'Car:',
+    haMsgNotes: 'Notes:',
+
+    haErrPlate: 'Check the licence plate.',
+    haErrYear: 'Check the year.',
+    haErrKm: 'Check the mileage.',
+    haErrPrice: 'Check the price.',
+    haErrContact: 'Leave us a phone number or an email.',
+    haErrPhotoTooLarge: 'Each photo must be under 10 MB.',
+    haErrPhotoTooMany: 'You can send up to 8 photos.',
+    haErrPhotos: 'We could not upload those photos. Try JPG or PNG images.',
+    haErrSend: 'We could not send it. Retry.',
+    haErrConsignment: 'We could not send the details. Retry.',
 
     bookVisit: 'Book a visit',
     myVisits: 'My bookings',
