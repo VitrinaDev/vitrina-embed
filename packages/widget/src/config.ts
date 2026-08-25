@@ -7,6 +7,7 @@ import type {
   WidgetConfig,
   WidgetFont,
   WidgetHelpConfig,
+  WidgetHomeCardsConfig,
   WidgetHomeConfig,
   WidgetLocale,
   WidgetTeamMemberConfig,
@@ -194,12 +195,40 @@ export interface TeamMember {
   avatarUrl: string | null;
 }
 
+/**
+ * The three quick-action cards, resolved. All false ⇒ nothing about the flows is
+ * ever constructed: no cards, no overlay, no consignment code path.
+ */
+export interface ResolvedHomeCards {
+  buy: boolean;
+  sell: boolean;
+  search: boolean;
+}
+
 /** The Home tab, resolved. `enabled` decides whether the tab bar exists at all. */
 export interface ResolvedHome {
   enabled: boolean;
   /** null ⇒ the built-in, locale-driven greeting. */
   title: string | null;
   subtitle: string | null;
+  /**
+   * The quick-action gates, ABSENT when all three are off.
+   *
+   * Optional and omitted rather than always-present-and-false for the same
+   * reason the remote coercion drops an empty bag: a tenant who has no quick
+   * actions must resolve to the object 0.8.x resolved to, key for key. Absent is
+   * read as all-off, through `resolveHomeCards`, everywhere it is consumed.
+   */
+  cards?: ResolvedHomeCards;
+}
+
+/** Read a possibly-absent `cards` bag as three hard booleans. */
+export function resolveHomeCards(input: WidgetHomeCardsConfig | undefined): ResolvedHomeCards {
+  return {
+    buy: input?.buy === true,
+    sell: input?.sell === true,
+    search: input?.search === true,
+  };
 }
 
 /**
@@ -285,6 +314,10 @@ export interface RemoteWidgetConfig {
    * The Home tab, server-owned. Merged FIELD-WISE under the inline `home`, so a
    * page that overrides the greeting still lets Vitrina decide whether the tab
    * exists.
+   *
+   * `home.cards` rides here too, and the server emits each key ONLY as an
+   * explicit `true` — the vertical's defaults are resolved server-side, and the
+   * widget just renders what arrives.
    */
   home?: WidgetHomeConfig;
   /** The Help tab (FAQ accordion), server-owned. Same field-wise merge. */
@@ -392,11 +425,18 @@ export function normalizeTeam(input: unknown): TeamMember[] {
  * `home: {}` tomorrow cannot restructure a live widget.
  */
 export function resolveHome(input: WidgetHomeConfig | undefined): ResolvedHome {
-  return {
+  const home: ResolvedHome = {
     enabled: input?.enabled === true,
     title: normalizeHomeTitle(input?.title),
     subtitle: normalizeHomeSubtitle(input?.subtitle),
   };
+  // Opt-IN per card, on the same terms as `enabled`: a server that starts
+  // sending `cards: {}` tomorrow cannot conjure a form onto a live widget. The
+  // key is added only when a card is actually on, so a tenant without them
+  // resolves to exactly the object 0.8.x resolved to.
+  const cards = resolveHomeCards(input?.cards);
+  if (cards.buy || cards.sell || cards.search) home.cards = cards;
+  return home;
 }
 
 /** The Help tab, resolved. Enabled means the flag AND at least one usable FAQ. */
@@ -480,7 +520,11 @@ export function resolveConfig(
   // beats the server's, and the server's `home.enabled` still applies when the
   // page said nothing about it. `team` is an array and merges wholesale —
   // interleaving two rosters would produce a team that does not exist.
-  const home = { ...defined(remote?.home), ...defined(config.home) };
+  const home: WidgetHomeConfig = { ...defined(remote?.home), ...defined(config.home) };
+  // `cards` is a nested bag, so the field-wise rule has to reach INTO it: a page
+  // that pins `cards: { sell: true }` must not blank the two cards the server
+  // turned on. Spreading `home` alone would have replaced the whole object.
+  home.cards = { ...defined(remote?.home?.cards), ...defined(config.home?.cards) };
   const help = { ...defined(remote?.help), ...defined(config.help) };
   return {
     publicKey: config.publicKey,
