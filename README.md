@@ -37,7 +37,7 @@ Full options, the imperative handle (`open()` / `close()` / `setVehicle()` /
 
 | Package | What it is | Status |
 |---|---|---|
-| [`@vitrina/widget`](packages/widget) | The embeddable chat widget: Shadow-DOM launcher + conversation panel, optional Home/Help tabs, SSE transport, server-resolved theming, visit booking ("Agendar visita", per-tenant), and a `<script>` loader for no-build sites. | **shipped** — [![npm](https://img.shields.io/npm/v/@vitrina/widget.svg)](https://www.npmjs.com/package/@vitrina/widget) |
+| [`@vitrina/widget`](packages/widget) | The embeddable chat widget: Shadow-DOM launcher + conversation panel, optional Home/Help tabs, Home quick actions (comprar / vender / lo buscamos por ti), SSE transport, server-resolved theming, visit booking ("Agendar visita", per-tenant), and a `<script>` loader for no-build sites. | **shipped** — [![npm](https://img.shields.io/npm/v/@vitrina/widget.svg)](https://www.npmjs.com/package/@vitrina/widget) |
 
 Reserved for later, and deliberately not scaffolded until something needs them:
 `@vitrina/react` (headless hooks) and `@vitrina/stock-ui` (themeable stock
@@ -62,7 +62,9 @@ dealer's page ──────┼──► POST /widget/conversations   who is
                     │
                     ├──► GET  /widget/appointments/availability   real open hours
                     ├──► POST /widget/appointments                book the visit
-                    └──► GET|DELETE /widget/appointments/:token   review / cancel
+                    ├──► GET|DELETE /widget/appointments/:token   review / cancel
+                    │
+                    └──► POST /widget/consignments   multipart: "vende tu auto"
 ```
 
 Three properties are worth knowing before changing anything here:
@@ -109,7 +111,7 @@ back to a default rather than being injected.
 ```bash
 pnpm install
 pnpm -r build        # tsup → dist/index.js (ESM) + dist/loader.global.js (IIFE)
-pnpm -r test         # vitest + happy-dom — 227 tests across 19 files
+pnpm -r test         # vitest + happy-dom — 358 tests across 26 files
 pnpm -r typecheck
 ```
 
@@ -117,8 +119,9 @@ The tests are the contract. They drive a real `init()` against a mocked fetch an
 pin down the things that are expensive to get wrong: a visitor's message is never
 lost on a failed send, a failed history fetch repaints nothing, injected HTML in
 a reply stays a text node, the config fetch fails open, a half-typed booking
-form survives a taken-slot bounce, and a tenant with booking off gets a widget
-byte-identical to one that never heard of it.
+form survives a taken-slot bounce, a consignment intake reaches the wire as
+multipart with every field the contract names, and a tenant with booking (or the
+quick actions) off gets a widget byte-identical to one that never heard of them.
 
 ## Releasing
 

@@ -71,6 +71,8 @@ const widget = init({
 // The returned handle lets you drive the widget imperatively:
 widget.open();
 widget.setVehicle('veh_456');      // e.g. on an SPA route change
+widget.openBooking();              // straight to the calendar (if the tenant has it)
+widget.openHomeAction('sell');     // straight to a quick-action form
 widget.close();
 widget.destroy();                  // unmounts + aborts the SSE stream
 ```
@@ -151,7 +153,8 @@ is idempotent against a double-load, and never throws into the host page.
 | `font`           | `WidgetFont`                  | no       | `'system'`         | Typeface for the whole widget. See **Fonts** below. Unknown values fall back to `system`. |
 | `bookingLabel`   | `string`                      | no       | localized copy     | What the booking chip says, verbatim — e.g. `Agendar demo`. Trimmed; blank or over 40 chars falls back to the built-in copy. Only visible when the tenant has booking on. |
 | `welcomeMessage` | `string`                      | no       | localized greeting | Greeting shown before the visitor sends the first message.                  |
-| `home`           | `{ enabled?, title?, subtitle? }` | no   | off                | The Home tab. See **Home and Help tabs** below. Off unless `enabled` is `true`. |
+| `home`           | `{ enabled?, title?, subtitle?, cards? }` | no | off          | The Home tab. See **Home and Help tabs** below. Off unless `enabled` is `true`. |
+| `home.cards`     | `{ buy?, sell?, search? }`    | no       | all off            | The automotive quick actions. See **Quick actions** below. Each card is off unless its key is explicitly `true`. |
 | `help`           | `{ enabled?, faqs? }`         | no       | off                | The Help tab (FAQ accordion). Off unless `enabled` is `true` **and** at least one usable question survives. |
 | `team`           | `Array<{ name, avatarUrl? }>` | no       | `[]`               | Faces for the Home hero. Up to 5 accepted, first 3 drawn. Non-http(s) `avatarUrl` ⇒ initials. |
 | `remoteConfig`   | `boolean`                     | no       | `true`             | Fetch appearance from Vitrina at load. `false` = fully self-contained.      |
@@ -253,6 +256,59 @@ URL becomes the member's initials on a stable colour, never a broken image.
 
 The panel is 400×704 (up from 360×520) whether or not you use the tabs, and
 still goes fullscreen at ≤480px.
+
+### Quick actions — comprar, vender, lo buscamos por ti
+
+Three more Home cards, each opening a short form **inside the panel** rather
+than sending the visitor to a landing page:
+
+```json
+{ "home": { "enabled": true, "cards": { "buy": true, "sell": true, "search": true } } }
+```
+
+Opt-in per card, and the bag merges field-wise like everything else under
+`home`: a page can pin one card on and still let Vitrina decide the other two.
+Which cards a vertical turns on by default is decided server-side.
+
+- **Comprar un auto** — nombre, teléfono, email (opcional), *¿qué auto buscas?*,
+  presupuesto (opcional), consent.
+- **¿No encuentras el auto que buscas?** — the same shape plus año and
+  comentarios.
+- **Vender tu auto** — four steps: *Tu auto* (patente, marca, modelo, año,
+  kilómetros) → *Detalles* (versión, precio esperado, plazo de venta, región,
+  comentarios) → *Fotos* (optional, up to 8, 10 MB each) → *Tus datos* (nombre,
+  teléfono o email, consent).
+
+**Where each one lands is the design.** Buy and search compose a message and
+send it down the ordinary chat pipeline with the visitor's name and phone
+attached — so it appears in the transcript, the dealer sees it in their inbox
+like any other conversation, and the reply arrives where the visitor is already
+looking. The overlay closes onto Mensajes; there is no separate "thanks" screen,
+because the conversation is the confirmation.
+
+Vender posts a real intake to `POST /widget/consignments` (multipart, photos
+included) and earns a confirmation screen — a fresh row and a duplicate get the
+same one, because the dealer already having the car is our bookkeeping, not the
+visitor's problem. Photo caps are enforced in the browser and a rejected file is
+named rather than silently dropped; nothing is lost on a refusal.
+
+A host page with its own button opens a form directly, with the same semantics
+as `openBooking()` (deferred intent included):
+
+```js
+// true  → the visitor is looking at that form
+// false → they got the conversation panel instead (that card is off, or
+//         GET /widget/config has not answered yet — in which case the form
+//         still opens by itself once it does, unless the panel was closed)
+const onForm = window.vitrinaChatInstance?.openHomeAction('sell') ?? false;
+```
+
+The gate is the **card**, not the Home tab: a tenant whose panel opens straight
+into the conversation can still be driven to the intake from their own page.
+
+Consent is recorded, not implied: the intake sends `consent_granted`, the host
+page URL (`consent_source_url`) and `consent_text_version: "widget-0.9"`
+together, because what matters is which text was shown.
 
 ### Fonts
 
