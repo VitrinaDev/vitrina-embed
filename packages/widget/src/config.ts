@@ -266,6 +266,13 @@ export interface ResolvedConfig {
    * reachable, which is exactly today's widget.
    */
   bookingEnabled: boolean;
+  /**
+   * Turnstile site key for the booking confirm step, or null. SERVER-ONLY
+   * like `bookingEnabled`, and for the same reason: a page must not be able
+   * to switch the tenant's anti-bot armor off (nor invent a key the server
+   * would not verify against).
+   */
+  turnstileSiteKey: string | null;
   /** The Home tab. `enabled: false` ⇒ nothing about it is ever constructed. */
   home: ResolvedHome;
   /** The Help tab. `enabled: false` ⇒ nothing about it is ever constructed. */
@@ -324,6 +331,14 @@ export interface RemoteWidgetConfig {
   help?: WidgetHelpConfig;
   /** Faces for the Home hero. An inline `team` replaces this list wholesale. */
   team?: WidgetTeamMemberConfig[];
+  /**
+   * Cloudflare Turnstile site key for the booking confirm step. SERVER-ONLY:
+   * present exactly when the deployment will DEMAND a token on
+   * `POST /widget/appointments` (it serves the key iff its secret is set), so
+   * absent means "book tokenless, the server fails open" and present means
+   * "render the challenge or every booking 400s".
+   */
+  turnstileSiteKey?: string;
 }
 
 const INIT_ERROR = '[vitrina-widget] init() requires { publicKey, apiBaseUrl }.';
@@ -543,6 +558,10 @@ export function resolveConfig(
     // Deliberately NOT layered with an inline override: a booking surface that
     // calls routes the tenant has switched off would only ever paint a 404.
     bookingEnabled: remote?.bookingEnabled === true,
+    turnstileSiteKey:
+      typeof remote?.turnstileSiteKey === 'string' && remote.turnstileSiteKey !== ''
+        ? remote.turnstileSiteKey
+        : null,
     home: resolveHome(home),
     help: resolveHelp(help),
     team: normalizeTeam(config.team ?? remote?.team),

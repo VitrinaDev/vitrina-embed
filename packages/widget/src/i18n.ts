@@ -235,6 +235,7 @@ export interface WidgetStrings {
   errVehicleTaken: string;
   errNotConfigured: string;
   errBookingGeneric: string;
+  errVerification: string;
 }
 
 export type StringKey = keyof WidgetStrings;
@@ -408,6 +409,8 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     errVehicleTaken: 'Ese auto ya está reservado a esa hora.',
     errNotConfigured: 'La agenda no está disponible ahora.',
     errBookingGeneric: 'No pudimos agendar. Reintenta.',
+    errVerification:
+      'No pudimos verificar tu solicitud. Completa la verificación y vuelve a intentar.',
   },
   en: {
     launcherLabel: 'Open chat',
@@ -572,6 +575,8 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     errVehicleTaken: 'That car is already booked at that time.',
     errNotConfigured: 'The calendar is not available right now.',
     errBookingGeneric: 'We could not book. Retry.',
+    errVerification:
+      'We could not verify your request. Complete the check and try again.',
   },
 };
 
