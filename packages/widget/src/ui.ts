@@ -16,19 +16,27 @@ import {
   type BookingUi,
   type BookingViewState,
 } from './booking-ui';
-import type {
-  ResolvedHelp,
-  ResolvedHome,
-  TeamMember,
-  WidgetMessage,
-  WidgetNotice,
+import {
+  resolveHomeCards,
+  type ResolvedHelp,
+  type ResolvedHome,
+  type ResolvedHomeCards,
+  type TeamMember,
+  type WidgetMessage,
+  type WidgetNotice,
 } from './config';
 import { ensureFontLoaded, fontStack } from './fonts';
+import {
+  createHomeActionsUi,
+  type HomeActionCallbacks,
+  type HomeActionsUi,
+  type HomeActionViewState,
+} from './home-actions-ui';
 import { makeT, type StringKey, type Translate } from './i18n';
 import { renderMarkdown } from './markdown';
 import { STYLES } from './styles';
 import { resolveAccent, resolvePosition, validateLogoUrl } from './theme';
-import type { WidgetFont, WidgetLocale, WidgetTheme } from './types';
+import type { WidgetFont, WidgetHomeAction, WidgetLocale, WidgetTheme } from './types';
 
 export type BannerState = 'none' | 'offline' | 'reconnecting' | 'error' | 'sending';
 
@@ -47,6 +55,10 @@ export interface WidgetUiCallbacks {
   onVisitsOpen?(): void;
   /** Everything the booking overlay reports. */
   booking?: BookingCallbacks;
+  /** A Home quick-action card was tapped. Absent ⇒ the cards are inert. */
+  onHomeAction?(kind: WidgetHomeAction): void;
+  /** Everything the quick-action overlay reports. */
+  homeActions?: HomeActionCallbacks;
 }
 
 /**
@@ -71,6 +83,16 @@ const noopBooking: BookingCallbacks = {
   onBookAgain: () => {},
   onChatFallback: () => {},
   onRetry: () => {},
+};
+
+/** The same courtesy for the quick-action overlay: coherent, reporting nowhere. */
+const noopHomeActions: HomeActionCallbacks = {
+  onClose: () => {},
+  onBack: () => {},
+  onFormChange: () => {},
+  onPickPhotos: () => {},
+  onRemovePhoto: () => {},
+  onPrimary: () => {},
 };
 
 export interface WidgetUiOptions {
@@ -153,7 +175,9 @@ export interface WidgetUi {
   // gets the panel the widget has always produced — no `.vtr-views` wrapper, no
   // `.vtr-tabs` node, node for node.
 
-  /** Turn the Home tab on/off and repaint its greeting. */
+  /** Turn the Home tab on/off and repaint its greeting. Does NOT touch the
+   *  quick-action gates — those have their own setter, for the same reason
+   *  `bookingEnabled` is not part of `setBookingLabel`. */
   setHomeConfig(home: ResolvedHome): void;
   /** Turn the Help tab on/off and rebuild its FAQ accordion. */
   setHelpConfig(help: ResolvedHelp): void;
@@ -185,6 +209,25 @@ export interface WidgetUi {
    * the human is one message away in the panel behind the overlay.
    */
   focusComposer(draft?: string): void;
+
+  // --- Home quick actions (0.9.0) -------------------------------------------
+  // Same contract as the booking surface: inert, and UNBUILT, until a resolved
+  // config turns a card on. A tenant with all three off gets the 0.8.x panel,
+  // node for node — not a hidden card and not an empty overlay.
+
+  /** Show/hide the three quick-action cards on Home, and build the overlay the
+   *  first time any of them is on. */
+  setHomeCards(cards: ResolvedHomeCards | undefined): void;
+  /** Cover the panel with one quick-action flow. The transcript is NOT destroyed. */
+  openHomeAction(kind: WidgetHomeAction): void;
+  /** Uncover the transcript. A `hidden` flip, never a re-render. */
+  closeHomeAction(): void;
+  isHomeActionOpen(): boolean;
+  /** Full repaint of the quick-action overlay from the caller's state. */
+  renderHomeAction(state: HomeActionViewState): void;
+  /** Show the conversation. Where a submitted buy/search lands: the message is
+   *  in the transcript, and the transcript is the confirmation. */
+  showMessages(): void;
 }
 
 interface TrackedListener {
@@ -243,6 +286,20 @@ const ICONS = {
   ],
   chevronRight: ['m9.5 5.5 6.5 6.5-6.5 6.5'],
   chevronDown: ['m5.5 9 6.5 6.5L18.5 9'],
+  // The three quick actions: a car (comprar), a price tag (vender) and a
+  // magnifier (lo buscamos por ti). Wheels are arcs rather than <circle> so the
+  // whole set stays a list of `d` strings.
+  car: [
+    'M4.6 12.4 6.7 7.7a2 2 0 0 1 1.8-1.2h7a2 2 0 0 1 1.8 1.2l2.1 4.7',
+    'M3.5 12.4h17v4.3a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z',
+    'M8.4 15.1a1.1 1.1 0 1 1-2.2 0 1.1 1.1 0 0 1 2.2 0z',
+    'M17.8 15.1a1.1 1.1 0 1 1-2.2 0 1.1 1.1 0 0 1 2.2 0z',
+  ],
+  tag: [
+    'M20.6 13.4 11.6 4.4a2 2 0 0 0-1.4-.6H4.8a1 1 0 0 0-1 1v5.4c0 .5.2 1 .6 1.4l9 9a2 2 0 0 0 2.8 0l4.4-4.4a2 2 0 0 0 0-2.8z',
+    'M7.9 7.9h.01',
+  ],
+  search: ['M18 10.6a7 7 0 1 1-14 0 7 7 0 0 1 14 0z', 'm16 15.6 4.5 4.5'],
 } as const;
 
 /** One stroked 24×24 glyph. `paths` is always a module constant (see ICONS). */
@@ -549,6 +606,12 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   let lastPreview: string | null = null;
   /** Mirrors setBookingEnabled, so the Home booking card can follow the gate. */
   let bookingSurfaceEnabled = false;
+  /**
+   * Which quick-action cards are on. Seeded from the cached config so a repeat
+   * visitor gets them on the FIRST paint rather than a round trip later; moved
+   * afterwards only through setHomeCards.
+   */
+  let homeCards: ResolvedHomeCards = resolveHomeCards(opts.home?.cards);
 
   function on(target: EventTarget, type: string, handler: EventListener): void {
     target.addEventListener(type, handler);
@@ -788,6 +851,26 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     paintVisitsChip();
   }
 
+  // --- Home quick actions (constructed on demand) -----------------------------
+  //
+  // LAZY, on exactly the booking surface's terms. `setHomeCards` with a card on
+  // is the only thing that brings the overlay into existence, and it is only
+  // ever called for a tenant whose `GET /widget/config` said so.
+  let homeActionsUi: HomeActionsUi | null = null;
+  let homeActionOpen = false;
+
+  function ensureHomeActions(): void {
+    if (homeActionsUi) return;
+    homeActionsUi = createHomeActionsUi({
+      getT: () => t,
+      callbacks: callbacks.homeActions ?? noopHomeActions,
+      on,
+    });
+    // Appended LAST, like the booking overlay: whichever of the two is open
+    // covers the panel, the tab bar included. Only one is ever open at a time.
+    panel.appendChild(homeActionsUi.root);
+  }
+
   // --- Tabs: Home / Messages / Help (0.8.0) -----------------------------------
   //
   // LAZY BY DESIGN, on exactly the same terms as the booking surface above. A
@@ -949,9 +1032,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     });
 
     panel.prepend(views);
-    // Before the booking overlay when it already exists, so the overlay stays
-    // the last child and keeps covering everything — the tab bar included.
-    panel.insertBefore(tabsEl, bookingUi?.root ?? null);
+    // Before whichever overlay already exists, so the overlays stay the last
+    // children and keep covering everything — the tab bar included.
+    panel.insertBefore(tabsEl, bookingUi?.root ?? homeActionsUi?.root ?? null);
     panel.setAttribute('data-tabs', '1');
   }
 
@@ -1045,11 +1128,13 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   /**
    * The Home cards, rebuilt from scratch on every paint.
    *
-   * Three of them, and which ones are present is the whole design:
+   * Which ones are present is the whole design:
    *   · recent conversation — only with something to come back to;
    *   · send us a message — ALWAYS, because that is what the widget is for;
    *   · the booking card — only for a tenant whose agenda is on, and titled
-   *     with THEIR word for it, never ours.
+   *     with THEIR word for it, never ours;
+   *   · comprar / vender / lo buscamos — one per quick action the tenant's
+   *     vertical turned on, each opening a form inside the panel.
    */
   function paintHomeCards(): void {
     if (!homeCardsEl) return;
@@ -1072,6 +1157,27 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       cardLine(book, 'vtr-home-card-title', bookChipText());
       cardLine(book, 'vtr-home-card-sub', t('homeBookSub'));
       homeCardsEl.appendChild(book);
+    }
+
+    if (homeCards.buy) {
+      const buy = homeCard('buy', ICONS.car, true);
+      cardLine(buy, 'vtr-home-card-title', t('homeBuyTitle'));
+      cardLine(buy, 'vtr-home-card-sub', t('homeBuySub'));
+      homeCardsEl.appendChild(buy);
+    }
+
+    if (homeCards.sell) {
+      const sell = homeCard('sell', ICONS.tag, true);
+      cardLine(sell, 'vtr-home-card-title', t('homeSellTitle'));
+      cardLine(sell, 'vtr-home-card-sub', t('homeSellSub'));
+      homeCardsEl.appendChild(sell);
+    }
+
+    if (homeCards.search) {
+      const search = homeCard('search', ICONS.search, true);
+      cardLine(search, 'vtr-home-card-title', t('homeSearchTitle'));
+      cardLine(search, 'vtr-home-card-sub', t('homeSearchSub'));
+      homeCardsEl.appendChild(search);
     }
   }
 
@@ -1118,7 +1224,8 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     // per-card listener would grow the tracked-listener array without bound.
     on(homeCardsEl, 'click', (e) => {
       const el = (e.target as Element | null)?.closest?.('[data-card]') as HTMLElement | null;
-      switch (el?.dataset.card) {
+      const kind = el?.dataset.card;
+      switch (kind) {
         case 'recent':
           setView('messages');
           break;
@@ -1129,6 +1236,13 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
           // The SAME path the chip takes, gate and all — the card is another
           // door onto one flow, never a second implementation of it.
           callbacks.onBookingOpen?.();
+          break;
+        case 'buy':
+        case 'sell':
+        case 'search':
+          // Same rule: the card reports the intent and the host decides, so
+          // openHomeAction() from a page button and a tap here are one path.
+          callbacks.onHomeAction?.(kind);
           break;
         default:
           break;
@@ -1417,6 +1531,45 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       input.focus();
       scrollToBottom();
     },
+    setHomeCards(cards: ResolvedHomeCards | undefined): void {
+      homeCards = resolveHomeCards(cards);
+      // The cards follow the gate in both directions, like the booking card.
+      paintHomeCards();
+      if (homeCards.buy || homeCards.sell || homeCards.search) {
+        ensureHomeActions();
+        return;
+      }
+      // Never constructed ⇒ nothing to take away. A tenant who never had the
+      // quick actions must not gain a hidden overlay for having been asked.
+      if (!homeActionsUi) return;
+      ui.closeHomeAction();
+    },
+    openHomeAction(kind: WidgetHomeAction): void {
+      ensureHomeActions();
+      if (!homeActionsUi) return;
+      homeActionOpen = true;
+      homeActionsUi.root.hidden = false;
+      // The composer, the chips and the tab bar go with it (CSS): while a form
+      // is up there is exactly one thing to do, and nothing behind it is
+      // tabbable. The kind rides on the attribute so a host page's own CSS —
+      // and this suite — can tell which flow is showing.
+      panel.setAttribute('data-home-action', kind);
+    },
+    closeHomeAction(): void {
+      homeActionOpen = false;
+      if (homeActionsUi) homeActionsUi.root.hidden = true;
+      panel.removeAttribute('data-home-action');
+    },
+    isHomeActionOpen(): boolean {
+      return homeActionOpen;
+    },
+    renderHomeAction(state: HomeActionViewState): void {
+      ensureHomeActions();
+      homeActionsUi?.render(state);
+    },
+    showMessages(): void {
+      setView('messages');
+    },
     setLocale(locale: WidgetLocale): void {
       t = makeT(locale);
       currentLocale = locale;
@@ -1446,6 +1599,11 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       if (bookBtn) bookBtn.textContent = bookChipText();
       paintVisitsChip();
       bookingUi?.setLocale();
+      // The quick-action forms are chrome too: a language swap that left a
+      // half-filled consignment form in Spanish is the same half-translated
+      // panel this method exists to prevent — and it must not lose a keystroke,
+      // which is why setLocale re-renders rather than rebuilding.
+      homeActionsUi?.setLocale();
       // The tabs are chrome too. The tenant's own words — home.title,
       // home.subtitle, the FAQ text, the booking label — are NOT: paintHome and
       // paintFaqs fall back to t() only where the tenant said nothing.
