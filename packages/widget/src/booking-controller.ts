@@ -55,6 +55,16 @@ export interface BookingControllerDeps {
 export interface BookingController {
   /** Handed straight to createBookingUi. */
   readonly callbacks: BookingCallbacks;
+  /**
+   * Swap the Turnstile gate after construction. The gate is decided by the
+   * REMOTE config, and a returning visitor's cached config (written by a
+   * widget older than the site key, or by a tenant that had no key yet) can
+   * build this controller before the live config lands — with no gate. Left
+   * that way, every confirm of that pageview POSTs tokenless against a server
+   * that now refuses tokenless bookings. `index.ts` calls this once the live
+   * config resolves; a null clears the gate (tenant switched Turnstile off).
+   */
+  setTurnstile(gate: TurnstileGate | null): void;
   /** Chip "Agendar visita". */
   openBooking(): void;
   /** Chip "Mis visitas". */
@@ -162,6 +172,7 @@ function emptyForm(): BookingViewState['form'] {
 }
 
 export function createBookingController(deps: BookingControllerDeps): BookingController {
+  let turnstile: TurnstileGate | null = deps.turnstile;
   const { transport, store } = deps;
 
   let destroyed = false;
@@ -196,7 +207,7 @@ export function createBookingController(deps: BookingControllerDeps): BookingCon
     visits: [],
     target: null,
     vehicleLabel: null,
-    turnstileRequired: deps.turnstile !== null,
+    turnstileRequired: turnstile !== null,
   };
 
   function render(): void {
@@ -390,7 +401,7 @@ export function createBookingController(deps: BookingControllerDeps): BookingCon
     // challenge on the resumen pane; otherwise it waits for them to. Null
     // (no script, no mount, timeout) sends nothing — the server's verdict
     // stays the single source of truth.
-    const turnstileToken = deps.turnstile ? await deps.turnstile.token() : null;
+    const turnstileToken = turnstile ? await turnstile.token() : null;
     if (destroyed || gen !== generation) return;
     const res = await transport.bookAppointment({
       startsAt: slot.startsAt,
@@ -553,7 +564,7 @@ export function createBookingController(deps: BookingControllerDeps): BookingCon
       void confirm();
     },
     onTurnstileSlot: (el: HTMLElement) => {
-      deps.turnstile?.mountFresh(el);
+      turnstile?.mountFresh(el);
     },
     onDone: () => deps.onClose(),
     onAskCancel: (ref: string) => {
@@ -590,6 +601,14 @@ export function createBookingController(deps: BookingControllerDeps): BookingCon
 
   return {
     callbacks,
+    setTurnstile(gate: TurnstileGate | null): void {
+      if (destroyed || gate === turnstile) return;
+      turnstile = gate;
+      state.turnstileRequired = gate !== null;
+      // The resumen pane owns the challenge slot: repaint it so the slot
+      // appears (or disappears) and `onTurnstileSlot` mounts the fresh widget.
+      if (state.step === 'resumen') render();
+    },
     openBooking(): void {
       // Reset the FLOW, keep the FORM. A visitor who stepped out and came back
       // should not retype their own name.
