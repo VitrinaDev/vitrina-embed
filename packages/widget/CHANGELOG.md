@@ -1,5 +1,25 @@
 # @vitrina/widget
 
+## 0.9.3
+
+The Turnstile gate now follows the **live** config instead of the config the
+booking controller was born with.
+
+A returning visitor carries a cached remote config. When that cache predates
+the site key (written by a widget older than 0.9.2, or by a tenant that had no
+key yet), its `bookingEnabled: true` builds the booking controller at init —
+before `GET /widget/config` answers with the key — and 0.9.2 left that
+controller without a gate for the rest of the pageview. Every confirm then
+POSTed tokenless against a server that refuses tokenless bookings: "No pudimos
+agendar. Reintenta." on every dealer site, for every returning visitor's first
+session after the upgrade (seen on lovende.cl, 2026-09-02).
+
+`BookingController.setTurnstile(gate)` swaps the gate after construction and
+repaints the resumen pane when it is showing; `init()` calls it once the live
+config resolves. The gate is keyed on the site key, so a tenant that moves to
+another widget gets a fresh gate, and a tenant that switches Turnstile off
+goes back to the tokenless POST (server fails open), exactly as before.
+
 ## 0.9.1
 
 Home header redesign (founder feedback): the accent gradient hero is gone.

@@ -187,6 +187,31 @@ export function init(config: WidgetConfig): WidgetInstance {
   let bookingEnabled = false;
 
   let turnstileGate: TurnstileGate | null = null;
+  let turnstileGateKey: string | null = null;
+
+  /**
+   * The gate for the CURRENT resolved site key — created on first use, torn
+   * down and rebuilt when the key changes (a tenant moved to another widget),
+   * dropped when the server stops advertising one. Called from
+   * `ensureBookingController` and again when the live config lands, because a
+   * controller built from a cached config that predates the key would
+   * otherwise keep POSTing tokenless for the whole pageview (every returning
+   * visitor's first session after the 0.9.2 upgrade did exactly that).
+   */
+  function gateForResolvedKey(): TurnstileGate | null {
+    const key = resolved.turnstileSiteKey;
+    if (turnstileGate && turnstileGateKey === key) return turnstileGate;
+    if (turnstileGate) {
+      turnstileGate.destroy();
+      turnstileGate = null;
+      turnstileGateKey = null;
+    }
+    if (key) {
+      turnstileGate = createTurnstileGate(key);
+      turnstileGateKey = key;
+    }
+    return turnstileGate;
+  }
 
   function ensureBookingController(): BookingController {
     if (!booking) {
@@ -215,9 +240,7 @@ export function init(config: WidgetConfig): WidgetInstance {
         // One gate per controller: created iff the server advertised a site
         // key, torn down with the controller. Null keeps the pre-Turnstile
         // behaviour byte-for-byte (tokenless POST, server fails open).
-        turnstile: resolved.turnstileSiteKey
-          ? (turnstileGate ??= createTurnstileGate(resolved.turnstileSiteKey))
-          : null,
+        turnstile: gateForResolvedKey(),
       });
     }
     return booking;
@@ -420,6 +443,8 @@ export function init(config: WidgetConfig): WidgetInstance {
         if (remote) {
           cache?.write(remote);
           resolved = resolveConfig(config, remote);
+          // A controller built from the cached config gets the live gate now.
+          if (booking) booking.setTurnstile(gateForResolvedKey());
           // Locale first: the greeting repaint inside setWelcomeMessage should
           // land in the language we are switching to, not the one we are
           // leaving.
@@ -805,6 +830,7 @@ export function init(config: WidgetConfig): WidgetInstance {
       if (turnstileGate) {
         turnstileGate.destroy();
         turnstileGate = null;
+        turnstileGateKey = null;
       }
       if (homeActions) {
         homeActions.destroy();
