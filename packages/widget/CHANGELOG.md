@@ -1,5 +1,29 @@
 # @vitrina/widget
 
+## 0.10.0
+
+**The combined tag** (vitrina-app#1594/#1595/#1610): a second `<script>`
+entry, `@vitrina/widget/tag` (`dist/tag.global.js`), that boots the assistant
+AND Atribu's attribution tracker from ONE install instead of two. The plain
+`@vitrina/widget/loader` is unchanged — this is additive.
+
+- Site id from `data-site`, same as the plain loader, with a `?site=` fallback
+  read off the tag's own `src` — Google Tag Manager's Custom HTML strips
+  `data-*` when it re-creates a `<script>` tag, so the fallback is load-bearing
+  for the GTM install path (vitrina-app#1611), not a nicety.
+- `apiBaseUrl` defaults to the tag's own origin (`+ /api/v1`) — the common
+  install needs only `data-site` / `?site=`; `data-api-base` / `?api=` exist
+  to override it (local dev, a non-default deployment).
+- ONE fetch, `GET {apiBase}/public/sites/{siteId}/tag-config`, resolves BOTH
+  halves: `{ assistant, tracking }`. `tracking` is `null` when the tenant
+  holds no Vitrina Ads entitlement — the assistant boots regardless.
+- The tracker half is consent-mode aware: it waits for `window.__vitrinaConsent`
+  (a boolean or a function) or Google Consent Mode v2's `dataLayer` `consent`
+  entries before injecting Atribu's collector script, polling for up to 20s.
+  The assistant never waits on this — it boots exactly like the plain loader.
+- Each half is independent past config resolution: a tracker-injection
+  failure never blocks the assistant and vice-versa.
+
 ## 0.9.3
 
 The Turnstile gate now follows the **live** config instead of the config the

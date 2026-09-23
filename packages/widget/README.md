@@ -47,6 +47,16 @@ connect-src https://api.vitrinadev.com;
 
 See "Usage — `<script>` loader" below for the full config.
 
+### Option C — combined tag (assistant + Vitrina Ads attribution)
+
+For a tenant with **Vitrina Ads** turned on: one tag boots the assistant
+above AND starts Atribu's attribution tracking — no second install. See
+**"The combined tag"** below.
+
+```html
+<script src="https://api.vitrinadev.com/tag.js?site=pk_live_xxx" async></script>
+```
+
 ---
 
 ## Usage — `import { init }`
@@ -134,6 +144,105 @@ live handle is stashed on `window.vitrinaChatInstance`, so the host page can cal
 
 The loader is defensive: it `console.warn`s and no-ops on a missing/invalid config,
 is idempotent against a double-load, and never throws into the host page.
+
+---
+
+## The combined tag (assistant + Vitrina Ads attribution)
+
+`@vitrina/widget/tag` (served at `https://api.vitrinadev.com/tag.js`) is a
+**second, separate loader** for dealers who also have **Vitrina Ads** turned
+on: ONE `<script>` boots the chat assistant above AND starts Atribu's
+attribution tracking, so the click that brought a visitor in is joined to
+whatever they do next. The plain `widget.js` loader above is unaffected and
+stays the recommended install for a tenant without Vitrina Ads.
+
+There is nothing to configure beyond the site id — no publishable key, no
+tracking key, no API base to get right. The tag fetches its own config at
+load from Vitrina (`GET /public/sites/{siteId}/tag-config`), so a key
+rotation or turning Ads on/off later never means editing this tag again.
+
+### Direct install
+
+```html
+<script src="https://api.vitrinadev.com/tag.js?site=pk_live_xxx" async></script>
+```
+
+`pk_live_xxx` is the SAME publishable widget key `window.vitrinaChat.publicKey`
+would hold — copy it from **Configuración › Conexiones › Web chat**, same as
+for the plain widget.
+
+You can also spell the site id as a `data-site` attribute instead of a query
+string:
+
+```html
+<script src="https://api.vitrinadev.com/tag.js" data-site="pk_live_xxx" async></script>
+```
+
+Both forms work for a direct install. The `?site=` query-string form is the
+one that matters for Google Tag Manager, below — GTM strips `data-*`
+attributes when it re-creates the tag, so a GTM-installed tag has to carry
+its site id in the URL itself. `data-api-base` / `?api=` exist as an escape
+hatch that overrides the API host derived from the tag's own origin — you
+will not need either on a normal install.
+
+### Google Tag Manager install
+
+For a dealer (or their agency) who installs everything through GTM and never
+touches page HTML directly:
+
+1. Open Vitrina → **Configuración › Conexiones › Vitrina Ads** and copy the
+   ready-to-paste tag (`GET /api/v1/ads/tracking/installers/gtm?site_id=<pk_…>`
+   returns it, already filled in with your site id — the API never asks you
+   to build the snippet by hand).
+2. In GTM: **Tags › New › Tag Configuration › Custom HTML**, paste the
+   snippet verbatim:
+
+   ```html
+   <script src="https://api.vitrinadev.com/tag.js?site=pk_live_xxx" async></script>
+   ```
+
+3. Trigger: **All Pages**.
+4. Name the tag (Vitrina's payload suggests one — e.g. "Vitrina — Asistente +
+   Atribu (tag único)") and **Publish** the container.
+5. Do **not** also install `widget.js`, and do **not** paste Atribu's own
+   tracker snippet separately — this one tag is both.
+
+Verify it worked with GTM's **Preview** mode: the assistant's launcher bubble
+should appear, and a `<script src="https://track.atribu.app/…">` (or
+whichever collector your key resolves to) should load in the Network panel
+once consent is granted (see next section).
+
+### Consent
+
+The **assistant half boots regardless of consent** — talking to a visitor is
+not tracking them. The **attribution tracker half waits** for one of:
+
+- **Google Consent Mode v2** — if your CMP already pushes the standard
+  `consent` `default` / `update` entries onto `window.dataLayer`
+  (`ad_storage` / `analytics_storage`), the tag reads them; nothing else to
+  wire up.
+- **`window.__vitrinaConsent`** — a generic hook for a hand-rolled banner or
+  a CMP that does not speak Consent Mode: set it to `true` / `false`, or to a
+  function returning one, at any point (before or after the tag loads).
+
+  ```html
+  <script>
+    // e.g. from your own "Aceptar cookies" button:
+    window.__vitrinaConsent = true;
+  </script>
+  ```
+
+No signal at all means the tracker never loads — it fails closed, not open.
+
+### What the combined tag needs from Vitrina
+
+- **#1605** — `GET /api/v1/ads/tracking/key` and `GET /api/v1/ads/tracking/
+  installers/gtm` (vitrina-app), admin-scoped, gated behind the Vitrina Ads
+  entitlement.
+- **#1610** — `GET /api/v1/public/sites/{siteId}/tag-config` (vitrina-app),
+  public and unauthenticated — `{siteId}` IS the credential (this package's
+  own `pk_…`). Answers `{ assistant, tracking }`; `tracking` is `null` for a
+  tenant without the Ads entitlement, and the assistant still boots.
 
 ---
 
@@ -432,7 +541,7 @@ from ~2020 onward. No IE11 support.
 ## Development
 
 ```bash
-pnpm build       # tsup → dist/ (ESM library + IIFE loader + .d.ts)
+pnpm build       # tsup → dist/ (ESM library + IIFE loader + IIFE combined tag + .d.ts)
 pnpm typecheck   # tsc --noEmit
 pnpm test        # vitest (happy-dom)
 ```
