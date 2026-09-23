@@ -178,6 +178,10 @@ const BOOK_FAILURE_REASONS: readonly string[] = [
   'vehicle_taken',
   'not_configured',
   'invalid',
+  'missing_token',
+  'invalid_token',
+  'timeout_or_duplicate',
+  'outage',
 ];
 
 /** Pull `error.details.reason` out of a refusal body, or undefined. */

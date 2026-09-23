@@ -173,13 +173,27 @@ export interface BookingResult {
   managementToken: string;
 }
 
-/** Why the ledger refused a booking. Carried in `error.details.reason`. */
+/**
+ * Why the ledger refused a booking. Carried in `error.details.reason`.
+ *
+ * `missing_token` / `invalid_token` / `timeout_or_duplicate` / `outage` are
+ * the Turnstile-gate refusals (vitrina-app #1265 — see `turnstile.ts`'s
+ * header): the server has sent these since Turnstile enforcement shipped,
+ * but they were missing from this union and from `BOOK_FAILURE_REASONS`
+ * (`transport.ts`) until now, so `refusalReason()` silently discarded them
+ * and every Turnstile refusal fell through to the generic error message
+ * instead of `errVerification`.
+ */
 export type BookFailureReason =
   | 'blocked'
   | 'slot_taken'
   | 'vehicle_taken'
   | 'not_configured'
-  | 'invalid';
+  | 'invalid'
+  | 'missing_token'
+  | 'invalid_token'
+  | 'timeout_or_duplicate'
+  | 'outage';
 
 // --- Resolved config --------------------------------------------------------
 

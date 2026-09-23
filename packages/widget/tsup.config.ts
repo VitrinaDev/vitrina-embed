@@ -1,11 +1,13 @@
 import { defineConfig } from 'tsup';
 
-// Two outputs from ONE `tsup` invocation (array of configs):
-//   1. ESM library  -> dist/index.js + dist/index.d.ts  (package.json exports ".")
-//   2. IIFE loader  -> dist/loader.global.js             (package.json exports "./loader")
+// Three outputs from ONE `tsup` invocation (array of configs):
+//   1. ESM library    -> dist/index.js + dist/index.d.ts  (package.json exports ".")
+//   2. IIFE loader     -> dist/loader.global.js             (package.json exports "./loader")
+//   3. IIFE combined tag -> dist/tag.global.js              (package.json exports "./tag",
+//      vitrina-app#1610 — boots the assistant AND Atribu's tracker from one <script>)
 //
-// Only the FIRST config sets `clean: true` — the second must NOT re-clean or it
-// wipes the library output written just before it.
+// Only the FIRST config sets `clean: true` — the others must NOT re-clean or
+// they wipe the output written just before them.
 export default defineConfig([
   {
     entry: { index: 'src/index.ts' },
@@ -30,6 +32,23 @@ export default defineConfig([
     // Self-executing IIFE (loader.ts auto-inits from window.vitrinaChat); the
     // global name is inert but named for clarity.
     globalName: 'VitrinaChatLoader',
+    outDir: 'dist',
+    outExtension() {
+      return { js: '.global.js' };
+    },
+  },
+  {
+    entry: { tag: 'src/tag.ts' },
+    format: ['iife'],
+    platform: 'browser',
+    target: 'es2019',
+    dts: false,
+    minify: true,
+    sourcemap: true,
+    clean: false,
+    // Self-executing IIFE (tag.ts auto-inits from data-site/?site= — see its
+    // header); the global name is inert but named for clarity.
+    globalName: 'VitrinaTagLoader',
     outDir: 'dist',
     outExtension() {
       return { js: '.global.js' };

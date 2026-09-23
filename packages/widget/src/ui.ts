@@ -83,6 +83,7 @@ const noopBooking: BookingCallbacks = {
   onBookAgain: () => {},
   onChatFallback: () => {},
   onRetry: () => {},
+  onTurnstileSlot: () => {},
 };
 
 /** The same courtesy for the quick-action overlay: coherent, reporting nowhere. */
