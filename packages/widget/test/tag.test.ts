@@ -29,6 +29,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   try {
     (window as { vitrinaChatInstance?: { destroy(): void } }).vitrinaChatInstance?.destroy();
   } catch {
@@ -147,7 +148,6 @@ describe('tag.ts (combined <script> entry)', () => {
     await bootTag();
     await vi.advanceTimersByTimeAsync(30_000);
     expect(trackerEl()).toBeNull();
-    vi.useRealTimers();
   });
 
   it('loads the tracker when a denial is later updated to granted', async () => {
@@ -162,7 +162,6 @@ describe('tag.ts (combined <script> entry)', () => {
     layer.push(['consent', 'update', { analytics_storage: 'granted' }]);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(trackerEl()).not.toBeNull();
-    vi.useRealTimers();
   });
 
   it('blocks the tracker when __vitrinaConsent is false', async () => {
@@ -171,7 +170,6 @@ describe('tag.ts (combined <script> entry)', () => {
     await bootTag();
     await vi.advanceTimersByTimeAsync(30_000);
     expect(trackerEl()).toBeNull();
-    vi.useRealTimers();
   });
 
   it('waits out a pending Consent Mode, then defaults to granted', async () => {
@@ -181,7 +179,6 @@ describe('tag.ts (combined <script> entry)', () => {
     expect(trackerEl()).toBeNull();
     await vi.advanceTimersByTimeAsync(3_000);
     expect(trackerEl()).not.toBeNull();
-    vi.useRealTimers();
   });
 
   it('a denial that lands during the pending grace blocks the default grant', async () => {
@@ -192,7 +189,6 @@ describe('tag.ts (combined <script> entry)', () => {
     layer.push(['consent', 'default', { analytics_storage: 'denied' }]);
     await vi.advanceTimersByTimeAsync(10_000);
     expect(trackerEl()).toBeNull();
-    vi.useRealTimers();
   });
 
   it('injects the tracker immediately when consent is already granted', async () => {

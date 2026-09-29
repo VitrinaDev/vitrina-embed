@@ -91,37 +91,6 @@ const POLL_MS = 500;
 // not leak a timer forever.
 const MAX_POLLS = 40;
 
-/**
- * Calls `onGranted` the instant tracking consent is (or becomes) `true`.
- * Checks immediately — a page whose CMP already granted before this script
- * ran fires synchronously-ish (microtask-free, same tick) — and otherwise
- * polls both signals above until granted or `MAX_POLLS` is exhausted.
- *
- * Polling, not a DOM event, because Consent Mode v2 defines no event of its
- * own and a dealer's CMP may push to `dataLayer` at any time relative to this
- * script. Returns a cancel function so a caller (or a test) can stop early.
- */
-export function onTrackingConsentGranted(onGranted: () => void): () => void {
-  let cancelled = false;
-  let attempts = 0;
-
-  const check = (): void => {
-    if (cancelled) return;
-    if (currentConsent() === true) {
-      onGranted();
-      return;
-    }
-    attempts += 1;
-    if (attempts >= MAX_POLLS) return;
-    setTimeout(check, POLL_MS);
-  };
-
-  check();
-  return () => {
-    cancelled = true;
-  };
-}
-
 // How long a page that HAS a dataLayer but has set no consent default yet
 // gets to set one before the beacon defaults to granted. Consent Mode
 // defaults are pushed before GTM boots, so this is a short grace, not a wait
@@ -133,7 +102,7 @@ const PENDING_GRACE_MS = 1500;
  *
  *   - verdict `true`, or NO signal at all (no hook, no dataLayer) -> now;
  *   - verdict `false` (explicit denial) -> never, unless it later becomes
- *     `true` (polled like `onTrackingConsentGranted`, up to ~20 s);
+ *     `true` (polled every 500 ms, up to ~20 s);
  *   - no verdict yet but a dataLayer exists (Consent Mode may still be
  *     initialising) -> wait `PENDING_GRACE_MS`; if still no verdict, load
  *     (default granted); if a denial arrived meanwhile, hold as above.

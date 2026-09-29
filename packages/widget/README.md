@@ -50,7 +50,7 @@ See "Usage — `<script>` loader" below for the full config.
 ### Option C — combined tag (assistant + Vitrina Ads attribution)
 
 For a tenant with **Vitrina Ads** turned on: one tag boots the assistant
-above AND starts Atribu's attribution tracking — no second install. See
+above AND starts Vitrina Ads attribution tracking — no second install. See
 **"The combined tag"** below.
 
 ```html
@@ -151,7 +151,7 @@ is idempotent against a double-load, and never throws into the host page.
 
 `@vitrina/widget/tag` (served at `https://api.vitrinadev.com/tag.js`) is a
 **second, separate loader** for dealers who also have **Vitrina Ads** turned
-on: ONE `<script>` boots the chat assistant above AND starts Atribu's
+on: ONE `<script>` boots the chat assistant above AND starts Vitrina Ads
 attribution tracking, so the click that brought a visitor in is joined to
 whatever they do next. The plain `widget.js` loader above is unaffected and
 stays the recommended install for a tenant without Vitrina Ads.
@@ -203,13 +203,13 @@ touches page HTML directly:
 
 3. Trigger: **All Pages**.
 4. Name the tag (Vitrina's payload suggests one — e.g. "Vitrina — Asistente +
-   Atribu (tag único)") and **Publish** the container.
-5. Do **not** also install `widget.js`, and do **not** paste Atribu's own
-   tracker snippet separately — this one tag is both.
+   Ads (tag único)") and **Publish** the container.
+5. Do **not** also install `widget.js`, and do **not** paste the measurement
+   provider's own tracker snippet separately — this one tag is both.
 
 Verify it worked with GTM's **Preview** mode: the assistant's launcher bubble
-should appear, and a `<script src="https://track.atribu.app/…">` (or
-whichever collector your key resolves to) should load in the Network panel
+should appear, and a tracker `<script>` from the measurement provider (the
+collector your key resolves to) should load in the Network panel
 unless the page denies consent (see next section).
 
 ### Consent
