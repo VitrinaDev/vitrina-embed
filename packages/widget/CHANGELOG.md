@@ -1,5 +1,22 @@
 # @vitrina/widget
 
+## 0.11.0
+
+**The combined tag's measurement beacon now loads by default.** A site in
+Chile does not need a cookie banner, so with no consent tool installed the
+beacon used to never load; now it does. It holds back only when the page
+explicitly denies tracking (behaviour change, hence the minor bump).
+
+- No consent signal at all: the beacon loads.
+- Google Consent Mode v2 `analytics_storage` / `ad_storage` explicitly
+  `denied`, or `window.__vitrinaConsent === false`: it does not load, and
+  loads later if consent becomes granted (polled for up to 20s).
+- A `dataLayer` with no consent default yet: the tag waits about 1.5s, then
+  loads unless a denial was set in the meantime.
+- Consent Mode entries pushed through `gtag()` (an `arguments` object, not an
+  array) are now read; they were ignored before.
+- The assistant half is unchanged: it never waits on consent.
+
 ## 0.10.0
 
 **The combined tag** (vitrina-app#1594/#1595/#1610): a second `<script>`
