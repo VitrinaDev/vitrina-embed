@@ -61,8 +61,23 @@ const YM = `${FIRST.getFullYear()}-${pad2(FIRST.getMonth() + 1)}`;
 const DAY = pad2(FIRST.getDate());
 const NEXT_MONTH = YM !== `${new Date().getFullYear()}-${pad2(new Date().getMonth() + 1)}`;
 
+// Every month OTHER than the booked one still offers a single day. The widget
+// opens on the current month; when the booked day lives in the next month
+// (any run within 3 days of a month end) an empty current month renders no
+// `.vtr-bk-count`, and the test used to wait on it forever. Same guard as
+// booking-flow.test.ts's agenda.
 function slotsFor(ym: string): unknown[] {
-  if (ym !== YM) return [];
+  if (ym !== YM) {
+    return [
+      {
+        startsAt: `${ym}-28T10:00:00-04:00`,
+        endsAt: `${ym}-28T10:30:00-04:00`,
+        label: '10:00',
+        labelLong: `${ym}-28 10:00`,
+        available: true,
+      },
+    ];
+  }
   return [
     {
       startsAt: `${YM}-${DAY}T10:00:00-04:00`,
