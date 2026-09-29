@@ -116,3 +116,21 @@ describe('onTrackingConsentGranted', () => {
     expect(cb).not.toHaveBeenCalled();
   });
 });
+
+describe('onTrackingAllowed', () => {
+  it('fires immediately with no signal and no dataLayer', async () => {
+    const { onTrackingAllowed } = await import('../src/consent');
+    const cb = vi.fn();
+    onTrackingAllowed(cb);
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads gtag()-style Arguments entries and denies when both keys are denied', async () => {
+    const { currentConsent: cc } = await import('../src/consent');
+    (function push(..._a: unknown[]) {
+      // eslint-disable-next-line prefer-rest-params
+      (window as { dataLayer?: unknown[] }).dataLayer = [arguments];
+    })('consent', 'default', { analytics_storage: 'denied', ad_storage: 'denied' });
+    expect(cc()).toBe(false);
+  });
+});

@@ -15,9 +15,10 @@
 //      Vitrina). Read defensively: dataLayer is a plain array anyone can
 //      push malformed entries onto, so every shape is checked before use.
 //
-// No signal at all resolves to `null` ("unknown"), which `tag.ts` treats as
-// NOT granted — tracking fails CLOSED, never open, on a page with no consent
-// integration at all.
+// No signal at all resolves to `null` ("unknown"). The tag's rule (founder
+// decision 2026-09-29 — a Chilean site needs no cookie banner) is DEFAULT
+// GRANTED: `null` loads the beacon; only an EXPLICIT denial (`false`) holds
+// it back. See `onTrackingAllowed` below.
 export type ConsentState = true | false | null;
 
 declare global {
@@ -48,8 +49,8 @@ function fromHook(): ConsentState {
  * entries (Google Consent Mode v2) and returns the LAST verdict found —
  * `update` entries are meant to supersede `default`, and pushes are
  * chronological, so the last matching entry is the current state.
- * `ad_storage` OR `analytics_storage` granted counts as granted (either is
- * enough for a first-party attribution tracker).
+ * Either key `granted` counts as granted (enough for a first-party
+ * tracker); otherwise either key `denied` counts as denied.
  */
 function fromGoogleConsentMode(): ConsentState {
   if (typeof window === 'undefined') return null;
@@ -58,8 +59,12 @@ function fromGoogleConsentMode(): ConsentState {
 
   let state: ConsentState = null;
   for (const entry of layer) {
-    if (!Array.isArray(entry) || entry.length < 3) continue;
-    const [kind, action, params] = entry as [unknown, unknown, unknown];
+    // gtag() pushes its `arguments` object, not a real array — accept both.
+    const isArgs = Object.prototype.toString.call(entry) === '[object Arguments]';
+    if (!isArgs && !Array.isArray(entry)) continue;
+    const tuple = entry as ArrayLike<unknown>;
+    if (tuple.length < 3) continue;
+    const [kind, action, params] = Array.from(tuple) as [unknown, unknown, unknown];
     if (kind !== 'consent') continue;
     if (action !== 'default' && action !== 'update') continue;
     if (!params || typeof params !== 'object') continue;
@@ -105,6 +110,59 @@ export function onTrackingConsentGranted(onGranted: () => void): () => void {
     if (currentConsent() === true) {
       onGranted();
       return;
+    }
+    attempts += 1;
+    if (attempts >= MAX_POLLS) return;
+    setTimeout(check, POLL_MS);
+  };
+
+  check();
+  return () => {
+    cancelled = true;
+  };
+}
+
+// How long a page that HAS a dataLayer but has set no consent default yet
+// gets to set one before the beacon defaults to granted. Consent Mode
+// defaults are pushed before GTM boots, so this is a short grace, not a wait
+// for a visitor's click.
+const PENDING_GRACE_MS = 1500;
+
+/**
+ * The tag's loading rule. Calls `onAllowed` once, when the beacon may load:
+ *
+ *   - verdict `true`, or NO signal at all (no hook, no dataLayer) -> now;
+ *   - verdict `false` (explicit denial) -> never, unless it later becomes
+ *     `true` (polled like `onTrackingConsentGranted`, up to ~20 s);
+ *   - no verdict yet but a dataLayer exists (Consent Mode may still be
+ *     initialising) -> wait `PENDING_GRACE_MS`; if still no verdict, load
+ *     (default granted); if a denial arrived meanwhile, hold as above.
+ *
+ * Returns a cancel function.
+ */
+export function onTrackingAllowed(onAllowed: () => void): () => void {
+  const pendingPossible = (): boolean =>
+    typeof window !== 'undefined' && Array.isArray(window.dataLayer);
+
+  let cancelled = false;
+  let attempts = 0;
+  let graceLeftMs = pendingPossible() ? PENDING_GRACE_MS : 0;
+
+  const check = (): void => {
+    if (cancelled) return;
+    const verdict = currentConsent();
+    if (verdict === true) {
+      onAllowed();
+      return;
+    }
+    if (verdict === null) {
+      if (graceLeftMs <= 0) {
+        onAllowed();
+        return;
+      }
+      graceLeftMs -= POLL_MS;
+    } else {
+      graceLeftMs = 0; // an explicit denial ends the grace: never default-grant
     }
     attempts += 1;
     if (attempts >= MAX_POLLS) return;

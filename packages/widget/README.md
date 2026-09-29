@@ -210,29 +210,42 @@ touches page HTML directly:
 Verify it worked with GTM's **Preview** mode: the assistant's launcher bubble
 should appear, and a `<script src="https://track.atribu.app/…">` (or
 whichever collector your key resolves to) should load in the Network panel
-once consent is granted (see next section).
+unless the page denies consent (see next section).
 
 ### Consent
 
 The **assistant half boots regardless of consent** — talking to a visitor is
-not tracking them. The **attribution tracker half waits** for one of:
+not tracking them. The **attribution tracker half loads by default**: a site
+in Chile does not need a cookie banner, so with no consent tool installed the
+tracker simply runs. It holds back only when the page **explicitly denies**
+tracking, through either signal:
 
 - **Google Consent Mode v2** — if your CMP already pushes the standard
-  `consent` `default` / `update` entries onto `window.dataLayer`
-  (`ad_storage` / `analytics_storage`), the tag reads them; nothing else to
-  wire up.
+  `consent` `default` / `update` entries onto `window.dataLayer`, the tag
+  reads them; nothing else to wire up. `ad_storage` or `analytics_storage`
+  set to `'denied'` blocks the tracker.
 - **`window.__vitrinaConsent`** — a generic hook for a hand-rolled banner or
-  a CMP that does not speak Consent Mode: set it to `true` / `false`, or to a
-  function returning one, at any point (before or after the tag loads).
+  a CMP that does not speak Consent Mode: set it to `false` (or a function
+  returning `false`) to block, `true` to allow, at any point (before or after
+  the tag loads).
 
   ```html
   <script>
-    // e.g. from your own "Aceptar cookies" button:
-    window.__vitrinaConsent = true;
+    // e.g. from your own "Rechazar cookies" button:
+    window.__vitrinaConsent = false;
   </script>
   ```
 
-No signal at all means the tracker never loads — it fails closed, not open.
+The rule, in full:
+
+| Page state | Tracker |
+| --- | --- |
+| No consent signal at all | loads |
+| Consent granted (either signal) | loads |
+| Consent explicitly denied | does not load; loads later if it becomes granted |
+| `dataLayer` present but no consent default set yet | waits about 1.5 s for one; loads if none is set, stays blocked if a denial arrives |
+
+`__vitrinaConsent` takes priority over Consent Mode when both are present.
 
 ### What the combined tag needs from Vitrina
 

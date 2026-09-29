@@ -90,7 +90,7 @@ describe('ownScriptElement / resolveSiteId / resolveApiBase (pure)', () => {
 });
 
 describe('tag.ts (combined <script> entry)', () => {
-  it('boots the assistant and defers the tracker until consent (no signal = never)', async () => {
+  it('boots the assistant AND loads the tracker with no consent signal (default granted)', async () => {
     appendScript({ src: 'https://api.example.com/tag.js?site=' + PK });
     vi.stubGlobal(
       'fetch',
@@ -114,8 +114,85 @@ describe('tag.ts (combined <script> entry)', () => {
 
     expect((window as { vitrinaChatInstance?: unknown }).vitrinaChatInstance).toBeDefined();
     expect(document.querySelector('[data-vitrina-widget]')).not.toBeNull();
-    // No consent signal at all -> the tracker must NOT have been injected.
-    expect(document.querySelector('script[data-vitrina-tracker-key]')).toBeNull();
+    // No consent signal at all -> default granted, the tracker loads.
+    expect(document.querySelector('script[data-vitrina-tracker-key]')).not.toBeNull();
+  });
+
+  const TRACKING = { key: 'trk_live_x', tracker_src: 'https://track.atribu.app/t.js?k=trk_live_x' };
+  async function bootTag(): Promise<void> {
+    appendScript({ src: 'https://api.example.com/tag.js?site=' + PK });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          stubJsonResponse({
+            data: {
+              assistant: { publicKey: PK, apiBaseUrl: 'https://api.example.com/api/v1' },
+              tracking: TRACKING,
+            },
+          }),
+        ),
+      ),
+    );
+    await import('../src/tag');
+    for (let i = 0; i < 4; i += 1) await Promise.resolve();
+  }
+  const trackerEl = (): Element | null => document.querySelector('script[data-vitrina-tracker-key]');
+
+  it('never loads the tracker while Consent Mode explicitly denies', async () => {
+    vi.useFakeTimers();
+    (window as { dataLayer?: unknown[] }).dataLayer = [
+      ['consent', 'default', { ad_storage: 'denied', analytics_storage: 'denied' }],
+    ];
+    await bootTag();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(trackerEl()).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('loads the tracker when a denial is later updated to granted', async () => {
+    vi.useFakeTimers();
+    const layer: unknown[] = [
+      ['consent', 'default', { analytics_storage: 'denied', ad_storage: 'denied' }],
+    ];
+    (window as { dataLayer?: unknown[] }).dataLayer = layer;
+    await bootTag();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(trackerEl()).toBeNull();
+    layer.push(['consent', 'update', { analytics_storage: 'granted' }]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(trackerEl()).not.toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('blocks the tracker when __vitrinaConsent is false', async () => {
+    vi.useFakeTimers();
+    (window as { __vitrinaConsent?: unknown }).__vitrinaConsent = false;
+    await bootTag();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(trackerEl()).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('waits out a pending Consent Mode, then defaults to granted', async () => {
+    vi.useFakeTimers();
+    (window as { dataLayer?: unknown[] }).dataLayer = [];
+    await bootTag();
+    expect(trackerEl()).toBeNull();
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(trackerEl()).not.toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('a denial that lands during the pending grace blocks the default grant', async () => {
+    vi.useFakeTimers();
+    const layer: unknown[] = [];
+    (window as { dataLayer?: unknown[] }).dataLayer = layer;
+    await bootTag();
+    layer.push(['consent', 'default', { analytics_storage: 'denied' }]);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(trackerEl()).toBeNull();
+    vi.useRealTimers();
   });
 
   it('injects the tracker immediately when consent is already granted', async () => {
