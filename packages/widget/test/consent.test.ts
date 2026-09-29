@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { currentConsent, onTrackingConsentGranted } from '../src/consent';
+import { currentConsent, onTrackingAllowed } from '../src/consent';
 
 beforeEach(() => {
   delete (window as { __vitrinaConsent?: unknown }).__vitrinaConsent;
@@ -72,44 +72,61 @@ describe('currentConsent', () => {
   });
 });
 
-describe('onTrackingConsentGranted', () => {
-  it('calls back immediately when consent is already granted', () => {
-    (window as { __vitrinaConsent?: unknown }).__vitrinaConsent = true;
+describe('onTrackingAllowed', () => {
+  it('fires immediately with no signal and no dataLayer', async () => {
     const cb = vi.fn();
-    onTrackingConsentGranted(cb);
+    onTrackingAllowed(cb);
     expect(cb).toHaveBeenCalledTimes(1);
   });
 
-  it('polls until consent is granted', () => {
-    vi.useFakeTimers();
+  it('reads gtag()-style Arguments entries and denies when both keys are denied', async () => {
+    const { currentConsent: cc } = await import('../src/consent');
+    (function push(..._a: unknown[]) {
+      // eslint-disable-next-line prefer-rest-params
+      (window as { dataLayer?: unknown[] }).dataLayer = [arguments];
+    })('consent', 'default', { analytics_storage: 'denied', ad_storage: 'denied' });
+    expect(cc()).toBe(false);
+  });
+
+  const deny = (): void => {
+    (window as { __vitrinaConsent?: unknown }).__vitrinaConsent = false;
+  };
+
+  it('calls back immediately when consent is already granted', () => {
+    (window as { __vitrinaConsent?: unknown }).__vitrinaConsent = true;
     const cb = vi.fn();
-    onTrackingConsentGranted(cb);
-    expect(cb).not.toHaveBeenCalled();
+    onTrackingAllowed(cb);
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
 
-    vi.advanceTimersByTime(500);
+  it('while denied, polls until consent is granted, then fires once', () => {
+    vi.useFakeTimers();
+    deny();
+    const cb = vi.fn();
+    onTrackingAllowed(cb);
+    vi.advanceTimersByTime(1000);
     expect(cb).not.toHaveBeenCalled();
-
     (window as { __vitrinaConsent?: unknown }).__vitrinaConsent = true;
     vi.advanceTimersByTime(500);
     expect(cb).toHaveBeenCalledTimes(1);
-
-    // Does not keep firing once granted.
     vi.advanceTimersByTime(5000);
     expect(cb).toHaveBeenCalledTimes(1);
   });
 
-  it('gives up after the poll budget on a page that never grants', () => {
+  it('gives up after the poll budget on a page that stays denied', () => {
     vi.useFakeTimers();
+    deny();
     const cb = vi.fn();
-    onTrackingConsentGranted(cb);
+    onTrackingAllowed(cb);
     vi.advanceTimersByTime(500 * 100);
     expect(cb).not.toHaveBeenCalled();
   });
 
   it('cancel() stops further polling', () => {
     vi.useFakeTimers();
+    deny();
     const cb = vi.fn();
-    const cancel = onTrackingConsentGranted(cb);
+    const cancel = onTrackingAllowed(cb);
     cancel();
     (window as { __vitrinaConsent?: unknown }).__vitrinaConsent = true;
     vi.advanceTimersByTime(500 * 10);

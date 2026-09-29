@@ -48,7 +48,7 @@
 // idempotent against a double-load, and never throws into the host page.
 
 import { init } from './index';
-import { currentConsent, onTrackingConsentGranted } from './consent';
+import { onTrackingAllowed } from './consent';
 import type { WidgetConfig, WidgetInstance } from './types';
 
 declare global {
@@ -175,11 +175,9 @@ function bootTracker(tracking: { key: string; tracker_src: string } | null | und
   // boot, silently. This is the expected, common state for a dealer who has
   // not bought the Add-on; it is not an error.
   if (!tracking || !tracking.tracker_src) return;
-  if (currentConsent() === true) {
-    injectTrackerScript(tracking);
-    return;
-  }
-  onTrackingConsentGranted(() => injectTrackerScript(tracking));
+  // Default GRANTED (no cookie banner needed in Chile): loads unless the page
+  // explicitly signals denial — see `onTrackingAllowed`.
+  onTrackingAllowed(() => injectTrackerScript(tracking));
 }
 
 async function autoInit(): Promise<void> {
