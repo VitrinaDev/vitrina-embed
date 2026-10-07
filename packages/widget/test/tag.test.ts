@@ -291,3 +291,41 @@ describe('tag.ts (combined <script> entry)', () => {
     expect((window as { vitrinaChatInstance?: unknown }).vitrinaChatInstance).toBeUndefined();
   });
 });
+
+describe('tag.ts — the booking page link (vitrina-app#3701)', () => {
+  it('decorates links to the booking page tag-config names with the tracker’s id', async () => {
+    window.localStorage.setItem('atribu_anon_id', 'anon_tag_boot_1');
+    appendScript({ src: 'https://api.example.com/tag.js?site=' + PK });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          stubJsonResponse({
+            data: {
+              assistant: { publicKey: PK, apiBaseUrl: 'https://api.example.com/api/v1' },
+              tracking: null,
+              booking_link: {
+                origin: 'https://app.vitrinadev.com',
+                path_prefix: '/reserva/',
+                param: 'vt_aid',
+              },
+            },
+          }),
+        ),
+      ),
+    );
+    await import('../src/tag');
+    for (let i = 0; i < 4; i += 1) await Promise.resolve();
+
+    const a = document.createElement('a');
+    a.setAttribute('href', 'https://app.vitrinadev.com/reserva/AbCdEfGhIjKlMnOpQrSt');
+    a.addEventListener('click', (e) => e.preventDefault());
+    document.body.appendChild(a);
+    a.click();
+    expect(a.getAttribute('href')).toBe(
+      'https://app.vitrinadev.com/reserva/AbCdEfGhIjKlMnOpQrSt?vt_aid=anon_tag_boot_1',
+    );
+    a.remove();
+    window.localStorage.clear();
+  });
+});

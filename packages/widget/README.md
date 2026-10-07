@@ -161,6 +161,12 @@ tracking key, no API base to get right. The tag fetches its own config at
 load from Vitrina (`GET /public/sites/{siteId}/tag-config`), so a key
 rotation or turning Ads on/off later never means editing this tag again.
 
+Links to the hosted booking page (`https://app.vitrinadev.com/reserva/…`) and a
+booking page embedded as an `<iframe>` get `?vt_aid=<anonymous visitor id>`
+appended when used, so a booking made there is credited to the ad visit that
+led to it. Nothing to set up: the tag learns the booking page's address from
+the same config read.
+
 ### Direct install
 
 ```html

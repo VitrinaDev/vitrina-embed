@@ -1,5 +1,18 @@
 # @vitrina/widget
 
+## 0.12.0
+
+**The combined tag carries the visitor across to the hosted booking page**
+(vitrina-app#3701, Website ads). A clinic's "Agendar" button usually links to
+Vitrina's hosted booking page on another domain, so the visit that came from
+an ad and the booking made there could not be joined. `tag-config` now names
+the booking page (`booking_link: { origin, path_prefix, param }`), and the tag
+appends `?vt_aid=<anonymous visitor id>` to links pointing at it when they are
+clicked (left, middle or "open in new tab"), and to an embedded booking
+`<iframe>` once the tracker has an id. The booking page sends it with the
+booking. No id (consent denied, tracker not loaded) leaves the link untouched;
+nothing else on the page is changed.
+
 ## 0.11.0
 
 **The combined tag's measurement beacon now loads by default.** A site in
