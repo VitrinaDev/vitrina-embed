@@ -29,6 +29,10 @@
 // `?api=` exist purely as an override for local development and a
 // non-default deployment (a regional API host, say).
 //
+// THE BOOKING PAGE LINK (vitrina-app#3701). `booking_link` names the hosted
+// booking page; links and iframes pointing at it get the tracker's anonymous
+// id appended (`booking-link.ts`) so a booking made there joins this visit.
+//
 // ONE FETCH, BOTH HALVES. `GET {apiBase}/public/sites/{siteId}/tag-config`
 // answers `{ assistant, tracking }` — `assistant` is exactly what
 // `window.vitrinaChat` would have held for the plain loader, `tracking` is
@@ -49,6 +53,7 @@
 
 import { init } from './index';
 import { onTrackingAllowed } from './consent';
+import { installBookingLinkDecoration, type BookingLinkConfig } from './booking-link';
 import type { WidgetConfig, WidgetInstance } from './types';
 
 declare global {
@@ -66,6 +71,9 @@ declare global {
 export interface TagConfigResponse {
   assistant?: Partial<WidgetConfig> | null;
   tracking?: { key: string; tracker_src: string } | null;
+  /** Which hosted-booking-page links carry the visitor id across domains
+   *  (vitrina-app#3701) — see `booking-link.ts`. */
+  booking_link?: BookingLinkConfig | null;
 }
 
 /** Matches this bundle's own filename, built (`.global.js`) or served under
@@ -219,6 +227,12 @@ async function autoInit(): Promise<void> {
   // down with it.
   bootAssistant(payload.assistant);
   bootTracker(payload.tracking);
+  try {
+    installBookingLinkDecoration(payload.booking_link);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[vitrina-tag] booking link decoration failed:', err);
+  }
 }
 
 void autoInit();
