@@ -312,6 +312,31 @@ Set `vehicleLabel` alongside `vehicleId` if you want the car named on the
 booking summary; without a label the widget shows no vehicle line at all rather
 than an empty card.
 
+### Clinics: the clinic booking flow
+
+When the Vitrina workspace is a clinic with an active online-booking landing,
+`GET /widget/config` answers `clinicBooking: { enabled: true }` and the chip
+("Reservar hora" by default) opens the clinic flow instead:
+`servicio → profesional (o cualquiera) → fecha → hora → datos → resumen → listo`.
+Services, prices, deposits, professionals and branding come from the landing,
+hours from the clinic's Vitrina agenda, and the booking goes through the same
+service as the hosted booking page, so the cita, the contact and the deposit
+hold are identical whichever one the patient used.
+
+The booking carries the ad click: UTMs and `fbclid`/`gclid` from the URL the
+patient landed on (remembered for the tab, so booking from another page still
+counts) and the Vitrina tag's anonymous visitor id. No page URL, referrer or
+title is ever sent, and the widget loads no ad-platform tag.
+
+A clinic with several landings picks one with `landing`:
+
+```js
+window.vitrinaChat = { publicKey: 'pk_…', apiBaseUrl: '…', landing: 'convenio-isapre' };
+```
+
+The confirmation shows the code, a link where the patient confirms, moves or
+cancels, and, for a service with a deposit, the amount and the deadline.
+
 A host page with its own booking button opens the calendar directly:
 
 ```js
