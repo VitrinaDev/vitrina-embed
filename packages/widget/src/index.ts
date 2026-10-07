@@ -17,6 +17,8 @@
 import { createBookingController, type BookingController } from './booking-controller';
 import { createTurnstileGate, type TurnstileGate } from './turnstile';
 import { createBookingStore } from './booking-store';
+import { createClinicBookingController, type ClinicBookingController } from './clinic-booking-controller';
+import { bookingAttribution, captureLandingClick } from './clinic-attribution';
 import { hasInlineAppearance, resolveConfig, resolveHomeCards, type ResolvedHomeCards } from './config';
 import {
   createHomeActionsController,
@@ -213,7 +215,38 @@ export function init(config: WidgetConfig): WidgetInstance {
     return turnstileGate;
   }
 
+  /** The clinic flow's controller, when this tenant is a clinic (#3707). */
+  let clinicBooking: ClinicBookingController | null = null;
+
+  /**
+   * The booking flow the chip opens, chosen from the tenant's configuration:
+   * the clinic flow for a clinic with a live online-booking landing, the
+   * dealer's test-drive flow otherwise.
+   */
   function ensureBookingController(): BookingController {
+    if (resolved.bookingFlow === 'clinic') {
+      if (!clinicBooking) {
+        clinicBooking = createClinicBookingController({
+          transport,
+          landing: resolved.landing,
+          getLocale: () => resolved.locale,
+          getAttribution: () => bookingAttribution(),
+          onRender: (state) => {
+            if (!destroyed) ui.renderBooking(state);
+          },
+          onChatFallback: (draftKey) => {
+            if (destroyed) return;
+            ui.closeBooking();
+            ui.focusComposer(makeT(resolved.locale)(draftKey));
+          },
+          onClose: () => {
+            if (!destroyed) ui.closeBooking();
+          },
+          turnstile: gateForResolvedKey(),
+        });
+      }
+      return clinicBooking;
+    }
     if (!booking) {
       booking = createBookingController({
         transport,
@@ -346,13 +379,24 @@ export function init(config: WidgetConfig): WidgetInstance {
     if (!cards.buy && !cards.sell && !cards.search) pendingHomeAction = null;
   }
 
+  /**
+   * The chip's words: the tenant's own label, else — for a clinic — "Reservar
+   * hora" rather than the dealer default "Agendar visita". Null hands the
+   * choice to the UI's built-in copy, exactly as before the clinic flow.
+   */
+  function chipLabel(): string | null {
+    if (resolved.bookingLabel) return resolved.bookingLabel;
+    return resolved.bookingFlow === 'clinic' ? makeT(resolved.locale)('clinicBookChip') : null;
+  }
+  if (resolved.bookingFlow === 'clinic') captureLandingClick();
+
   const ui = createWidgetUI({
     t,
     locale: resolved.locale,
     theme: resolved.theme,
     welcomeMessage: resolved.welcomeMessage,
     font: resolved.font,
-    bookingLabel: resolved.bookingLabel,
+    bookingLabel: chipLabel(),
     // A repeat visitor's cached config already knows whether this tenant has
     // the tabs, so they paint with the panel rather than a round trip after it.
     home: resolved.home,
@@ -398,6 +442,8 @@ export function init(config: WidgetConfig): WidgetInstance {
         onChatFallback: (key) => ensureBookingController().callbacks.onChatFallback(key),
         onTurnstileSlot: (el) => ensureBookingController().callbacks.onTurnstileSlot(el),
         onRetry: () => ensureBookingController().callbacks.onRetry(),
+        onPickService: (id) => ensureBookingController().callbacks.onPickService?.(id),
+        onPickProfessional: (p) => ensureBookingController().callbacks.onPickProfessional?.(p),
       },
       onHomeAction: (kind) => {
         if (!homeCards[kind]) return;
@@ -445,6 +491,8 @@ export function init(config: WidgetConfig): WidgetInstance {
           resolved = resolveConfig(config, remote);
           // A controller built from the cached config gets the live gate now.
           if (booking) booking.setTurnstile(gateForResolvedKey());
+          if (clinicBooking) clinicBooking.setTurnstile(gateForResolvedKey());
+          if (resolved.bookingFlow === 'clinic') captureLandingClick();
           // Locale first: the greeting repaint inside setWelcomeMessage should
           // land in the language we are switching to, not the one we are
           // leaving.
@@ -452,7 +500,7 @@ export function init(config: WidgetConfig): WidgetInstance {
           ui.applyTheme(resolved.theme);
           // After setLocale, which repaints the chip from our own copy: a tenant
           // label must be the LAST word on what that button says.
-          ui.setBookingLabel(resolved.bookingLabel);
+          ui.setBookingLabel(chipLabel());
           ui.applyFont(resolved.font);
           ui.setWelcomeMessage(resolved.welcomeMessage);
           // The tab surfaces, AFTER setLocale so their built-in copy lands in
@@ -826,6 +874,10 @@ export function init(config: WidgetConfig): WidgetInstance {
       if (booking) {
         booking.destroy();
         booking = null;
+      }
+      if (clinicBooking) {
+        clinicBooking.destroy();
+        clinicBooking = null;
       }
       if (turnstileGate) {
         turnstileGate.destroy();

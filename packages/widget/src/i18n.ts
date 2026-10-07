@@ -236,6 +236,38 @@ export interface WidgetStrings {
   errNotConfigured: string;
   errBookingGeneric: string;
   errVerification: string;
+
+  // --- Clinic booking flow (vitrina-app#3707) -------------------------------
+  // Only painted for a clinic with a live online-booking landing. The flow
+  // speaks of "hora" and "servicio", never "visita" or "vehículo".
+  /** Default chip copy for a clinic; a tenant label still wins. */
+  clinicBookChip: string;
+  stepServiceTitle: string;
+  stepProfessionalTitle: string;
+  /** The "whoever is free" option on the professional step. */
+  anyProfessional: string;
+  anyProfessionalHint: string;
+  minutes: string;
+  /** Rendered as "<depositLabel> $29.000". */
+  depositLabel: string;
+  noServices: string;
+  clinicHorizonNote: string;
+  fieldDocument: string;
+  fieldDocumentPlaceholder: string;
+  clinicConsentLabel: string;
+  clinicPrivacyNote: string;
+  summaryService: string;
+  summaryProfessional: string;
+  summaryPrice: string;
+  summaryLocation: string;
+  clinicTrustLine: string;
+  clinicSaveCodeNote: string;
+  /** Opens the tokenised page to confirm, move or cancel. */
+  manageCta: string;
+  depositDueTitle: string;
+  /** Rendered as "<depositDueBy> lunes 12 de octubre, 10:00". */
+  depositDueBy: string;
+  errServiceUnavailable: string;
 }
 
 export type StringKey = keyof WidgetStrings;
@@ -411,6 +443,29 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     errBookingGeneric: 'No pudimos agendar. Reintenta.',
     errVerification:
       'No pudimos verificar tu solicitud. Completa la verificación y vuelve a intentar.',
+    clinicBookChip: 'Reservar hora',
+    stepServiceTitle: 'Elige un servicio',
+    stepProfessionalTitle: 'Elige profesional',
+    anyProfessional: 'Cualquier profesional',
+    anyProfessionalHint: 'Te mostramos todas las horas disponibles.',
+    minutes: 'min',
+    depositLabel: 'Abono para reservar',
+    noServices: 'Por ahora no hay servicios para reservar en línea.',
+    clinicHorizonNote: 'La agenda está abierta hasta el',
+    fieldDocument: 'RUT',
+    fieldDocumentPlaceholder: '12.345.678-9',
+    clinicConsentLabel: 'Acepto que usen mis datos para gestionar esta reserva',
+    clinicPrivacyNote: 'Tus datos se usan solo para tu reserva.',
+    summaryService: 'Servicio',
+    summaryProfessional: 'Profesional',
+    summaryPrice: 'Valor',
+    summaryLocation: 'Lugar',
+    clinicTrustLine: 'Es la agenda real de la clínica.',
+    clinicSaveCodeNote: 'Desde el enlace puedes confirmar, cambiar o cancelar tu hora.',
+    manageCta: 'Ver o cambiar mi hora',
+    depositDueTitle: 'Para asegurar tu hora',
+    depositDueBy: 'Paga el abono antes del',
+    errServiceUnavailable: 'Ese servicio ya no se puede reservar en línea.',
   },
   en: {
     launcherLabel: 'Open chat',
@@ -577,6 +632,29 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     errBookingGeneric: 'We could not book. Retry.',
     errVerification:
       'We could not verify your request. Complete the check and try again.',
+    clinicBookChip: 'Book an appointment',
+    stepServiceTitle: 'Choose a service',
+    stepProfessionalTitle: 'Choose a professional',
+    anyProfessional: 'Any professional',
+    anyProfessionalHint: 'We show you every available time.',
+    minutes: 'min',
+    depositLabel: 'Deposit to book',
+    noServices: 'There are no services to book online right now.',
+    clinicHorizonNote: 'The calendar is open until',
+    fieldDocument: 'ID number',
+    fieldDocumentPlaceholder: '12.345.678-9',
+    clinicConsentLabel: 'I agree to my details being used to manage this booking',
+    clinicPrivacyNote: 'Your details are used only for your booking.',
+    summaryService: 'Service',
+    summaryProfessional: 'Professional',
+    summaryPrice: 'Price',
+    summaryLocation: 'Location',
+    clinicTrustLine: "This is the clinic's real calendar.",
+    clinicSaveCodeNote: 'From the link you can confirm, change or cancel your appointment.',
+    manageCta: 'View or change my appointment',
+    depositDueTitle: 'To secure your appointment',
+    depositDueBy: 'Pay the deposit before',
+    errServiceUnavailable: 'That service can no longer be booked online.',
   },
 };
 

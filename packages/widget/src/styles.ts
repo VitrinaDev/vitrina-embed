@@ -468,6 +468,35 @@ select.vtr-ha-input { cursor: pointer; }
 }
 .vtr-ha-fileremove:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
 
+/* Clinic flow (vitrina-app#3707): service and professional pickers. */
+.vtr-bk-intro { font-size: 13px; line-height: 1.5; color: var(--vtr-muted); }
+.vtr-bk-options { display: flex; flex-direction: column; gap: 8px; }
+.vtr-bk-option {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  width: 100%; text-align: left; cursor: pointer; padding: 11px 12px;
+  background: transparent; color: var(--vtr-text);
+  border: 1px solid var(--vtr-border); border-radius: 12px; font: inherit;
+}
+.vtr-bk-option:hover { border-color: var(--vtr-accent); }
+.vtr-bk-option[aria-current] { border-color: var(--vtr-accent); background: var(--vtr-bubble-out); }
+.vtr-bk-option:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 1px; }
+.vtr-bk-option-title { font-size: 14px; font-weight: 600; line-height: 1.35; }
+.vtr-bk-option-meta { font-size: 12px; color: var(--vtr-muted); line-height: 1.4; }
+/* The deposit on the confirmation, and the slot the payment link mounts in. */
+.vtr-bk-deposit {
+  border: 1px solid var(--vtr-border); border-radius: 12px; padding: 12px;
+  display: flex; flex-direction: column; gap: 4px; background: var(--vtr-bubble-out);
+}
+.vtr-bk-deposit-title { font-size: 12px; color: var(--vtr-muted); }
+.vtr-bk-deposit-amount { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.vtr-bk-deposit-instructions { font-size: 12px; line-height: 1.5; white-space: pre-line; }
+.vtr-bk-payment:empty { display: none; }
+.vtr-bk-manage {
+  display: inline-flex; align-self: center; font-size: 13px; font-weight: 600;
+  color: var(--vtr-accent); text-decoration: underline;
+}
+.vtr-bk-manage:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+
 /* Summary + confirmation */
 .vtr-bk-card {
   border: 1px solid var(--vtr-border); border-radius: 12px; padding: 12px;
