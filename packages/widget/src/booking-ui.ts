@@ -21,6 +21,8 @@ import type { StringKey, Translate } from './i18n';
 import type { WidgetLocale } from './types';
 
 export type BookingStep =
+  | 'servicio'
+  | 'profesional'
   | 'fecha'
   | 'hora'
   | 'datos'
@@ -47,6 +49,62 @@ export interface BookingFormValues {
   phone: string;
   email: string;
   consent: boolean;
+  /** RUT — asked only by a clinic whose landing requires it. */
+  document?: string;
+}
+
+/**
+ * The clinic flow's extra state (vitrina-app#3707). PRESENT only for a clinic;
+ * the dealer flow never sets it, so every dealer screen paints exactly as it
+ * did before this block existed.
+ */
+export interface ClinicFlowView {
+  /** The landing's own heading and intro, painted on the service step. */
+  title: string | null;
+  intro: string | null;
+  /** The landing has been read. Until then an empty list is not "no services". */
+  loaded: boolean;
+  services: Array<{
+    id: string;
+    name: string;
+    /** "30 min · $45.000". */
+    meta: string;
+    /** "Abono para reservar $29.000", or null. */
+    deposit: string | null;
+  }>;
+  /** Professionals who perform the chosen service. */
+  professionals: Array<{ id: string; name: string; specialty: string | null }>;
+  allowAny: boolean;
+  /** Whether the professional step is part of this flow (skipped for one). */
+  showProfessionalStep: boolean;
+  selectedServiceId: string | null;
+  /** A professional id, 'any', or null. */
+  selectedProfessional: string | null;
+  requireDocument: boolean;
+  /** Summary rows, pre-formatted by the controller. */
+  summary: {
+    service: string | null;
+    professional: string | null;
+    price: string | null;
+    deposit: string | null;
+    location: string | null;
+  };
+  /** What the confirmation screen shows beyond the code. */
+  booked: {
+    manageUrl: string | null;
+    /**
+     * PAYMENT SEAM. The deposit a booking of this service opened. The widget
+     * shows the amount and the deadline; the payment link itself belongs to
+     * the Mercado Pago checkout (vitrina-embed#18), which mounts into the
+     * `[data-bk-payment]` slot painted next to this.
+     */
+    deposit: {
+      amount: string;
+      dueBy: string | null;
+      /** Where to transfer, until the checkout link exists. */
+      accounts: Array<{ title: string; number: string; holder: string }>;
+    } | null;
+  } | null;
 }
 
 /** One entry of "Mis visitas", resolved from the server. */
@@ -96,6 +154,8 @@ export interface BookingViewState {
    * paint of that step, so the controller can (re)mount a fresh widget there.
    */
   turnstileRequired: boolean;
+  /** Present only in the clinic flow. */
+  clinic?: ClinicFlowView | null;
 }
 
 export interface BookingCallbacks {
@@ -121,6 +181,10 @@ export interface BookingCallbacks {
   onRetry(): void;
   /** The resumen pane just painted its Turnstile slot — mount into it. */
   onTurnstileSlot(el: HTMLElement): void;
+  /** Clinic flow: a service was chosen. */
+  onPickService?(serviceId: string): void;
+  /** Clinic flow: a professional (or 'any') was chosen. */
+  onPickProfessional?(professional: string): void;
 }
 
 export interface BookingUi {
@@ -135,6 +199,8 @@ const INTL_LOCALE: Record<WidgetLocale, string> = { es: 'es-CL', en: 'en-US' };
 
 /** Which of the four flow steps a screen is, or 0 when it is outside the flow. */
 const STEP_NUMBER: Record<BookingStep, number> = {
+  servicio: 0,
+  profesional: 0,
   fecha: 1,
   hora: 2,
   datos: 3,
@@ -146,6 +212,8 @@ const STEP_NUMBER: Record<BookingStep, number> = {
 };
 
 const STEP_TITLE: Record<BookingStep, StringKey> = {
+  servicio: 'stepServiceTitle',
+  profesional: 'stepProfessionalTitle',
   fecha: 'stepDateTitle',
   hora: 'stepTimeTitle',
   datos: 'stepFormTitle',
@@ -158,6 +226,8 @@ const STEP_TITLE: Record<BookingStep, StringKey> = {
 
 /** Steps whose back arrow leads somewhere. */
 const STEP_HAS_BACK: Record<BookingStep, boolean> = {
+  servicio: false,
+  profesional: true,
   fecha: false,
   hora: true,
   datos: true,
@@ -280,6 +350,18 @@ function chevron(): SVGElement {
   return svg;
 }
 
+/**
+ * The clinic flow's step counter: servicio → [profesional] → fecha → hora →
+ * datos → resumen. Returns [n, total], or null outside the flow.
+ */
+function clinicStep(step: BookingStep, clinic: ClinicFlowView): [number, number] | null {
+  const order: BookingStep[] = clinic.showProfessionalStep
+    ? ['servicio', 'profesional', 'fecha', 'hora', 'datos', 'resumen']
+    : ['servicio', 'fecha', 'hora', 'datos', 'resumen'];
+  const i = order.indexOf(step);
+  return i < 0 ? null : [i + 1, order.length];
+}
+
 /** The confirmation check. */
 function checkMark(): SVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -377,6 +459,15 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
   emailInput.autocomplete = 'email';
   emailLabel.append(emailText, emailInput);
 
+  const documentLabel = el('label', 'vtr-bk-label');
+  const documentText = el('span', 'vtr-bk-label-text');
+  const documentInput = document.createElement('input');
+  documentInput.className = 'vtr-bk-input';
+  documentInput.type = 'text';
+  documentInput.autocomplete = 'off';
+  documentLabel.append(documentText, documentInput);
+  documentLabel.hidden = true;
+
   const consentLabel = el('label', 'vtr-bk-consent');
   const consentInput = document.createElement('input');
   consentInput.className = 'vtr-bk-check';
@@ -385,7 +476,7 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
   consentLabel.append(consentInput, consentText);
 
   const privacyEl = el('div', 'vtr-bk-note');
-  datosEl.append(nameLabel, phoneLabel, emailLabel, consentLabel, privacyEl);
+  datosEl.append(nameLabel, phoneLabel, emailLabel, documentLabel, consentLabel, privacyEl);
 
   /** Swap the body's single child without disturbing a node already in place. */
   function setBody(node: Node): void {
@@ -482,7 +573,7 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
         el(
           'div',
           'vtr-bk-note',
-          `${t()('horizonNote')} ${formatDateShort(state.horizonEnd, loc)}.`,
+          `${t()(state.clinic ? 'clinicHorizonNote' : 'horizonNote')} ${formatDateShort(state.horizonEnd, loc)}.`,
         ),
       );
     }
@@ -537,14 +628,99 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
     phoneInput.placeholder = t()('fieldPhonePlaceholder');
     emailText.textContent = t()('fieldEmail');
     emailInput.placeholder = t()('fieldEmailPlaceholder');
-    consentText.textContent = t()('consentLabel');
-    privacyEl.textContent = t()('privacyNote');
+    const clinic = state.clinic ?? null;
+    consentText.textContent = t()(clinic ? 'clinicConsentLabel' : 'consentLabel');
+    privacyEl.textContent = t()(clinic ? 'clinicPrivacyNote' : 'privacyNote');
+    documentLabel.hidden = !clinic?.requireDocument;
+    documentText.textContent = t()('fieldDocument');
+    documentInput.placeholder = t()('fieldDocumentPlaceholder');
+    const doc = state.form.document ?? '';
+    if (documentInput.value !== doc) documentInput.value = doc;
     // Assign only on a real difference: writing an identical value still resets
     // the caret in some engines, and this runs on every keystroke.
     if (nameInput.value !== state.form.name) nameInput.value = state.form.name;
     if (phoneInput.value !== state.form.phone) phoneInput.value = state.form.phone;
     if (emailInput.value !== state.form.email) emailInput.value = state.form.email;
     if (consentInput.checked !== state.form.consent) consentInput.checked = state.form.consent;
+  }
+
+  // --- servicio / profesional (clinic flow) ---------------------------------
+  function optionButton(
+    attr: 'bkService' | 'bkProfessional',
+    value: string,
+    title: string,
+    lines: Array<string | null>,
+    selected: boolean,
+  ): HTMLElement {
+    const btn = document.createElement('button');
+    btn.className = 'vtr-bk-option';
+    btn.type = 'button';
+    btn.dataset[attr] = value;
+    if (selected) btn.setAttribute('aria-current', 'true');
+    btn.appendChild(el('span', 'vtr-bk-option-title', title));
+    for (const line of lines) {
+      if (line) btn.appendChild(el('span', 'vtr-bk-option-meta', line));
+    }
+    return btn;
+  }
+
+  function renderServicio(state: BookingViewState): Node {
+    const wrap = document.createDocumentFragment();
+    const clinic = state.clinic;
+    if (!clinic) return wrap;
+    if (clinic.intro) wrap.appendChild(el('div', 'vtr-bk-intro', clinic.intro));
+    if (state.loading) {
+      wrap.appendChild(el('div', 'vtr-bk-note', t()('loading')));
+      return wrap;
+    }
+    if (!clinic.loaded) return wrap;
+    if (clinic.services.length === 0) {
+      const empty = el('div', 'vtr-bk-empty');
+      empty.appendChild(el('div', 'vtr-bk-empty-title', t()('noServices')));
+      empty.appendChild(fallbackLine('writeUsDraft', 'writeUsCta'));
+      wrap.appendChild(empty);
+      return wrap;
+    }
+    const list = el('div', 'vtr-bk-options');
+    for (const svc of clinic.services) {
+      list.appendChild(
+        optionButton('bkService', svc.id, svc.name, [svc.meta, svc.deposit], clinic.selectedServiceId === svc.id),
+      );
+    }
+    wrap.appendChild(list);
+    return wrap;
+  }
+
+  function renderProfesional(state: BookingViewState): Node {
+    const wrap = document.createDocumentFragment();
+    const clinic = state.clinic;
+    if (!clinic) return wrap;
+    const list = el('div', 'vtr-bk-options');
+    if (clinic.allowAny) {
+      list.appendChild(
+        optionButton(
+          'bkProfessional',
+          'any',
+          t()('anyProfessional'),
+          [t()('anyProfessionalHint')],
+          clinic.selectedProfessional === 'any',
+        ),
+      );
+    }
+    for (const pro of clinic.professionals) {
+      list.appendChild(
+        optionButton('bkProfessional', pro.id, pro.name, [pro.specialty], clinic.selectedProfessional === pro.id),
+      );
+    }
+    wrap.appendChild(list);
+    return wrap;
+  }
+
+  function summaryRow(key: StringKey, value: string | null): HTMLElement | null {
+    if (!value) return null;
+    const row = el('div', 'vtr-bk-row');
+    row.append(el('span', 'vtr-bk-rowkey', t()(key)), el('span', 'vtr-bk-rowval', value));
+    return row;
   }
 
   // --- resumen --------------------------------------------------------------
@@ -556,6 +732,18 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
     }
     if (state.selectedSlot) {
       card.appendChild(el('div', 'vtr-bk-time', state.selectedSlot.time));
+    }
+    if (state.clinic) {
+      const sum = state.clinic.summary;
+      for (const row of [
+        summaryRow('summaryService', sum.service),
+        summaryRow('summaryProfessional', sum.professional),
+        summaryRow('summaryLocation', sum.location),
+        summaryRow('summaryPrice', sum.price),
+        summaryRow('depositLabel', sum.deposit),
+      ]) {
+        if (row) card.appendChild(row);
+      }
     }
     if (state.vehicleLabel) {
       const row = el('div', 'vtr-bk-row');
@@ -579,7 +767,7 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
       // token gets replaced (they are single-use).
       wrap.appendChild(el('div', 'vtr-bk-turnstile'));
     }
-    wrap.appendChild(el('div', 'vtr-bk-note', t()('trustLine')));
+    wrap.appendChild(el('div', 'vtr-bk-note', t()(state.clinic ? 'clinicTrustLine' : 'trustLine')));
     return wrap;
   }
 
@@ -596,7 +784,56 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
       // two names and guarantee a support call.
       wrap.appendChild(el('div', 'vtr-bk-code', state.booked.displayId));
     }
-    wrap.appendChild(el('div', 'vtr-bk-note', t()('saveCodeNote')));
+    const clinicBooked = state.clinic?.booked ?? null;
+    if (state.clinic) {
+      const sum = state.clinic.summary;
+      const card = el('div', 'vtr-bk-card');
+      for (const row of [
+        summaryRow('summaryService', sum.service),
+        summaryRow('summaryProfessional', sum.professional),
+        summaryRow('summaryLocation', sum.location),
+      ]) {
+        if (row) card.appendChild(row);
+      }
+      if (card.childNodes.length > 0) wrap.appendChild(card);
+    }
+    if (clinicBooked?.deposit) {
+      // THE PAYMENT SEAM. The amount and the deadline are facts of this
+      // booking; how the patient pays (the Mercado Pago checkout link,
+      // vitrina-embed#18) mounts into the empty [data-bk-payment] slot.
+      const dep = clinicBooked.deposit;
+      const box = el('div', 'vtr-bk-deposit');
+      box.appendChild(el('div', 'vtr-bk-deposit-title', t()('depositDueTitle')));
+      box.appendChild(el('div', 'vtr-bk-deposit-amount', dep.amount));
+      if (dep.dueBy) box.appendChild(el('div', 'vtr-bk-note', `${t()('depositDueBy')} ${dep.dueBy}.`));
+      if (dep.accounts.length > 0) {
+        for (const acc of dep.accounts) {
+          const row = el('div', 'vtr-bk-account');
+          row.append(
+            el('span', 'vtr-bk-account-title', acc.title),
+            el('span', 'vtr-bk-account-number', acc.number),
+            el('span', 'vtr-bk-account-holder', acc.holder),
+          );
+          box.appendChild(row);
+        }
+      } else {
+        box.appendChild(el('div', 'vtr-bk-note', t()('depositNoAccounts')));
+      }
+      const slot = el('div', 'vtr-bk-payment');
+      slot.dataset.bkPayment = '1';
+      box.appendChild(slot);
+      wrap.appendChild(box);
+    }
+    if (clinicBooked?.manageUrl) {
+      const link = document.createElement('a');
+      link.className = 'vtr-bk-manage';
+      link.href = clinicBooked.manageUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = t()('manageCta');
+      wrap.appendChild(link);
+    }
+    wrap.appendChild(el('div', 'vtr-bk-note', t()(state.clinic ? 'clinicSaveCodeNote' : 'saveCodeNote')));
     return wrap;
   }
 
@@ -691,7 +928,8 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
         disabled =
           state.form.name.trim() === '' ||
           state.form.phone.trim() === '' ||
-          !state.form.consent;
+          !state.form.consent ||
+          (!!state.clinic?.requireDocument && (state.form.document ?? '').trim() === '');
         break;
       case 'resumen':
         primary = state.submitting ? 'confirming' : 'confirmCta';
@@ -759,15 +997,30 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
       titleEl.textContent = t()(STEP_TITLE[state.step]);
       root.setAttribute('aria-label', titleEl.textContent);
       root.dataset.step = state.step;
-      backBtn.hidden = !STEP_HAS_BACK[state.step];
+      // In the clinic flow the calendar is step 3, not the first screen, so
+      // it has somewhere to go back to.
+      backBtn.hidden = !(STEP_HAS_BACK[state.step] || (state.clinic && state.step === 'fecha'));
       backBtn.setAttribute('aria-label', t()('back'));
       closeBtn.setAttribute('aria-label', t()('close'));
 
-      const n = STEP_NUMBER[state.step];
-      stepEl.hidden = n === 0;
-      if (n > 0) stepEl.textContent = `${t()('stepLabel')} ${n} ${t()('stepOf')} 4`;
+      const counter: [number, number] | null = state.clinic
+        ? clinicStep(state.step, state.clinic)
+        : STEP_NUMBER[state.step] > 0
+          ? [STEP_NUMBER[state.step], 4]
+          : null;
+      stepEl.hidden = counter === null;
+      if (counter) stepEl.textContent = `${t()('stepLabel')} ${counter[0]} ${t()('stepOf')} ${counter[1]}`;
+      if (state.step === 'servicio' && state.clinic?.title) {
+        titleEl.textContent = state.clinic.title;
+      }
 
       switch (state.step) {
+        case 'servicio':
+          setBody(renderServicio(state));
+          break;
+        case 'profesional':
+          setBody(renderProfesional(state));
+          break;
         case 'fecha':
           setBody(renderFecha(state));
           break;
@@ -841,7 +1094,9 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
   // array without bound, since the body is rebuilt on each paint.
   const delegate = (e: Event): void => {
     const start = e.target as HTMLElement | null;
-    const target = start?.closest?.('[data-bk-day],[data-bk-slot],[data-bk-nav],[data-bk-cancel],[data-bk-fallback],[data-bk-retry]') as
+    const target = start?.closest?.(
+      '[data-bk-day],[data-bk-slot],[data-bk-nav],[data-bk-cancel],[data-bk-fallback],[data-bk-retry],[data-bk-service],[data-bk-professional]',
+    ) as
       | HTMLElement
       | null;
     if (!target) return;
@@ -854,6 +1109,8 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
       return callbacks.onChatFallback(data.bkFallback);
     }
     if (data.bkRetry) return callbacks.onRetry();
+    if (data.bkService) return callbacks.onPickService?.(data.bkService);
+    if (data.bkProfessional) return callbacks.onPickProfessional?.(data.bkProfessional);
   };
   on(body, 'click', delegate);
   on(errorEl, 'click', delegate);
@@ -862,6 +1119,7 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
   on(phoneInput, 'input', () => callbacks.onFormChange({ phone: phoneInput.value }));
   on(emailInput, 'input', () => callbacks.onFormChange({ email: emailInput.value }));
   on(consentInput, 'change', () => callbacks.onFormChange({ consent: consentInput.checked }));
+  on(documentInput, 'input', () => callbacks.onFormChange({ document: documentInput.value }));
 
   return ui;
 }

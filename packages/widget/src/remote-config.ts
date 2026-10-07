@@ -73,6 +73,11 @@ export function coerceRemoteConfig(input: unknown): RemoteWidgetConfig | null {
   // without the line the flag would round-trip out of the cache as undefined
   // and the chip would flicker off on every repeat pageview.
   if (raw.bookingEnabled === true) out.bookingEnabled = true;
+  // The clinic booking flow (vitrina-app#3707). Same explicit-true rule.
+  const clinic = raw.clinicBooking as { enabled?: unknown } | null | undefined;
+  if (clinic && typeof clinic === 'object' && clinic.enabled === true) {
+    out.clinicBooking = { enabled: true };
+  }
   // Turnstile site key for the booking confirm step. Bounded so a tampered
   // localStorage entry cannot smuggle a novel into the config — site keys are
   // short opaque identifiers.

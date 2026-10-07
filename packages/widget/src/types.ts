@@ -136,6 +136,12 @@ export interface WidgetConfig {
    * Trimmed; blank or longer than 40 characters falls back to the built-in
    * "Agendar visita" / "Book a visit". Omit for the default.
    */
+  /**
+   * Clinic workspaces: the slug of the online-booking landing the clinic
+   * booking flow books through, when the clinic runs several. Omitted ⇒ the
+   * clinic's main landing. Ignored by a dealer's widget.
+   */
+  landing?: string;
   bookingLabel?: string;
   /**
    * Typeface for the whole widget. Default `system` — today's native stack,

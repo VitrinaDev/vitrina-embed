@@ -281,6 +281,15 @@ export interface ResolvedConfig {
    */
   bookingEnabled: boolean;
   /**
+   * WHICH booking flow the chip opens. `clinic` exactly when the server says
+   * the tenant is a clinic with a live online-booking landing
+   * (`clinicBooking`); the dealer's test-drive flow otherwise. Server-only,
+   * like the gate itself.
+   */
+  bookingFlow: 'dealer' | 'clinic';
+  /** The landing slug the clinic flow books through; null ⇒ the main one. */
+  landing: string | null;
+  /**
    * Turnstile site key for the booking confirm step, or null. SERVER-ONLY
    * like `bookingEnabled`, and for the same reason: a page must not be able
    * to switch the tenant's anti-bot armor off (nor invent a key the server
@@ -353,6 +362,13 @@ export interface RemoteWidgetConfig {
    * "render the challenge or every booking 400s".
    */
   turnstileSiteKey?: string;
+  /**
+   * The clinic booking flow (vitrina-app#3707): present, as `{ enabled: true }`,
+   * exactly when the tenant is a clinic with an active online-booking landing.
+   * A separate key from `bookingEnabled` so a widget older than the clinic flow
+   * never offers a clinic the dealer's test-drive booking.
+   */
+  clinicBooking?: { enabled: true };
 }
 
 const INIT_ERROR = '[vitrina-widget] init() requires { publicKey, apiBaseUrl }.';
@@ -571,7 +587,12 @@ export function resolveConfig(
     font: resolveFont(config.font ?? remote?.font),
     // Deliberately NOT layered with an inline override: a booking surface that
     // calls routes the tenant has switched off would only ever paint a 404.
-    bookingEnabled: remote?.bookingEnabled === true,
+    bookingEnabled: remote?.bookingEnabled === true || remote?.clinicBooking?.enabled === true,
+    bookingFlow: remote?.clinicBooking?.enabled === true ? 'clinic' : 'dealer',
+    landing:
+      typeof config.landing === 'string' && /^[a-z0-9][a-z0-9-]{0,62}$/.test(config.landing)
+        ? config.landing
+        : null,
     turnstileSiteKey:
       typeof remote?.turnstileSiteKey === 'string' && remote.turnstileSiteKey !== ''
         ? remote.turnstileSiteKey

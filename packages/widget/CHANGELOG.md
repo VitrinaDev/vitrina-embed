@@ -1,5 +1,27 @@
 # @vitrina/widget
 
+## 0.13.0
+
+**The clinic booking flow** (vitrina-app#3707, Website ads). A clinic with an
+active online-booking landing gets `servicio → profesional (o cualquiera) →
+fecha → hora → datos → resumen → listo` in the widget, served by the new
+`/widget/clinic/*` routes and booked through the same service as Vitrina's
+hosted booking page. The flow is chosen by the server (`clinicBooking` on
+`/widget/config`); the dealer's test-drive flow is unchanged.
+
+- The landing's services (duration, price, deposit), professionals and
+  branding; "any professional" shows everyone's hours and books whoever's
+  hour it is.
+- The booking sends the ad click: UTMs and `fbclid`/`gclid` from the landing
+  URL (kept for the tab) and the Vitrina tag's anonymous id. Nothing that
+  names the page is sent, and no ad-platform tag is loaded.
+- A slot taken while the patient typed sends them back to the hours with
+  their details kept.
+- The confirmation shows the code, the manage link and, for a deposit
+  service, the amount and deadline, with an empty slot for the checkout
+  link (vitrina-embed#18).
+- New inline option `landing` (slug) for a clinic with several landings.
+
 ## 0.12.0
 
 **The combined tag carries the visitor across to the hosted booking page**

@@ -38,6 +38,15 @@ import type {
   WidgetMessageDto,
 } from './config';
 import { coerceRemoteConfig } from './remote-config';
+import type {
+  ClinicBookInput,
+  ClinicBookingResult,
+  ClinicDepositAccount,
+  ClinicLanding,
+  ClinicProfessional,
+  ClinicService,
+  ClinicSlot,
+} from './clinic-types';
 import type { TokenStore } from './token-store';
 
 export type { WidgetMessage, WidgetMessageDto, MessageStatus } from './config';
@@ -186,11 +195,95 @@ const BOOK_FAILURE_REASONS: readonly string[] = [
 
 /** Pull `error.details.reason` out of a refusal body, or undefined. */
 function refusalReason(json: unknown): BookFailureReason | undefined {
-  const err = (json as { error?: { details?: { reason?: unknown } } } | null)?.error;
-  const reason = err?.details?.reason;
+  const err = (json as { error?: { details?: { reason?: unknown; code?: unknown } } } | null)
+    ?.error;
+  // The clinic booking (vitrina-app#3707) names a ledger refusal `code`
+  // (`slot_taken`), a Turnstile one `reason`; the dealer booking only `reason`.
+  const reason = err?.details?.reason ?? err?.details?.code;
   return typeof reason === 'string' && BOOK_FAILURE_REASONS.includes(reason)
     ? (reason as BookFailureReason)
     : undefined;
+}
+
+
+function str(v: unknown): string | null {
+  return typeof v === 'string' && v !== '' ? v : null;
+}
+function num(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+function coerceClinicLanding(input: unknown): ClinicLanding | null {
+  if (!input || typeof input !== 'object') return null;
+  const raw = input as Record<string, unknown>;
+  const services: ClinicService[] = (Array.isArray(raw.services) ? raw.services : [])
+    .map((x): ClinicService | null => {
+      const s = (x ?? {}) as Record<string, unknown>;
+      const id = str(s.id);
+      const name = str(s.name);
+      if (!id || !name) return null;
+      return {
+        id,
+        name,
+        durationMinutes: num(s.duration_minutes),
+        priceClp: num(s.price_clp),
+        depositRequired: s.deposit_required === true,
+        depositAmountClp: num(s.deposit_amount_clp),
+      };
+    })
+    .filter((s): s is ClinicService => s !== null);
+  const professionals: ClinicProfessional[] = (
+    Array.isArray(raw.professionals) ? raw.professionals : []
+  )
+    .map((x): ClinicProfessional | null => {
+      const p = (x ?? {}) as Record<string, unknown>;
+      const id = str(p.id);
+      const name = str(p.name);
+      if (!id || !name) return null;
+      return {
+        id,
+        name,
+        specialty: str(p.especialidad),
+        serviceIds: Array.isArray(p.service_ids)
+          ? p.service_ids.filter((v): v is string => typeof v === 'string')
+          : [],
+      };
+    })
+    .filter((p): p is ClinicProfessional => p !== null);
+  const loc = raw.location as Record<string, unknown> | null | undefined;
+  return {
+    slug: str(raw.slug) ?? '',
+    title: str(raw.title),
+    welcomeText: str(raw.welcome_text),
+    primaryColor: str(raw.primary_color),
+    logoUrl: str(raw.logo_url),
+    timezone: str(raw.timezone) ?? 'America/Santiago',
+    allowAnyProfessional: raw.allow_any_professional === true,
+    requireDocument: raw.require_document === true,
+    horizonDays: num(raw.horizon_days) ?? 30,
+    location:
+      loc && typeof loc === 'object' && str(loc.name)
+        ? { name: str(loc.name) as string, address: str(loc.address) }
+        : null,
+    services,
+    professionals,
+  };
+}
+
+function coerceClinicSlot(input: unknown): ClinicSlot | null {
+  if (!input || typeof input !== 'object') return null;
+  const s = input as Record<string, unknown>;
+  const startsAt = str(s.starts_at);
+  const endsAt = str(s.ends_at);
+  if (!startsAt || !endsAt) return null;
+  return {
+    startsAt,
+    endsAt,
+    label: str(s.label) ?? '',
+    slotRef: str(s.slot_ref),
+    professionalId: str(s.professional_id),
+    professionalName: str(s.professional_name),
+  };
 }
 
 /** Coerce one wire slot, dropping anything without a usable time range. */
@@ -770,6 +863,125 @@ export class VitrinaTransport {
     if (!res.ok) return res;
     const appointment = coerceAppointment(res.data);
     return appointment ? { ok: true, data: appointment } : { ok: false, status: 200 };
+  }
+
+  // --- Clinic booking (vitrina-app#3707) ------------------------------------
+  //
+  // The clinic's online-booking landing, served on the same pk_ pipeline as
+  // every other widget route. The SAME booking service the clinic's hosted
+  // booking page uses sits behind these three calls; the widget is a second
+  // front-end, never a second booking path.
+
+  private landingQs(landing: string | null): string {
+    return landing ? `landing=${encodeURIComponent(landing)}` : '';
+  }
+
+  /** The landing: services (with any deposit), professionals, branding. */
+  async fetchClinicLanding(landing: string | null): Promise<CallResult<ClinicLanding>> {
+    const qs = this.landingQs(landing);
+    const res = await this.call<unknown>(`/widget/clinic/landing${qs ? `?${qs}` : ''}`, {
+      method: 'GET',
+      withVisitor: false,
+    });
+    if (!res.ok) return res;
+    const view = coerceClinicLanding(res.data);
+    return view ? { ok: true, data: view } : { ok: false, status: 200 };
+  }
+
+  /** Free hours from the clinic's agenda. `from`/`to` are calendar days. */
+  async fetchClinicAvailability(params: {
+    landing: string | null;
+    serviceId: string;
+    professionalId: string | null;
+    from: string;
+    to: string;
+  }): Promise<CallResult<{ timezone: string | null; slots: ClinicSlot[] }>> {
+    const qs = new URLSearchParams();
+    if (params.landing) qs.set('landing', params.landing);
+    qs.set('service_id', params.serviceId);
+    if (params.professionalId) qs.set('professional_id', params.professionalId);
+    qs.set('from', params.from);
+    qs.set('to', params.to);
+    const res = await this.call<unknown>(`/widget/clinic/availability?${qs.toString()}`, {
+      method: 'GET',
+      withVisitor: false,
+    });
+    if (!res.ok) return res;
+    const raw = (res.data ?? {}) as Record<string, unknown>;
+    return {
+      ok: true,
+      data: {
+        timezone: str(raw.timezone),
+        slots: (Array.isArray(raw.slots) ? raw.slots : [])
+          .map(coerceClinicSlot)
+          .filter((s): s is ClinicSlot => s !== null),
+      },
+    };
+  }
+
+  /**
+   * Book. A refusal carries its machine reason (`slot_taken`, a Turnstile
+   * reason); the caller branches on that, never on the sentence.
+   */
+  async bookClinic(input: ClinicBookInput): Promise<CallResult<ClinicBookingResult>> {
+    const body: Record<string, unknown> = {
+      service_id: input.serviceId,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      name: input.name,
+      phone: input.phone,
+    };
+    if (input.landing) body.landing = input.landing;
+    if (input.professionalId) body.professional_id = input.professionalId;
+    if (input.slotRef) body.slot_ref = input.slotRef;
+    if (input.email) body.email = input.email;
+    if (input.document) body.document = input.document;
+    if (input.turnstileToken) body.turnstile_token = input.turnstileToken;
+    if (input.attribution && Object.keys(input.attribution).length > 0) {
+      body.attribution = input.attribution;
+    }
+    const res = await this.call<unknown>('/widget/clinic/bookings', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      withVisitor: false,
+      captureError: true,
+    });
+    if (!res.ok) return res;
+    const raw = (res.data ?? {}) as Record<string, unknown>;
+    const displayId = str(raw.display_id);
+    const startsAt = str(raw.starts_at);
+    if (!displayId || !startsAt) return { ok: false, status: 201 };
+    const dep = (raw.deposit ?? {}) as Record<string, unknown>;
+    return {
+      ok: true,
+      data: {
+        displayId,
+        startsAt,
+        serviceName: str(raw.service_name),
+        professionalName: str(raw.professional_name),
+        locationName: str(raw.location_name),
+        manageUrl: str(raw.manage_url),
+        deposit: {
+          required: dep.required === true,
+          amountClp: num(dep.amount_clp),
+          deadline: str(dep.deadline),
+          accounts: (Array.isArray(dep.accounts) ? dep.accounts : [])
+            .map((x): ClinicDepositAccount | null => {
+              const a = (x ?? {}) as Record<string, unknown>;
+              const accountNumber = str(a.account_number);
+              if (!accountNumber) return null;
+              return {
+                bank: str(a.bank) ?? '',
+                accountType: str(a.account_type) ?? '',
+                accountNumber,
+                holderName: str(a.holder_name) ?? '',
+                holderRut: str(a.holder_rut) ?? '',
+              };
+            })
+            .filter((a): a is ClinicDepositAccount => a !== null),
+        },
+      },
+    };
   }
 
   /** Cancel a booking. Idempotent server-side; answers the cancelled DTO. */
