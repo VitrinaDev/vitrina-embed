@@ -196,6 +196,7 @@ export function createClinicBookingController(
     return {
       title: landing?.title ?? null,
       intro: landing?.welcomeText ?? null,
+      loaded: landing !== null,
       services: (landing?.services ?? []).map((s) => ({
         id: s.id,
         name: s.name,
@@ -404,7 +405,15 @@ export function createClinicBookingController(
         manageUrl: safeUrl(res.data.manageUrl),
         deposit:
           dep.required && dep.amountClp != null
-            ? { amount: formatClp(dep.amountClp, loc), dueBy, instructions: dep.instructions }
+            ? {
+                amount: formatClp(dep.amountClp, loc),
+                dueBy,
+                accounts: dep.accounts.map((a) => ({
+                  title: [a.bank, a.accountType].filter(Boolean).join(' · '),
+                  number: a.accountNumber,
+                  holder: [a.holderName, a.holderRut].filter(Boolean).join(' · '),
+                })),
+              }
             : null,
       };
       state.step = 'ok';

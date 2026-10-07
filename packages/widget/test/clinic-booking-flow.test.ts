@@ -140,8 +140,18 @@ function bookedFor(body: Record<string, unknown>, deposit = false): Response {
           required: true,
           amount_clp: 29000,
           deadline: `${target.key}T09:00:00-03:00`,
-          accounts: [],
-          instructions: 'Transfiere a la cuenta de la clínica.',
+          accounts: [
+            {
+              alias: 'principal',
+              bank: 'Banco de Chile',
+              account_type: 'Cuenta corriente',
+              account_number: '00-123-45678-09',
+              holder_name: 'Clínica Suelo Pélvico SpA',
+              holder_rut: '76.123.456-7',
+            },
+          ],
+          // Written for the AI agent; a patient must never see it.
+          instructions: 'This booking requires an abono. Dictate EXACTLY ONE of the accounts.',
         }
       : { required: false, amount_clp: null, deadline: null, accounts: [], instructions: null },
     confirmation: { sent: true, reason: null },
@@ -264,7 +274,9 @@ async function clickSlot(time: string): Promise<void> {
 }
 
 function fillDetails(): void {
-  const [name, phone, email] = inputs();
+  const [name, phone, email, rut] = inputs();
+  // No RUT unless the landing asks for one.
+  expect((rut.closest('label') as HTMLElement).hidden).toBe(true);
   typeInto(name, 'Camila Fuentes');
   typeInto(phone, '+56 9 8765 4321');
   typeInto(email, 'camila@example.cl');
@@ -423,7 +435,11 @@ describe('clinic booking flow (vitrina-app#3707)', () => {
     await vi.waitFor(() => expect(q('.vtr-bk-deposit')).not.toBeNull());
     expect(must('.vtr-bk-deposit-amount').textContent).toMatch(/\$\s?29\.000/);
     expect(must('.vtr-bk-deposit').textContent).toContain('Paga el abono antes del');
-    expect(must('.vtr-bk-deposit-instructions').textContent).toBe('Transfiere a la cuenta de la clínica.');
+    const account = must('.vtr-bk-account').textContent ?? '';
+    expect(account).toContain('Banco de Chile · Cuenta corriente');
+    expect(account).toContain('00-123-45678-09');
+    expect(account).toContain('Clínica Suelo Pélvico SpA · 76.123.456-7');
+    expect(must('.vtr-bk-deposit').textContent).not.toMatch(/Dictate|abono\. /);
     const slot = must('[data-bk-payment]');
     expect(slot.childNodes.length).toBe(0);
   });
@@ -434,6 +450,7 @@ describe('clinic booking flow (vitrina-app#3707)', () => {
     await pickToCalendar(SVC_EVAL, PRO_ANA);
     await pickHour('10:00');
     const [name, phone, , rut] = inputs();
+    expect((rut.closest('label') as HTMLElement).hidden).toBe(false);
     typeInto(name, 'Camila Fuentes');
     typeInto(phone, '+56 9 8765 4321');
     check(must<HTMLInputElement>('.vtr-bk-check'), true);
@@ -445,6 +462,21 @@ describe('clinic booking flow (vitrina-app#3707)', () => {
     must<HTMLButtonElement>('.vtr-bk-primary').click();
     await vi.waitFor(() => expect(posted).toHaveLength(1));
     expect(posted[0].document).toBe('12.345.678-5');
+  });
+
+  it('a landing that failed to load says so with a retry, never "no services"', async () => {
+    let fail = true;
+    const base = fetchMock.getMockImplementation() as (u: string, o?: RequestInit) => Promise<Response>;
+    fetchMock.mockImplementation((u: string, o?: RequestInit) =>
+      fail && String(u).includes('/widget/clinic/landing') ? Promise.resolve(emptyRes(503)) : base(u, o),
+    );
+    await boot();
+    must<HTMLButtonElement>('.vtr-chip-book').click();
+    await vi.waitFor(() => expect(must('.vtr-bk-error').textContent).toContain('No pudimos cargar'));
+    expect(shadowOf().querySelector('.vtr-bk-body')?.textContent).not.toContain('no hay servicios');
+    fail = false;
+    must<HTMLButtonElement>('[data-bk-retry]').click();
+    await vi.waitFor(() => expect(shadowOf().querySelectorAll('[data-bk-service]').length).toBe(2));
   });
 
   it('passes the snippet’s landing slug to every clinic call', async () => {

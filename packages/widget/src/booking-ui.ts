@@ -62,6 +62,8 @@ export interface ClinicFlowView {
   /** The landing's own heading and intro, painted on the service step. */
   title: string | null;
   intro: string | null;
+  /** The landing has been read. Until then an empty list is not "no services". */
+  loaded: boolean;
   services: Array<{
     id: string;
     name: string;
@@ -96,7 +98,12 @@ export interface ClinicFlowView {
      * the Mercado Pago checkout (vitrina-embed#18), which mounts into the
      * `[data-bk-payment]` slot painted next to this.
      */
-    deposit: { amount: string; dueBy: string | null; instructions: string | null } | null;
+    deposit: {
+      amount: string;
+      dueBy: string | null;
+      /** Where to transfer, until the checkout link exists. */
+      accounts: Array<{ title: string; number: string; holder: string }>;
+    } | null;
   } | null;
 }
 
@@ -666,6 +673,7 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
       wrap.appendChild(el('div', 'vtr-bk-note', t()('loading')));
       return wrap;
     }
+    if (!clinic.loaded) return wrap;
     if (clinic.services.length === 0) {
       const empty = el('div', 'vtr-bk-empty');
       empty.appendChild(el('div', 'vtr-bk-empty-title', t()('noServices')));
@@ -798,7 +806,19 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
       box.appendChild(el('div', 'vtr-bk-deposit-title', t()('depositDueTitle')));
       box.appendChild(el('div', 'vtr-bk-deposit-amount', dep.amount));
       if (dep.dueBy) box.appendChild(el('div', 'vtr-bk-note', `${t()('depositDueBy')} ${dep.dueBy}.`));
-      if (dep.instructions) box.appendChild(el('div', 'vtr-bk-deposit-instructions', dep.instructions));
+      if (dep.accounts.length > 0) {
+        for (const acc of dep.accounts) {
+          const row = el('div', 'vtr-bk-account');
+          row.append(
+            el('span', 'vtr-bk-account-title', acc.title),
+            el('span', 'vtr-bk-account-number', acc.number),
+            el('span', 'vtr-bk-account-holder', acc.holder),
+          );
+          box.appendChild(row);
+        }
+      } else {
+        box.appendChild(el('div', 'vtr-bk-note', t()('depositNoAccounts')));
+      }
       const slot = el('div', 'vtr-bk-payment');
       slot.dataset.bkPayment = '1';
       box.appendChild(slot);

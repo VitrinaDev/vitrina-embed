@@ -267,6 +267,7 @@ export interface WidgetStrings {
   depositDueTitle: string;
   /** Rendered as "<depositDueBy> lunes 12 de octubre, 10:00". */
   depositDueBy: string;
+  depositNoAccounts: string;
   errServiceUnavailable: string;
 }
 
@@ -465,6 +466,8 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     manageCta: 'Ver o cambiar mi hora',
     depositDueTitle: 'Para asegurar tu hora',
     depositDueBy: 'Paga el abono antes del',
+    depositNoAccounts:
+      'La clínica te va a indicar dónde transferir. No transfieras a ninguna cuenta que no te haya dado la clínica misma.',
     errServiceUnavailable: 'Ese servicio ya no se puede reservar en línea.',
   },
   en: {
@@ -654,6 +657,8 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     manageCta: 'View or change my appointment',
     depositDueTitle: 'To secure your appointment',
     depositDueBy: 'Pay the deposit before',
+    depositNoAccounts:
+      'The clinic will tell you where to transfer. Do not transfer to any account the clinic itself has not given you.',
     errServiceUnavailable: 'That service can no longer be booked online.',
   },
 };

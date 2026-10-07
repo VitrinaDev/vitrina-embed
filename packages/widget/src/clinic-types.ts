@@ -71,6 +71,14 @@ export interface ClinicBookInput {
   attribution: ClinicAttribution | null;
 }
 
+export interface ClinicDepositAccount {
+  bank: string;
+  accountType: string;
+  accountNumber: string;
+  holderName: string;
+  holderRut: string;
+}
+
 export interface ClinicBookingResult {
   displayId: string;
   startsAt: string;
@@ -83,6 +91,9 @@ export interface ClinicBookingResult {
     required: boolean;
     amountClp: number | null;
     deadline: string | null;
-    instructions: string | null;
+    /** The clinic's transfer accounts (until the checkout link, embed#18).
+     *  The server's `instructions` string is written for the AI agent, not
+     *  for a patient, and is deliberately never read. */
+    accounts: ClinicDepositAccount[];
   };
 }

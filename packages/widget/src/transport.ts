@@ -41,6 +41,7 @@ import { coerceRemoteConfig } from './remote-config';
 import type {
   ClinicBookInput,
   ClinicBookingResult,
+  ClinicDepositAccount,
   ClinicLanding,
   ClinicProfessional,
   ClinicService,
@@ -964,7 +965,20 @@ export class VitrinaTransport {
           required: dep.required === true,
           amountClp: num(dep.amount_clp),
           deadline: str(dep.deadline),
-          instructions: str(dep.instructions),
+          accounts: (Array.isArray(dep.accounts) ? dep.accounts : [])
+            .map((x): ClinicDepositAccount | null => {
+              const a = (x ?? {}) as Record<string, unknown>;
+              const accountNumber = str(a.account_number);
+              if (!accountNumber) return null;
+              return {
+                bank: str(a.bank) ?? '',
+                accountType: str(a.account_type) ?? '',
+                accountNumber,
+                holderName: str(a.holder_name) ?? '',
+                holderRut: str(a.holder_rut) ?? '',
+              };
+            })
+            .filter((a): a is ClinicDepositAccount => a !== null),
         },
       },
     };

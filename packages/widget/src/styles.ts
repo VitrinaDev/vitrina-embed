@@ -469,6 +469,7 @@ select.vtr-ha-input { cursor: pointer; }
 .vtr-ha-fileremove:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
 
 /* Clinic flow (vitrina-app#3707): service and professional pickers. */
+.vtr-bk-label[hidden] { display: none; }
 .vtr-bk-intro { font-size: 13px; line-height: 1.5; color: var(--vtr-muted); }
 .vtr-bk-options { display: flex; flex-direction: column; gap: 8px; }
 .vtr-bk-option {
@@ -489,7 +490,13 @@ select.vtr-ha-input { cursor: pointer; }
 }
 .vtr-bk-deposit-title { font-size: 12px; color: var(--vtr-muted); }
 .vtr-bk-deposit-amount { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
-.vtr-bk-deposit-instructions { font-size: 12px; line-height: 1.5; white-space: pre-line; }
+.vtr-bk-account {
+  display: flex; flex-direction: column; gap: 1px; margin-top: 6px; padding: 8px 10px;
+  border-radius: 10px; background: var(--vtr-surface); font-size: 12.5px; line-height: 1.45;
+}
+.vtr-bk-account-title { font-weight: 600; }
+.vtr-bk-account-number { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.vtr-bk-account-holder { color: var(--vtr-muted); }
 .vtr-bk-payment:empty { display: none; }
 .vtr-bk-manage {
   display: inline-flex; align-self: center; font-size: 13px; font-weight: 600;
