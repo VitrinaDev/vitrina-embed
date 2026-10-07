@@ -12,8 +12,9 @@
 //   3. A SLOT TAKEN MID-FLOW bounces back to the hours with the details kept.
 //   4. NO AD-PLATFORM TAG. The widget loads no Meta Pixel or any other
 //      third-party script, and talks to nobody but the Vitrina API.
-//   5. THE PAYMENT SEAM. A deposit service shows the amount and the deadline
-//      on the confirmation and leaves an empty slot for the checkout link.
+//   5. A deposit service shows the amount and the deadline on the
+//      confirmation; without a Mercado Pago link the payment slot stays empty
+//      (pay / resume / manage: clinic-pay-resume-manage.test.ts, embed#18).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -326,9 +327,10 @@ describe('clinic booking flow (vitrina-app#3707)', () => {
     must<HTMLButtonElement>('.vtr-bk-primary').click();
     await vi.waitFor(() => expect(q('.vtr-bk-code')).not.toBeNull());
     expect(must('.vtr-bk-code').textContent).toBe('A-77');
-    const manage = must<HTMLAnchorElement>('.vtr-bk-manage');
-    expect(manage.href).toBe('https://api.example.com/api/v1/public/clinic/appt/eyJ.a.b');
-    expect(manage.target).toBe('_blank');
+    // Change and cancel run inline through the manage token (embed#18).
+    expect(q('[data-bk-manage="reschedule"]')).not.toBeNull();
+    expect(q('[data-bk-manage="cancel"]')).not.toBeNull();
+    expect(must('[data-bk-status]').textContent).toBe('Confirmada');
     // No deposit asked, no deposit box.
     expect(q('.vtr-bk-deposit')).toBeNull();
 
@@ -424,7 +426,7 @@ describe('clinic booking flow (vitrina-app#3707)', () => {
     expect(email.value).toBe('camila@example.cl');
   });
 
-  it('shows the deposit and leaves an empty payment slot for the checkout link (embed#18)', async () => {
+  it('shows the deposit and the transfer accounts, and no pay button without a checkout link', async () => {
     bookResponse = (body) => bookedFor(body, true);
     await boot();
     await pickToCalendar(SVC_DEPOSIT, PRO_ANA);

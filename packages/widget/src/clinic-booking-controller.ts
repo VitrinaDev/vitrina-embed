@@ -616,8 +616,14 @@ export function createClinicBookingController(
       return;
     }
     refreshing = true;
-    const res = await transport.fetchClinicAppointment(manageToken);
-    refreshing = false;
+    let res: Awaited<ReturnType<ClinicBookingTransport['fetchClinicAppointment']>>;
+    try {
+      res = await transport.fetchClinicAppointment(manageToken);
+    } catch {
+      return;
+    } finally {
+      refreshing = false;
+    }
     if (destroyed || !res.ok || !bookedExtra) return;
     applyManaged(res.data);
     if (bookedExtra.status !== 'pending') stopWatch();

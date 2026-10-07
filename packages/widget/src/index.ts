@@ -479,6 +479,8 @@ export function init(config: WidgetConfig): WidgetInstance {
         onRetry: () => ensureBookingController().callbacks.onRetry(),
         onPickService: (id) => ensureBookingController().callbacks.onPickService?.(id),
         onPickProfessional: (p) => ensureBookingController().callbacks.onPickProfessional?.(p),
+        onManage: (action) => ensureBookingController().callbacks.onManage?.(action),
+        onConfirmMove: () => ensureBookingController().callbacks.onConfirmMove?.(),
       },
       onHomeAction: (kind) => {
         if (!homeCards[kind]) return;
