@@ -269,6 +269,35 @@ export interface WidgetStrings {
   depositDueBy: string;
   depositNoAccounts: string;
   errServiceUnavailable: string;
+  // --- Clinic widget: pay, resume, manage (embed#18) ---
+  whatsappConsentLabel: string;
+  whatsappConsentHint: string;
+  draftResumed: string;
+  draftSlotTaken: string;
+  draftAlreadyBooked: string;
+  draftLinkGone: string;
+  payOnlineCta: string;
+  payOnlineHint: string;
+  orTransfer: string;
+  statusPendingPayment: string;
+  statusConfirmed: string;
+  clinicHeldTitle: string;
+  clinicCancelledTitle: string;
+  clinicCodeNote: string;
+  rescheduleCta: string;
+  cancelBookingCta: string;
+  rescheduleTitle: string;
+  moveTitle: string;
+  moveFrom: string;
+  moveTo: string;
+  moveNote: string;
+  moveConfirmCta: string;
+  moving: string;
+  movedNote: string;
+  noOtherTimes: string;
+  errMoveFailed: string;
+  errCancelFailed: string;
+  paymentReceived: string;
 }
 
 export type StringKey = keyof WidgetStrings;
@@ -469,6 +498,34 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     depositNoAccounts:
       'La clínica te va a indicar dónde transferir. No transfieras a ninguna cuenta que no te haya dado la clínica misma.',
     errServiceUnavailable: 'Ese servicio ya no se puede reservar en línea.',
+    whatsappConsentLabel: 'Quiero recibir mensajes por WhatsApp sobre esta reserva',
+    whatsappConsentHint: 'Si no alcanzas a terminarla, te enviamos un solo mensaje con el enlace para retomarla.',
+    draftResumed: 'Retomamos tu reserva donde la dejaste.',
+    draftSlotTaken: 'La hora que habías elegido ya no está disponible. Elige otra: tus datos quedan guardados.',
+    draftAlreadyBooked: 'Esa reserva ya está hecha. Si quieres otra hora, puedes reservarla aquí.',
+    draftLinkGone: 'Ese enlace para retomar tu reserva ya no está disponible, pero puedes reservar aquí.',
+    payOnlineCta: 'Pagar con Mercado Pago',
+    payOnlineHint: 'Tu hora queda confirmada apenas se apruebe el pago. Esta pantalla se actualiza sola.',
+    orTransfer: 'O transfiere:',
+    statusPendingPayment: 'Pendiente de pago',
+    statusConfirmed: 'Confirmada',
+    clinicHeldTitle: 'Hora reservada',
+    clinicCancelledTitle: 'Hora cancelada',
+    clinicCodeNote: 'Guarda el código por si necesitas hablar con la clínica.',
+    rescheduleCta: 'Cambiar hora',
+    cancelBookingCta: 'Cancelar hora',
+    rescheduleTitle: 'Elige la hora nueva',
+    moveTitle: 'Mover tu hora',
+    moveFrom: 'Antes',
+    moveTo: 'Ahora',
+    moveNote: 'La hora anterior se libera para otra persona.',
+    moveConfirmCta: 'Sí, mover mi hora',
+    moving: 'Moviendo…',
+    movedNote: 'Listo, movimos tu hora.',
+    noOtherTimes: 'No hay otras horas disponibles para mover esta reserva.',
+    errMoveFailed: 'No pudimos mover tu hora. Elige otra o escríbele a la clínica.',
+    errCancelFailed: 'No pudimos cancelar tu hora. Escríbele a la clínica.',
+    paymentReceived: 'Recibimos tu pago. Tu hora está confirmada.',
   },
   en: {
     launcherLabel: 'Open chat',
@@ -660,6 +717,34 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     depositNoAccounts:
       'The clinic will tell you where to transfer. Do not transfer to any account the clinic itself has not given you.',
     errServiceUnavailable: 'That service can no longer be booked online.',
+    whatsappConsentLabel: 'I want to receive WhatsApp messages about this booking',
+    whatsappConsentHint: "If you don't get to finish it, we'll send you a single message with the link to pick it up again.",
+    draftResumed: 'We picked your booking up where you left it.',
+    draftSlotTaken: 'The time you had chosen is no longer available. Choose another one: your details are saved.',
+    draftAlreadyBooked: 'That booking is already done. If you want another time, you can book it here.',
+    draftLinkGone: 'That link to resume your booking is no longer available, but you can book here.',
+    payOnlineCta: 'Pay with Mercado Pago',
+    payOnlineHint: 'Your appointment is confirmed as soon as the payment is approved. This screen updates by itself.',
+    orTransfer: 'Or transfer:',
+    statusPendingPayment: 'Payment pending',
+    statusConfirmed: 'Confirmed',
+    clinicHeldTitle: 'Appointment held',
+    clinicCancelledTitle: 'Appointment cancelled',
+    clinicCodeNote: 'Keep the code in case you need to talk to the clinic.',
+    rescheduleCta: 'Change time',
+    cancelBookingCta: 'Cancel appointment',
+    rescheduleTitle: 'Choose the new time',
+    moveTitle: 'Move your appointment',
+    moveFrom: 'Before',
+    moveTo: 'Now',
+    moveNote: 'The previous time is released for someone else.',
+    moveConfirmCta: 'Yes, move my appointment',
+    moving: 'Moving…',
+    movedNote: 'Done, we moved your appointment.',
+    noOtherTimes: 'There are no other times available to move this booking to.',
+    errMoveFailed: 'We could not move your appointment. Pick another time or write to the clinic.',
+    errCancelFailed: 'We could not cancel your appointment. Write to the clinic.',
+    paymentReceived: 'We received your payment. Your appointment is confirmed.',
   },
 };
 

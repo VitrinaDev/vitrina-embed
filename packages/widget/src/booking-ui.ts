@@ -28,6 +28,8 @@ export type BookingStep =
   | 'datos'
   | 'resumen'
   | 'ok'
+  /** Clinic flow: confirm moving the booking to the hour just picked. */
+  | 'mover'
   | 'mis'
   | 'cancelar'
   | 'cancelado';
@@ -51,6 +53,12 @@ export interface BookingFormValues {
   consent: boolean;
   /** RUT — asked only by a clinic whose landing requires it. */
   document?: string;
+  /**
+   * Clinic flow: the WhatsApp box (vitrina-app#3706). UNCHECKED by default and
+   * optional — the clinic's one recovery message only goes to a patient who
+   * ticked it.
+   */
+  consentWhatsapp?: boolean;
 }
 
 /**
@@ -89,22 +97,33 @@ export interface ClinicFlowView {
     deposit: string | null;
     location: string | null;
   };
+  /** 'reschedule' while the patient picks a new hour for a booking. */
+  mode: 'book' | 'reschedule';
+  /** One calm line over the step: a reopened draft, a moved booking. */
+  notice: StringKey | null;
   /** What the confirmation screen shows beyond the code. */
   booked: {
+    /** The hosted manage page — the fallback when inline manage is off. */
     manageUrl: string | null;
-    /**
-     * PAYMENT SEAM. The deposit a booking of this service opened. The widget
-     * shows the amount and the deadline; the payment link itself belongs to
-     * the Mercado Pago checkout (vitrina-embed#18), which mounts into the
-     * `[data-bk-payment]` slot painted next to this.
-     */
+    /** View / change / cancel run inline (the manage token is known). */
+    manageInline: boolean;
+    /** The booking as the server last said: a deposit hold is 'pending'
+     *  until paid, then 'confirmed'. */
+    status: 'pending' | 'confirmed' | 'cancelled';
+    /** Can it still be moved or cancelled (not past, not cancelled). */
+    canManage: boolean;
+    /** The deposit a booking of this service opened, while it is unpaid. */
     deposit: {
       amount: string;
       dueBy: string | null;
-      /** Where to transfer, until the checkout link exists. */
+      /** The clinic's own Mercado Pago checkout for this booking (#3705). */
+      checkoutUrl: string | null;
+      /** Where to transfer — the alternative to the link, or the only way. */
       accounts: Array<{ title: string; number: string; holder: string }>;
     } | null;
   } | null;
+  /** The move being confirmed: from the booked hour to the one picked. */
+  move: { from: string; to: string } | null;
 }
 
 /** One entry of "Mis visitas", resolved from the server. */
@@ -185,6 +204,10 @@ export interface BookingCallbacks {
   onPickService?(serviceId: string): void;
   /** Clinic flow: a professional (or 'any') was chosen. */
   onPickProfessional?(professional: string): void;
+  /** Clinic flow: change or cancel the booking from its confirmation. */
+  onManage?(action: 'reschedule' | 'cancel'): void;
+  /** Clinic flow: confirm the move to the picked hour. */
+  onConfirmMove?(): void;
 }
 
 export interface BookingUi {
@@ -206,6 +229,7 @@ const STEP_NUMBER: Record<BookingStep, number> = {
   datos: 3,
   resumen: 4,
   ok: 0,
+  mover: 0,
   mis: 0,
   cancelar: 0,
   cancelado: 0,
@@ -219,6 +243,7 @@ const STEP_TITLE: Record<BookingStep, StringKey> = {
   datos: 'stepFormTitle',
   resumen: 'stepSummaryTitle',
   ok: 'stepDoneTitle',
+  mover: 'moveTitle',
   mis: 'myVisits',
   cancelar: 'cancelTitle',
   cancelado: 'cancelledTitle',
@@ -233,6 +258,7 @@ const STEP_HAS_BACK: Record<BookingStep, boolean> = {
   datos: true,
   resumen: true,
   ok: false,
+  mover: true,
   mis: false,
   cancelar: true,
   cancelado: false,
@@ -244,6 +270,18 @@ const APPT_STATUS_STRING: Record<string, StringKey> = {
   cancelled: 'statusCancelled',
   canceled: 'statusCancelled',
   completed: 'statusCompleted',
+};
+
+const CLINIC_STATUS_STRING: Record<'pending' | 'confirmed' | 'cancelled', StringKey> = {
+  pending: 'statusPendingPayment',
+  confirmed: 'statusConfirmed',
+  cancelled: 'statusCancelled',
+};
+
+const CLINIC_DONE_TITLE: Record<'pending' | 'confirmed' | 'cancelled', StringKey> = {
+  pending: 'clinicHeldTitle',
+  confirmed: 'stepDoneTitle',
+  cancelled: 'clinicCancelledTitle',
 };
 
 function pad2(n: number): string {
@@ -475,8 +513,27 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
   const consentText = el('span');
   consentLabel.append(consentInput, consentText);
 
+  // Clinic flow: the WhatsApp box (vitrina-app#3706) — unchecked, optional,
+  // and the same words as the hosted booking page.
+  const waLabel = el('label', 'vtr-bk-consent vtr-bk-consent-wa');
+  const waInput = document.createElement('input');
+  waInput.className = 'vtr-bk-check';
+  waInput.type = 'checkbox';
+  waInput.dataset.bkConsentWhatsapp = '1';
+  const waText = el('span', 'vtr-bk-consent-text');
+  const waMain = el('span', 'vtr-bk-consent-main');
+  const waHint = el('span', 'vtr-bk-consent-hint');
+  waText.append(waMain, waHint);
+  waLabel.append(waInput, waText);
+  waLabel.hidden = true;
+
   const privacyEl = el('div', 'vtr-bk-note');
-  datosEl.append(nameLabel, phoneLabel, emailLabel, documentLabel, consentLabel, privacyEl);
+  // The notice line (a reopened draft) lives INSIDE the persistent form, so
+  // showing it never rebuilds the inputs.
+  const datosNotice = el('div', 'vtr-bk-notice');
+  datosNotice.setAttribute('role', 'status');
+  datosNotice.hidden = true;
+  datosEl.append(datosNotice, nameLabel, phoneLabel, emailLabel, documentLabel, consentLabel, waLabel, privacyEl);
 
   /** Swap the body's single child without disturbing a node already in place. */
   function setBody(node: Node): void {
@@ -642,6 +699,14 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
     if (phoneInput.value !== state.form.phone) phoneInput.value = state.form.phone;
     if (emailInput.value !== state.form.email) emailInput.value = state.form.email;
     if (consentInput.checked !== state.form.consent) consentInput.checked = state.form.consent;
+    waLabel.hidden = !clinic;
+    const notice = clinic?.notice ?? null;
+    datosNotice.hidden = notice === null;
+    datosNotice.textContent = notice ? t()(notice) : '';
+    waMain.textContent = t()('whatsappConsentLabel');
+    waHint.textContent = t()('whatsappConsentHint');
+    const wa = state.form.consentWhatsapp === true;
+    if (waInput.checked !== wa) waInput.checked = wa;
   }
 
   // --- servicio / profesional (clinic flow) ---------------------------------
@@ -797,16 +862,39 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
       }
       if (card.childNodes.length > 0) wrap.appendChild(card);
     }
-    if (clinicBooked?.deposit) {
-      // THE PAYMENT SEAM. The amount and the deadline are facts of this
-      // booking; how the patient pays (the Mercado Pago checkout link,
-      // vitrina-embed#18) mounts into the empty [data-bk-payment] slot.
+    if (clinicBooked) {
+      // Where the booking stands, as the server last said. A deposit hold
+      // reads «Pendiente de pago» until Mercado Pago (or the clinic, for a
+      // transfer) settles it; the controller re-reads it and this flips.
+      const status = el('div', 'vtr-bk-status', t()(CLINIC_STATUS_STRING[clinicBooked.status]));
+      status.dataset.bkStatus = clinicBooked.status;
+      wrap.appendChild(status);
+    }
+    if (clinicBooked?.deposit && clinicBooked.status === 'pending') {
       const dep = clinicBooked.deposit;
       const box = el('div', 'vtr-bk-deposit');
       box.appendChild(el('div', 'vtr-bk-deposit-title', t()('depositDueTitle')));
       box.appendChild(el('div', 'vtr-bk-deposit-amount', dep.amount));
       if (dep.dueBy) box.appendChild(el('div', 'vtr-bk-note', `${t()('depositDueBy')} ${dep.dueBy}.`));
+      // THE PAYMENT. The clinic's own Mercado Pago checkout for THIS booking
+      // (vitrina-app#3705): paying there confirms the hour by itself. A new
+      // tab, so the clinic's page — and this screen, which updates itself —
+      // is still here when the patient comes back.
+      const slot = el('div', 'vtr-bk-payment');
+      slot.dataset.bkPayment = '1';
+      if (dep.checkoutUrl) {
+        const pay = document.createElement('a');
+        pay.className = 'vtr-bk-pay';
+        pay.href = dep.checkoutUrl;
+        pay.target = '_blank';
+        pay.rel = 'noopener noreferrer';
+        pay.dataset.bkPay = '1';
+        pay.textContent = t()('payOnlineCta');
+        slot.append(pay, el('div', 'vtr-bk-note', t()('payOnlineHint')));
+      }
+      box.appendChild(slot);
       if (dep.accounts.length > 0) {
+        if (dep.checkoutUrl) box.appendChild(el('div', 'vtr-bk-or', t()('orTransfer')));
         for (const acc of dep.accounts) {
           const row = el('div', 'vtr-bk-account');
           row.append(
@@ -816,15 +904,29 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
           );
           box.appendChild(row);
         }
-      } else {
+      } else if (!dep.checkoutUrl) {
         box.appendChild(el('div', 'vtr-bk-note', t()('depositNoAccounts')));
       }
-      const slot = el('div', 'vtr-bk-payment');
-      slot.dataset.bkPayment = '1';
-      box.appendChild(slot);
       wrap.appendChild(box);
     }
-    if (clinicBooked?.manageUrl) {
+    if (clinicBooked?.manageInline && clinicBooked.canManage) {
+      // View is this screen; change and cancel run here too, through the
+      // booking's own manage token — the clinic's site never hands the
+      // patient off to another page to move their hour.
+      const actions = el('div', 'vtr-bk-manage-actions');
+      const move = document.createElement('button');
+      move.type = 'button';
+      move.className = 'vtr-bk-manage-btn';
+      move.dataset.bkManage = 'reschedule';
+      move.textContent = t()('rescheduleCta');
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'vtr-bk-manage-btn';
+      cancel.dataset.bkManage = 'cancel';
+      cancel.textContent = t()('cancelBookingCta');
+      actions.append(move, cancel);
+      wrap.appendChild(actions);
+    } else if (clinicBooked?.manageUrl && !clinicBooked.manageInline) {
       const link = document.createElement('a');
       link.className = 'vtr-bk-manage';
       link.href = clinicBooked.manageUrl;
@@ -833,7 +935,40 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
       link.textContent = t()('manageCta');
       wrap.appendChild(link);
     }
+    if (clinicBooked?.manageInline) {
+      wrap.appendChild(el('div', 'vtr-bk-note', t()('clinicCodeNote')));
+      return wrap;
+    }
     wrap.appendChild(el('div', 'vtr-bk-note', t()(state.clinic ? 'clinicSaveCodeNote' : 'saveCodeNote')));
+    return wrap;
+  }
+
+  // --- mover (clinic: confirm a move) ---------------------------------------
+  function renderMover(state: BookingViewState): Node {
+    const wrap = document.createDocumentFragment();
+    const move = state.clinic?.move;
+    if (!move) return wrap;
+    const card = el('div', 'vtr-bk-card');
+    const from = el('div', 'vtr-bk-row');
+    const fromVal = el('span', 'vtr-bk-rowval', move.from);
+    fromVal.setAttribute('data-struck', '1');
+    from.append(el('span', 'vtr-bk-rowkey', t()('moveFrom')), fromVal);
+    const to = el('div', 'vtr-bk-row');
+    to.append(el('span', 'vtr-bk-rowkey', t()('moveTo')), el('span', 'vtr-bk-rowval', move.to));
+    card.append(from, to);
+    wrap.appendChild(card);
+    wrap.appendChild(el('div', 'vtr-bk-note', t()('moveNote')));
+    return wrap;
+  }
+
+  /** The calm line over a step: a reopened draft, a moved booking. */
+  function withNotice(state: BookingViewState, node: Node): Node {
+    const notice = state.clinic?.notice;
+    if (!notice) return node;
+    const wrap = document.createDocumentFragment();
+    const line = el('div', 'vtr-bk-notice', t()(notice));
+    line.setAttribute('role', 'status');
+    wrap.append(line, node);
     return wrap;
   }
 
@@ -938,6 +1073,10 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
       case 'ok':
         primary = 'doneCta';
         break;
+      case 'mover':
+        primary = state.submitting ? 'moving' : 'moveConfirmCta';
+        disabled = state.submitting;
+        break;
       case 'cancelar':
         // The soft path carries the visual weight; the destructive one is a
         // quiet secondary. Cancelling should never be the easy accident.
@@ -1004,7 +1143,9 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
       closeBtn.setAttribute('aria-label', t()('close'));
 
       const counter: [number, number] | null = state.clinic
-        ? clinicStep(state.step, state.clinic)
+        ? state.clinic.mode === 'reschedule'
+          ? null
+          : clinicStep(state.step, state.clinic)
         : STEP_NUMBER[state.step] > 0
           ? [STEP_NUMBER[state.step], 4]
           : null;
@@ -1013,19 +1154,29 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
       if (state.step === 'servicio' && state.clinic?.title) {
         titleEl.textContent = state.clinic.title;
       }
+      if (state.clinic?.mode === 'reschedule' && (state.step === 'fecha' || state.step === 'hora')) {
+        titleEl.textContent = t()('rescheduleTitle');
+      }
+      if (state.step === 'ok' && state.clinic?.booked) {
+        titleEl.textContent = t()(CLINIC_DONE_TITLE[state.clinic.booked.status]);
+      }
+      if (state.clinic && state.step === 'cancelado') {
+        titleEl.textContent = t()('clinicCancelledTitle');
+      }
+      root.setAttribute('aria-label', titleEl.textContent ?? '');
 
       switch (state.step) {
         case 'servicio':
-          setBody(renderServicio(state));
+          setBody(withNotice(state, renderServicio(state)));
           break;
         case 'profesional':
-          setBody(renderProfesional(state));
+          setBody(withNotice(state, renderProfesional(state)));
           break;
         case 'fecha':
-          setBody(renderFecha(state));
+          setBody(withNotice(state, renderFecha(state)));
           break;
         case 'hora':
-          setBody(renderHora(state));
+          setBody(withNotice(state, renderHora(state)));
           break;
         case 'datos':
           setBody(datosEl);
@@ -1038,7 +1189,10 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
           break;
         }
         case 'ok':
-          setBody(renderOk(state));
+          setBody(withNotice(state, renderOk(state)));
+          break;
+        case 'mover':
+          setBody(renderMover(state));
           break;
         case 'mis':
           setBody(renderMis(state));
@@ -1075,6 +1229,9 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
       case 'ok':
         callbacks.onDone();
         break;
+      case 'mover':
+        callbacks.onConfirmMove?.();
+        break;
       case 'cancelar':
         callbacks.onKeepVisit();
         break;
@@ -1095,7 +1252,7 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
   const delegate = (e: Event): void => {
     const start = e.target as HTMLElement | null;
     const target = start?.closest?.(
-      '[data-bk-day],[data-bk-slot],[data-bk-nav],[data-bk-cancel],[data-bk-fallback],[data-bk-retry],[data-bk-service],[data-bk-professional]',
+      '[data-bk-day],[data-bk-slot],[data-bk-nav],[data-bk-cancel],[data-bk-fallback],[data-bk-retry],[data-bk-service],[data-bk-professional],[data-bk-manage]',
     ) as
       | HTMLElement
       | null;
@@ -1111,6 +1268,9 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
     if (data.bkRetry) return callbacks.onRetry();
     if (data.bkService) return callbacks.onPickService?.(data.bkService);
     if (data.bkProfessional) return callbacks.onPickProfessional?.(data.bkProfessional);
+    if (data.bkManage === 'reschedule' || data.bkManage === 'cancel') {
+      return callbacks.onManage?.(data.bkManage);
+    }
   };
   on(body, 'click', delegate);
   on(errorEl, 'click', delegate);
@@ -1120,6 +1280,7 @@ export function createBookingUi(opts: BookingUiOptions): BookingUi {
   on(emailInput, 'input', () => callbacks.onFormChange({ email: emailInput.value }));
   on(consentInput, 'change', () => callbacks.onFormChange({ consent: consentInput.checked }));
   on(documentInput, 'input', () => callbacks.onFormChange({ document: documentInput.value }));
+  on(waInput, 'change', () => callbacks.onFormChange({ consentWhatsapp: waInput.checked }));
 
   return ui;
 }
