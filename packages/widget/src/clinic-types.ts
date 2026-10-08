@@ -44,6 +44,18 @@ export interface ClinicSlot {
   professionalName: string | null;
 }
 
+/** Which days of the booking window have an opening (vitrina-app#3833). */
+export interface ClinicAvailableDays {
+  timezone: string | null;
+  /** The booking window, the clinic's calendar days, inclusive. */
+  from: string;
+  to: string;
+  /** Day → free hours, only days with at least one. */
+  counts: Record<string, number>;
+  /** False when the clinic's system could not read the whole window. */
+  complete: boolean;
+}
+
 /** The ad click the booking carries — what the Vitrina tag and the URL hold. */
 export interface ClinicAttribution {
   utm_source?: string;

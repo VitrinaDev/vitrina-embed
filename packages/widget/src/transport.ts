@@ -39,6 +39,7 @@ import type {
 } from './config';
 import { coerceRemoteConfig } from './remote-config';
 import type {
+  ClinicAvailableDays,
   ClinicBookInput,
   ClinicBookingResult,
   ClinicDepositAccount,
@@ -966,20 +967,68 @@ export class VitrinaTransport {
     return view ? { ok: true, data: view } : { ok: false, status: 200 };
   }
 
-  /** Free hours from the clinic's agenda. `from`/`to` are calendar days. */
+  /**
+   * Which days of the clinic's whole booking window have an opening, with how
+   * many (vitrina-app#3833). The calendar is drawn from this; a day's hours
+   * are read with {@link fetchClinicAvailability}'s `date` when it is opened.
+   */
+  async fetchClinicAvailableDays(params: {
+    landing: string | null;
+    serviceId: string;
+    professionalId: string | null;
+  }): Promise<CallResult<ClinicAvailableDays>> {
+    const qs = new URLSearchParams();
+    if (params.landing) qs.set('landing', params.landing);
+    qs.set('service_id', params.serviceId);
+    if (params.professionalId) qs.set('professional_id', params.professionalId);
+    const res = await this.call<unknown>(`/widget/clinic/availability/days?${qs.toString()}`, {
+      method: 'GET',
+      withVisitor: false,
+    });
+    if (!res.ok) return res;
+    const raw = (res.data ?? {}) as Record<string, unknown>;
+    const from = str(raw.from);
+    const to = str(raw.to);
+    if (!from || !to) return { ok: false, status: 200 };
+    const counts: Record<string, number> = {};
+    for (const d of Array.isArray(raw.days) ? raw.days : []) {
+      const row = (d ?? {}) as Record<string, unknown>;
+      const date = str(row.date);
+      const n = typeof row.slots === 'number' ? row.slots : 0;
+      if (date && /^\d{4}-\d{2}-\d{2}$/.test(date) && n > 0) counts[date] = n;
+    }
+    return {
+      ok: true,
+      data: {
+        timezone: str(raw.timezone),
+        from,
+        to,
+        counts,
+        complete: raw.complete !== false,
+      },
+    };
+  }
+
+  /**
+   * Free hours from the clinic's agenda: every hour of ONE day (`date`, the
+   * clinic's calendar day — vitrina-app#3833), or a `from`/`to` window of
+   * calendar days (capped by the server; kept for the old month read).
+   */
   async fetchClinicAvailability(params: {
     landing: string | null;
     serviceId: string;
     professionalId: string | null;
-    from: string;
-    to: string;
+    date?: string;
+    from?: string;
+    to?: string;
   }): Promise<CallResult<{ timezone: string | null; slots: ClinicSlot[] }>> {
     const qs = new URLSearchParams();
     if (params.landing) qs.set('landing', params.landing);
     qs.set('service_id', params.serviceId);
     if (params.professionalId) qs.set('professional_id', params.professionalId);
-    qs.set('from', params.from);
-    qs.set('to', params.to);
+    if (params.date) qs.set('date', params.date);
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
     const res = await this.call<unknown>(`/widget/clinic/availability?${qs.toString()}`, {
       method: 'GET',
       withVisitor: false,

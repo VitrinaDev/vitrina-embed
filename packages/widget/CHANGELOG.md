@@ -1,5 +1,16 @@
 # @vitrina/widget
 
+## 0.15.0
+
+**Days first, then the day's hours** (vitrina-app#3833). The clinic calendar is
+drawn from one read of the clinic's whole booking window
+(`GET /widget/clinic/availability/days`), so every day with an opening shows,
+however busy the clinic. The old per-month read was a capped list that went
+blind after about a fortnight. A day's hours are read when the patient opens
+it (`/widget/clinic/availability?date=`). Paging stops at the window's last
+month. If the API has no days read yet (404), the widget falls back to the
+month read.
+
 ## 0.14.1
 
 **The booking carries `utm_id`** (Website ads fix, vitrina-app#3697). The clinic
