@@ -334,8 +334,20 @@ A clinic with several landings picks one with `landing`:
 window.vitrinaChat = { publicKey: 'pk_…', apiBaseUrl: '…', landing: 'convenio-isapre' };
 ```
 
-The confirmation shows the code, a link where the patient confirms, moves or
-cancels, and, for a service with a deposit, the amount and the deadline.
+The confirmation shows the code and where the booking stands. For a service
+with a deposit it shows the amount, the deadline and — when the clinic connected
+its Mercado Pago — a «Pagar con Mercado Pago» button for that booking's own
+checkout (new tab). The screen re-reads the booking while it is open and flips
+to «Confirmada» once the payment lands. «Cambiar hora» and «Cancelar hora» run
+right there, through the booking's manage token.
+
+**Abandoned bookings.** The details step has an unchecked box: «Quiero recibir
+mensajes por WhatsApp sobre esta reserva». Once a phone is typed, the widget
+saves a booking draft (what was picked, the box, the ad click and this page's
+URL). A patient who ticked it and left gets one WhatsApp from the clinic whose
+link comes back to this same page with `?vt_draft=…`; the widget opens itself
+at the draft, details filled in (or at that day's hours, if the hour went), and
+the booking completes the draft. The page must be on an origin the key allows.
 
 A host page with its own booking button opens the calendar directly:
 

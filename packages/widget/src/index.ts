@@ -19,6 +19,12 @@ import { createTurnstileGate, type TurnstileGate } from './turnstile';
 import { createBookingStore } from './booking-store';
 import { createClinicBookingController, type ClinicBookingController } from './clinic-booking-controller';
 import { bookingAttribution, captureLandingClick } from './clinic-attribution';
+import {
+  draftAlreadyHandled,
+  draftReturnUrl,
+  markDraftHandled,
+  readDraftToken,
+} from './clinic-draft-link';
 import { hasInlineAppearance, resolveConfig, resolveHomeCards, type ResolvedHomeCards } from './config';
 import {
   createHomeActionsController,
@@ -231,6 +237,7 @@ export function init(config: WidgetConfig): WidgetInstance {
           landing: resolved.landing,
           getLocale: () => resolved.locale,
           getAttribution: () => bookingAttribution(),
+          getReturnUrl: () => draftReturnUrl(),
           onRender: (state) => {
             if (!destroyed) ui.renderBooking(state);
           },
@@ -295,6 +302,30 @@ export function init(config: WidgetConfig): WidgetInstance {
     ensureBookingController().openBooking();
   }
 
+  /**
+   * The recovery link's draft (embed#18): `?vt_draft=` on this page. Held
+   * until the configuration says this tenant runs the clinic flow, then the
+   * widget opens itself at the draft — once per tab, so a reload does not pop
+   * the booking up again.
+   */
+  let pendingDraft: string | null = (() => {
+    const token = readDraftToken();
+    return token && !draftAlreadyHandled(token) ? token : null;
+  })();
+
+  function maybeOpenDraft(): void {
+    if (!pendingDraft || destroyed || !bookingEnabled || resolved.bookingFlow !== 'clinic') return;
+    const token = pendingDraft;
+    pendingDraft = null;
+    markDraftHandled(token);
+    instanceOpen();
+    pendingBookingOpen = false;
+    ui.openBooking();
+    const controller = ensureBookingController();
+    if (controller === clinicBooking && clinicBooking) clinicBooking.resumeDraft(token);
+    else controller.openBooking();
+  }
+
   /** Reflect the tenant's booking gate. Idempotent, and safe in both directions. */
   function applyBookingGate(enabled: boolean): void {
     if (destroyed || enabled === bookingEnabled) return;
@@ -302,6 +333,10 @@ export function init(config: WidgetConfig): WidgetInstance {
     ui.setBookingEnabled(enabled);
     if (enabled) {
       ensureBookingController().refreshChip();
+      if (pendingDraft && resolved.bookingFlow === 'clinic') {
+        maybeOpenDraft();
+        return;
+      }
       // The answer arrived after the ask. Honour it — but only while the panel
       // is still open: a visitor who walked away must not have an overlay
       // appear under their cursor a second later.
@@ -444,6 +479,8 @@ export function init(config: WidgetConfig): WidgetInstance {
         onRetry: () => ensureBookingController().callbacks.onRetry(),
         onPickService: (id) => ensureBookingController().callbacks.onPickService?.(id),
         onPickProfessional: (p) => ensureBookingController().callbacks.onPickProfessional?.(p),
+        onManage: (action) => ensureBookingController().callbacks.onManage?.(action),
+        onConfirmMove: () => ensureBookingController().callbacks.onConfirmMove?.(),
       },
       onHomeAction: (kind) => {
         if (!homeCards[kind]) return;

@@ -42,6 +42,10 @@ import type {
   ClinicBookInput,
   ClinicBookingResult,
   ClinicDepositAccount,
+  ClinicDraftInput,
+  ClinicDraftResume,
+  ClinicManageAction,
+  ClinicManagedAppointment,
   ClinicLanding,
   ClinicProfessional,
   ClinicService,
@@ -212,6 +216,80 @@ function str(v: unknown): string | null {
 function num(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
+
+/** Only an https link becomes the pay button. */
+function httpsUrl(v: unknown): string | null {
+  const raw = str(v);
+  if (!raw) return null;
+  try {
+    return new URL(raw).protocol === 'https:' ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A capability token: three base64url segments (the server's own regex). */
+const MANAGE_TOKEN_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+/**
+ * The capability token at the end of a booking's `manage_url`
+ * (`…/public/clinic/appt/<token>`), or null for any other shape — then the
+ * widget simply links out to the page instead of managing inline.
+ */
+export function manageTokenOf(manageUrl: string | null): string | null {
+  if (!manageUrl) return null;
+  try {
+    const m = /\/public\/clinic\/appt\/([^/?#]+)$/.exec(new URL(manageUrl).pathname);
+    const token = m ? decodeURIComponent(m[1]) : null;
+    return token && MANAGE_TOKEN_SHAPE.test(token) ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+function coerceManagedAppointment(input: unknown): ClinicManagedAppointment | null {
+  if (!input || typeof input !== 'object') return null;
+  const raw = input as Record<string, unknown>;
+  const displayId = str(raw.display_id);
+  const startsAt = str(raw.starts_at);
+  const status = str(raw.status);
+  if (!displayId || !startsAt || !status) return null;
+  return {
+    displayId,
+    startsAt,
+    endsAt: str(raw.ends_at) ?? startsAt,
+    status,
+    professionalName: str(raw.professional_name),
+    timezone: str(raw.timezone),
+    canManage: raw.can_manage === true,
+    reason: str(raw.reason),
+  };
+}
+
+const DRAFT_STATUSES = ['open', 'completed', 'recovered', 'expired'] as const;
+
+function coerceDraft(input: unknown): ClinicDraftResume | null {
+  if (!input || typeof input !== 'object') return null;
+  const raw = input as Record<string, unknown>;
+  const status = DRAFT_STATUSES.find((s) => s === raw.status);
+  if (!status) return null;
+  return {
+    status,
+    serviceId: str(raw.service_id),
+    professionalId: str(raw.professional_id),
+    startsAt: str(raw.starts_at),
+    endsAt: str(raw.ends_at),
+    slotRef: str(raw.slot_ref),
+    slotAvailable: typeof raw.slot_available === 'boolean' ? raw.slot_available : null,
+    name: str(raw.name) ?? '',
+    phone: str(raw.phone) ?? '',
+    email: str(raw.email) ?? '',
+    document: str(raw.document) ?? '',
+    consentWhatsapp: raw.consent_whatsapp === true,
+  };
+}
+
+const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function coerceClinicLanding(input: unknown): ClinicLanding | null {
   if (!input || typeof input !== 'object') return null;
@@ -940,6 +1018,7 @@ export class VitrinaTransport {
     if (input.attribution && Object.keys(input.attribution).length > 0) {
       body.attribution = input.attribution;
     }
+    if (input.draftToken) body.draft_token = input.draftToken;
     const res = await this.call<unknown>('/widget/clinic/bookings', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -961,7 +1040,9 @@ export class VitrinaTransport {
         professionalName: str(raw.professional_name),
         locationName: str(raw.location_name),
         manageUrl: str(raw.manage_url),
+        manageToken: manageTokenOf(str(raw.manage_url)),
         deposit: {
+          checkoutUrl: httpsUrl(dep.checkout_url),
           required: dep.required === true,
           amountClp: num(dep.amount_clp),
           deadline: str(dep.deadline),
@@ -982,6 +1063,114 @@ export class VitrinaTransport {
         },
       },
     };
+  }
+
+  // --- Booking drafts + manage (embed#18) -----------------------------------
+
+  /**
+   * Save the details step as a booking draft (vitrina-app#3706). Bookkeeping
+   * only: a failure costs one possible recovery message and is never shown.
+   */
+  async saveClinicDraft(
+    input: ClinicDraftInput,
+  ): Promise<CallResult<{ draftToken: string; status: string }>> {
+    const body: Record<string, unknown> = {
+      phone: input.phone.trim(),
+      consent_whatsapp: input.consentWhatsapp,
+    };
+    if (input.landing) body.landing = input.landing;
+    if (input.draftToken) body.draft_token = input.draftToken;
+    if (input.serviceId) body.service_id = input.serviceId;
+    if (input.professionalId) body.professional_id = input.professionalId;
+    if (input.startsAt && input.endsAt) {
+      body.starts_at = input.startsAt;
+      body.ends_at = input.endsAt;
+      if (input.slotRef) body.slot_ref = input.slotRef;
+    }
+    if (input.name.trim()) body.name = input.name.trim();
+    // A half-typed address would 400 the whole save; left out until it looks
+    // like one.
+    if (LOOKS_LIKE_EMAIL.test(input.email.trim())) body.email = input.email.trim();
+    if (input.document.trim()) body.document = input.document.trim();
+    if (input.attribution && Object.keys(input.attribution).length > 0) {
+      body.attribution = input.attribution;
+    }
+    if (input.returnUrl) body.return_url = input.returnUrl;
+    const res = await this.call<unknown>('/widget/clinic/drafts', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      withVisitor: false,
+    });
+    if (!res.ok) return res;
+    const raw = (res.data ?? {}) as Record<string, unknown>;
+    const draftToken = str(raw.draft_token);
+    if (!draftToken) return { ok: false, status: 200 };
+    return { ok: true, data: { draftToken, status: str(raw.status) ?? 'open' } };
+  }
+
+  /** Reopen a draft from the recovery link's `vt_draft`. */
+  async fetchClinicDraft(token: string): Promise<CallResult<ClinicDraftResume>> {
+    const res = await this.call<unknown>(`/widget/clinic/drafts/${encodeURIComponent(token)}`, {
+      method: 'GET',
+      withVisitor: false,
+    });
+    if (!res.ok) return res;
+    const draft = coerceDraft(res.data);
+    return draft ? { ok: true, data: draft } : { ok: false, status: 200 };
+  }
+
+  /** The booking behind its manage token — its status is how a paid deposit
+   *  shows up (`pending_hold` → `confirmed`). */
+  async fetchClinicAppointment(token: string): Promise<CallResult<ClinicManagedAppointment>> {
+    const res = await this.call<unknown>(`/widget/clinic/appointments/${encodeURIComponent(token)}`, {
+      method: 'GET',
+      withVisitor: false,
+    });
+    if (!res.ok) return res;
+    const view = coerceManagedAppointment(res.data);
+    return view ? { ok: true, data: view } : { ok: false, status: 200 };
+  }
+
+  /** Free hours to move this booking to: same service, same professional. */
+  async fetchClinicAppointmentAvailability(
+    token: string,
+  ): Promise<CallResult<{ timezone: string | null; slots: ClinicSlot[] }>> {
+    const res = await this.call<unknown>(
+      `/widget/clinic/appointments/${encodeURIComponent(token)}/availability`,
+      { method: 'GET', withVisitor: false },
+    );
+    if (!res.ok) return res;
+    const raw = (res.data ?? {}) as Record<string, unknown>;
+    return {
+      ok: true,
+      data: {
+        timezone: str(raw.timezone),
+        slots: (Array.isArray(raw.slots) ? raw.slots : [])
+          .map(coerceClinicSlot)
+          .filter((s): s is ClinicSlot => s !== null),
+      },
+    };
+  }
+
+  /** Move or cancel the booking. Answers the booking as it now stands. */
+  async actOnClinicAppointment(
+    token: string,
+    act: ClinicManageAction,
+  ): Promise<CallResult<ClinicManagedAppointment>> {
+    const body: Record<string, unknown> = { action: act.action };
+    if (act.action === 'reschedule') {
+      body.starts_at = act.startsAt;
+      body.ends_at = act.endsAt;
+      if (act.slotRef) body.slot_ref = act.slotRef;
+    }
+    const res = await this.call<unknown>(`/widget/clinic/appointments/${encodeURIComponent(token)}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      withVisitor: false,
+    });
+    if (!res.ok) return res;
+    const view = coerceManagedAppointment(res.data);
+    return view ? { ok: true, data: view } : { ok: false, status: 200 };
   }
 
   /** Cancel a booking. Idempotent server-side; answers the cancelled DTO. */

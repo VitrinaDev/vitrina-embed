@@ -503,6 +503,39 @@ select.vtr-ha-input { cursor: pointer; }
   color: var(--vtr-accent); text-decoration: underline;
 }
 .vtr-bk-manage:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+.vtr-bk-consent[hidden] { display: none; }
+/* embed#18 — the WhatsApp box, its hint, the notice line, status, pay, manage. */
+.vtr-bk-consent-text { display: flex; flex-direction: column; gap: 2px; }
+.vtr-bk-consent-hint { font-size: 11.5px; color: var(--vtr-muted); line-height: 1.4; }
+.vtr-bk-notice {
+  font-size: 12.5px; line-height: 1.45; padding: 9px 11px; border-radius: 10px;
+  background: var(--vtr-bubble-out); color: var(--vtr-text);
+}
+.vtr-bk-notice[hidden] { display: none; }
+.vtr-bk-status {
+  align-self: center; font-size: 12px; font-weight: 600; padding: 3px 10px;
+  border-radius: 999px; border: 1px solid var(--vtr-border); color: var(--vtr-muted);
+}
+.vtr-bk-status[data-bk-status="confirmed"] { color: var(--vtr-ok); border-color: currentColor; }
+.vtr-bk-status[data-bk-status="cancelled"] { color: var(--vtr-danger); border-color: currentColor; }
+.vtr-bk-payment { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.vtr-bk-pay {
+  display: flex; align-items: center; justify-content: center; height: 42px;
+  border-radius: 10px; background: var(--vtr-accent); color: #fff;
+  font-weight: 600; font-size: 14px; text-decoration: none;
+}
+.vtr-bk-pay:hover { opacity: 0.92; }
+.vtr-bk-pay:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+.vtr-bk-or { margin-top: 8px; font-size: 11.5px; color: var(--vtr-muted); }
+.vtr-bk-manage-actions { display: flex; gap: 8px; }
+.vtr-bk-manage-btn {
+  flex: 1; height: 38px; border-radius: 10px; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 600; background: transparent; color: var(--vtr-text);
+  border: 1px solid var(--vtr-border);
+}
+.vtr-bk-manage-btn:hover { border-color: var(--vtr-accent); color: var(--vtr-accent); }
+.vtr-bk-manage-btn:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+.vtr-bk-rowval[data-struck] { text-decoration: line-through; color: var(--vtr-muted); }
 
 /* Summary + confirmation */
 .vtr-bk-card {

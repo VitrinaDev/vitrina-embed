@@ -1,5 +1,23 @@
 # @vitrina/widget
 
+## 0.14.0
+
+**The clinic widget pays, resumes and manages** (vitrina-embed#18, Website ads).
+
+- **Pay.** A deposit booking shows «Pagar con Mercado Pago», the clinic's own
+  checkout for that booking (vitrina-app#3705), in a new tab; the transfer
+  accounts stay as the alternative. The confirmation re-reads the booking
+  (every 5 s while visible, and on return to the tab, for 30 min) and flips
+  from «Pendiente de pago» to «Confirmada» when the payment lands.
+- **Resume.** The details step adds the unchecked WhatsApp box (same copy as
+  the hosted page) and saves a booking draft once a phone is typed
+  (`POST /widget/clinic/drafts`, with this page as `return_url`). `?vt_draft=`
+  on the page reopens the widget at the draft (`GET /widget/clinic/drafts/:token`);
+  the booking sends `draft_token`, which completes or recovers it.
+- **Manage.** «Cambiar hora» and «Cancelar hora» on the confirmation, through
+  `/widget/clinic/appointments/:token` (vitrina-app, embed#18) — the manage
+  link's token, behind the key.
+
 ## 0.13.0
 
 **The clinic booking flow** (vitrina-app#3707, Website ads). A clinic with an
