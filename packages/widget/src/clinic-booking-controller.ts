@@ -36,6 +36,7 @@ import type {
 import { formatDayLong } from './booking-ui';
 import type {
   ClinicAttribution,
+  ClinicAvailableDays,
   ClinicDraftInput,
   ClinicLanding,
   ClinicManagedAppointment,
@@ -50,6 +51,7 @@ export type ClinicBookingTransport = Pick<
   VitrinaTransport,
   | 'fetchClinicLanding'
   | 'fetchClinicAvailability'
+  | 'fetchClinicAvailableDays'
   | 'bookClinic'
   | 'saveClinicDraft'
   | 'fetchClinicDraft'
@@ -182,6 +184,16 @@ export function createClinicBookingController(
   const months = new Map<string, MonthEntry>();
   /** startsAt → the slot posted back (its ref and its professional). */
   let slotIndex = new Map<string, ClinicSlot>();
+
+  // vitrina-app#3833 — days first, then one day's hours. The calendar's days
+  // come from ONE read of the whole booking window; a day's hours are read
+  // when the patient opens it. `null` = not read yet for this service +
+  // professional. An API that predates the days read (404) falls back to the
+  // per-month read below, which a capped list made blind past the fortnight.
+  let windowDays: ClinicAvailableDays | null = null;
+  let daysSupported = true;
+  /** day → its hours, for the chosen service + professional. */
+  const dayHours = new Map<string, ClinicSlot[]>();
 
   let serviceId: string | null = null;
   let professional: string | null = null;
@@ -342,11 +354,12 @@ export function createClinicBookingController(
   }
 
   function slotsForDay(day: string): BookingSlotView[] {
-    const entry = months.get(monthKeyOf(state.monthAnchor));
-    if (!entry) return [];
+    const source =
+      mode === 'book' && windowDays ? dayHours.get(day) : months.get(monthKeyOf(state.monthAnchor))?.slots;
+    if (!source) return [];
     const seen = new Set<string>();
     const out: BookingSlotView[] = [];
-    for (const s of entry.slots) {
+    for (const s of source) {
       const clock = wallClock(s.startsAt, timezone);
       if (clock.day !== day || seen.has(s.startsAt)) continue;
       // "Anyone": two professionals free at 10:00 are ONE hour for the
@@ -373,6 +386,10 @@ export function createClinicBookingController(
       return;
     }
     if (!serviceId) return;
+    if (daysSupported) {
+      await loadWindowMonth(anchor, force);
+      if (daysSupported) return;
+    }
     const key = monthKeyOf(anchor);
     const cached = months.get(key);
     state.monthAnchor = anchor;
@@ -423,7 +440,95 @@ export function createClinicBookingController(
     render();
   }
 
+  /** The calendar for `anchor`'s month from the window's days (#3833). */
+  async function loadWindowMonth(anchor: Date, force: boolean): Promise<void> {
+    state.monthAnchor = anchor;
+    if (!windowDays || force) {
+      const gen = ++generation;
+      state.loading = true;
+      if (state.error === 'loadFailed') state.error = null;
+      render();
+      const res = await transport.fetchClinicAvailableDays({
+        landing: deps.landing,
+        serviceId: serviceId as string,
+        professionalId: professional && professional !== 'any' ? professional : null,
+      });
+      if (destroyed || gen !== generation) return;
+      if (!res.ok && res.status === 404 && res.reason === undefined) {
+        // An API without the days read: the old per-month read takes over.
+        daysSupported = false;
+        state.loading = false;
+        return;
+      }
+      if (!res.ok) {
+        state.loading = false;
+        state.error = res.status === 409 ? 'errServiceUnavailable' : 'loadFailed';
+        render();
+        return;
+      }
+      windowDays = res.data;
+      if (res.data.timezone) timezone = res.data.timezone;
+      // The window's own end, as the clinic counts it — the horizon note
+      // names this day.
+      state.horizonEnd = `${res.data.to}T12:00:00.000Z`;
+      dayHours.clear();
+      if (force && state.selectedDay) {
+        // A re-read (slot taken, retry) refreshes the open day too.
+        state.loading = false;
+        await loadDayHours(state.selectedDay);
+        return finishWindowMonth();
+      }
+    }
+    finishWindowMonth();
+    if (state.selectedDay && !dayHours.has(state.selectedDay)) {
+      await loadDayHours(state.selectedDay);
+    }
+  }
+
+  function finishWindowMonth(): void {
+    if (!windowDays) return;
+    const anchor = state.monthAnchor;
+    const key = monthKeyOf(anchor);
+    const nextKey = monthKeyOf(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1));
+    state.dayCounts = windowDays.counts;
+    state.nextMonthBlocked = windowDays.to.slice(0, 7) <= key;
+    state.nextMonthHasSlots = Object.keys(windowDays.counts).some((d) => d.startsWith(nextKey));
+    state.loading = false;
+    if (state.selectedDay) state.daySlots = slotsForDay(state.selectedDay);
+    render();
+  }
+
+  /** Every hour of one day (#3833). */
+  async function loadDayHours(day: string): Promise<void> {
+    if (!serviceId) return;
+    const gen = ++generation;
+    state.loading = true;
+    render();
+    const res = await transport.fetchClinicAvailability({
+      landing: deps.landing,
+      serviceId,
+      professionalId: professional && professional !== 'any' ? professional : null,
+      date: day,
+    });
+    if (destroyed || gen !== generation) return;
+    state.loading = false;
+    if (!res.ok) {
+      state.error = res.status === 409 ? 'errServiceUnavailable' : 'loadFailed';
+      render();
+      return;
+    }
+    if (res.data.timezone) timezone = res.data.timezone;
+    for (const s of res.data.slots) {
+      if (!slotIndex.has(s.startsAt)) slotIndex.set(s.startsAt, s);
+    }
+    dayHours.set(day, res.data.slots);
+    if (state.selectedDay === day) state.daySlots = slotsForDay(day);
+    render();
+  }
+
   function resetAgenda(): void {
+    windowDays = null;
+    dayHours.clear();
     months.clear();
     slotIndex = new Map();
     state.selectedDay = null;
@@ -844,6 +949,7 @@ export function createClinicBookingController(
       state.error = 'errSlotTaken';
       render();
       months.delete(monthKeyOf(state.monthAnchor));
+      dayHours.clear();
       slotIndex = new Map();
       await loadMonth(state.monthAnchor, true);
       if (destroyed) return;
@@ -938,6 +1044,7 @@ export function createClinicBookingController(
       state.step = 'hora';
       state.error = null;
       render();
+      if (mode === 'book' && windowDays && !dayHours.has(day)) void loadDayHours(day);
     },
     onPickSlot: (startsAt: string) => {
       const slot = state.daySlots.find((s) => s.startsAt === startsAt);
@@ -1069,6 +1176,7 @@ export function createClinicBookingController(
       stopWatch();
       if (draftTimer) clearTimeout(draftTimer);
       months.clear();
+      dayHours.clear();
       slotIndex.clear();
       state = { ...state, booked: null, form: emptyForm() };
     },

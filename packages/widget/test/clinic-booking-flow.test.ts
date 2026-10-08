@@ -126,6 +126,17 @@ let bookResponse: (body: Record<string, unknown>) => Response;
 let fetchMock: ReturnType<typeof vi.fn>;
 const posted: Array<Record<string, unknown>> = [];
 const availabilityQueries: URLSearchParams[] = [];
+/** False = an API that predates the days read (it answers 404). */
+let daysRoute = true;
+/** A second open day — the window's last (vitrina-app#3833). */
+let farDay: string | null = null;
+const dayOffset = (n: number) => {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + n);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+const windowFrom = dayOffset(0);
+const windowTo = dayOffset(30);
 
 function bookedFor(body: Record<string, unknown>, deposit = false): Response {
   return jsonRes(201, {
@@ -171,15 +182,58 @@ beforeEach(() => {
   landingData = { ...LANDING };
   posted.length = 0;
   availabilityQueries.length = 0;
+  daysRoute = true;
+  farDay = null;
   bookResponse = (body) => bookedFor(body);
   fetchMock = vi.fn((url: string, opts?: RequestInit) => {
     const u = String(url);
     const method = opts?.method ?? 'GET';
     if (u.includes('/widget/config')) return Promise.resolve(jsonRes(200, configData));
     if (u.includes('/widget/clinic/landing')) return Promise.resolve(jsonRes(200, landingData));
+    if (u.includes('/widget/clinic/availability/days')) {
+      // vitrina-app#3833: the window's days with an opening.
+      const qs = new URL(u).searchParams;
+      availabilityQueries.push(qs);
+      if (!daysRoute) return Promise.resolve(emptyRes(404));
+      return Promise.resolve(
+        jsonRes(200, {
+          timezone: TZ,
+          from: windowFrom,
+          to: windowTo,
+          days: [
+            { date: target.key, slots: agenda(qs.get('professional_id')).length },
+            ...(farDay ? [{ date: farDay, slots: 1 }] : []),
+          ],
+          searched_through: windowTo,
+          complete: true,
+        }),
+      );
+    }
     if (u.includes('/widget/clinic/availability')) {
       const qs = new URL(u).searchParams;
       availabilityQueries.push(qs);
+      if (qs.get('date')) {
+        return Promise.resolve(
+          jsonRes(200, {
+            timezone: TZ,
+            slots:
+              qs.get('date') === target.key
+                ? agenda(qs.get('professional_id'))
+                : qs.get('date') === farDay
+                  ? [
+                      {
+                        starts_at: `${farDay}T17:30:00-03:00`,
+                        ends_at: `${farDay}T18:00:00-03:00`,
+                        label: 'último día 17:30',
+                        slot_ref: 'ncl1_far_1730',
+                        professional_id: PRO_ANA,
+                        professional_name: 'Ana Rojas',
+                      },
+                    ]
+                  : [],
+          }),
+        );
+      }
       const inMonth = (qs.get('from') ?? '').slice(0, 7) === target.ym;
       return Promise.resolve(
         jsonRes(200, { timezone: TZ, slots: inMonth ? agenda(qs.get('professional_id')) : [] }),
@@ -479,6 +533,59 @@ describe('clinic booking flow (vitrina-app#3707)', () => {
     fail = false;
     must<HTMLButtonElement>('[data-bk-retry]').click();
     await vi.waitFor(() => expect(shadowOf().querySelectorAll('[data-bk-service]').length).toBe(2));
+  });
+
+  it('draws the calendar from the window’s days and reaches its LAST day, a month out (vitrina-app#3833)', async () => {
+    farDay = windowTo;
+    const w = await boot();
+    await pickToCalendar(SVC_EVAL, PRO_ANA);
+    // One read of the whole window: no from/to, so no capped month list.
+    const daysQuery = availabilityQueries.find((qs) => !qs.has('date'));
+    expect(daysQuery?.has('from')).toBe(false);
+    expect(daysQuery?.get('professional_id')).toBe(PRO_ANA);
+
+    // Page to the window's last month and open its last day.
+    for (let i = 0; i < 3 && !q(`[data-bk-day="${windowTo}"]`); i += 1) {
+      must<HTMLButtonElement>('.vtr-bk-navnext').click();
+      // eslint-disable-next-line no-await-in-loop
+      await vi.waitFor(() => expect(q('.vtr-bk-day')).not.toBeNull());
+    }
+    await vi.waitFor(() =>
+      expect(q<HTMLButtonElement>(`[data-bk-day="${windowTo}"]`)?.disabled).toBe(false),
+    );
+    // Nothing past the window's end to page to.
+    expect(q<HTMLButtonElement>('.vtr-bk-navnext')?.disabled).toBe(true);
+    must<HTMLButtonElement>(`[data-bk-day="${windowTo}"]`).click();
+    await clickSlot('17:30');
+    expect(availabilityQueries[availabilityQueries.length - 1].get('date')).toBe(windowTo);
+    fillDetails();
+    await vi.waitFor(() => expect(must('.vtr-bk-step').textContent).toBe('Paso 6 de 6'));
+    must<HTMLButtonElement>('.vtr-bk-primary').click();
+    await vi.waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0].slot_ref).toBe('ncl1_far_1730');
+    w.destroy();
+  });
+
+  it('reads a day’s hours only when that day is opened', async () => {
+    const w = await boot();
+    await pickToCalendar(SVC_EVAL, PRO_ANA);
+    expect(availabilityQueries.some((qs) => qs.has('date'))).toBe(false);
+    must<HTMLButtonElement>(`[data-bk-day="${target.key}"]`).click();
+    await vi.waitFor(() => expect(q('.vtr-bk-slot')).not.toBeNull());
+    const dayReads = availabilityQueries.filter((qs) => qs.has('date'));
+    expect(dayReads.map((qs) => qs.get('date'))).toEqual([target.key]);
+    w.destroy();
+  });
+
+  it('an API without the days read falls back to the month read and still books', async () => {
+    daysRoute = false;
+    const w = await boot();
+    await pickToCalendar(SVC_EVAL, PRO_ANA);
+    expect(availabilityQueries.some((qs) => qs.has('from'))).toBe(true);
+    await pickHour('10:00');
+    fillDetails();
+    await vi.waitFor(() => expect(must('.vtr-bk-step').textContent).toBe('Paso 6 de 6'));
+    w.destroy();
   });
 
   it('passes the snippet’s landing slug to every clinic call', async () => {

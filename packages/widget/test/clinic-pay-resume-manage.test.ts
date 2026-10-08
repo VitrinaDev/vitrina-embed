@@ -129,7 +129,28 @@ beforeEach(() => {
     const body = opts?.body ? (JSON.parse(String(opts.body)) as Record<string, unknown>) : {};
     if (u.includes('/widget/config')) return Promise.resolve(jsonRes(200, { clinicBooking: { enabled: true } }));
     if (u.includes('/widget/clinic/landing')) return Promise.resolve(jsonRes(200, LANDING));
+    if (u.includes('/widget/clinic/availability/days')) {
+      return Promise.resolve(
+        jsonRes(200, {
+          timezone: TZ,
+          from: target.key,
+          to: target.key,
+          days: [{ date: target.key, slots: 2 }],
+          searched_through: target.key,
+          complete: true,
+        }),
+      );
+    }
     if (u.includes('/widget/clinic/availability')) {
+      const date = new URL(u).searchParams.get('date');
+      if (date) {
+        return Promise.resolve(
+          jsonRes(200, {
+            timezone: TZ,
+            slots: date === target.key ? [slot('10:00', '10:30'), slot('11:00', '11:30')] : [],
+          }),
+        );
+      }
       const inMonth = (new URL(u).searchParams.get('from') ?? '').slice(0, 7) === target.ym;
       return Promise.resolve(
         jsonRes(200, { timezone: TZ, slots: inMonth ? [slot('10:00', '10:30'), slot('11:00', '11:30')] : [] }),
