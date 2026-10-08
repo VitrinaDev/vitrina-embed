@@ -1,5 +1,12 @@
 # @vitrina/widget
 
+## 0.14.1
+
+**The booking carries `utm_id`** (Website ads fix, vitrina-app#3697). The clinic
+booking's attribution capture now reads and remembers `utm_id` (Meta's
+`{{campaign.id}}`) with the other UTMs, so a booking or draft with no ad id still
+files on its campaign.
+
 ## 0.14.0
 
 **The clinic widget pays, resumes and manages** (vitrina-embed#18, Website ads).
