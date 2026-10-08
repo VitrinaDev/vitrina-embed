@@ -25,6 +25,7 @@ const URL_KEYS = [
   'utm_campaign',
   'utm_content',
   'utm_term',
+  'utm_id',
   'fbclid',
   'gclid',
 ] as const;

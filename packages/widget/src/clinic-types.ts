@@ -51,6 +51,7 @@ export interface ClinicAttribution {
   utm_campaign?: string;
   utm_content?: string;
   utm_term?: string;
+  utm_id?: string;
   fbclid?: string;
   gclid?: string;
   anonymous_id?: string;
