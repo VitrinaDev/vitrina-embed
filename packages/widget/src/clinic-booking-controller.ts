@@ -912,7 +912,7 @@ export function createClinicBookingController(
       let dueBy: string | null = null;
       if (dep.deadline) {
         const due = wallClock(dep.deadline, timezone);
-        dueBy = [due.day ? formatDayLong(due.day, loc) : '', due.time].filter(Boolean).join(', ');
+        dueBy = [due.day ? formatDayLong(due.day, loc, 'inline') : '', due.time].filter(Boolean).join(', ');
       }
       const depositDue = dep.required && dep.amountClp != null;
       manageToken = res.data.manageToken;
