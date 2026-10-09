@@ -365,7 +365,7 @@ export const STYLES = `
 
 /* Month navigation + the hand-rolled grid (no date library, zero deps). */
 .vtr-bk-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.vtr-bk-month { font-size: 14px; font-weight: 600; text-transform: capitalize; }
+.vtr-bk-month { font-size: 14px; font-weight: 600; }
 .vtr-bk-navbtn {
   background: transparent; border: 1px solid var(--vtr-border); border-radius: 8px;
   color: var(--vtr-text); cursor: pointer; width: 32px; height: 32px; padding: 0;
@@ -415,7 +415,7 @@ export const STYLES = `
 }
 
 /* Slot grid. A taken hour is DIMMED, never removed. */
-.vtr-bk-daylabel { font-size: 13.5px; font-weight: 600; text-transform: capitalize; }
+.vtr-bk-daylabel { font-size: 13.5px; font-weight: 600; }
 .vtr-bk-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .vtr-bk-slot {
   height: 36px; border-radius: 9px; cursor: pointer;
@@ -542,7 +542,7 @@ select.vtr-ha-input { cursor: pointer; }
   border: 1px solid var(--vtr-border); border-radius: 12px; padding: 12px;
   display: flex; flex-direction: column; gap: 6px;
 }
-.vtr-bk-when { font-size: 15px; font-weight: 600; text-transform: capitalize; }
+.vtr-bk-when { font-size: 15px; font-weight: 600; }
 .vtr-bk-when[data-struck] { text-decoration: line-through; color: var(--vtr-muted); }
 .vtr-bk-time { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
 .vtr-bk-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
@@ -568,7 +568,7 @@ select.vtr-ha-input { cursor: pointer; }
   border: 1px solid var(--vtr-border); border-radius: 12px; padding: 10px 12px;
   display: flex; flex-direction: column; gap: 4px;
 }
-.vtr-bk-visit-when { font-size: 13.5px; font-weight: 600; text-transform: capitalize; }
+.vtr-bk-visit-when { font-size: 13.5px; font-weight: 600; }
 .vtr-bk-visit-when[data-struck] { text-decoration: line-through; color: var(--vtr-muted); }
 .vtr-bk-visit-meta { display: flex; gap: 8px; align-items: baseline; }
 .vtr-bk-visit-status { font-size: 11.5px; color: var(--vtr-muted); }

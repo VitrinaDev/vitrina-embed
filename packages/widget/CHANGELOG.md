@@ -1,5 +1,22 @@
 # @vitrina/widget
 
+## 0.16.0
+
+**Spanish dates in sentence case, and the business's language by default**
+(vitrina-app#3957).
+
+- **Dates.** «Domingo, 11 de octubre» and «Octubre de 2026», never the
+  title-cased «Domingo, 11 De Octubre». The shared date formatters now
+  capitalise only the first letter where a date opens a line and keep Intl's
+  lowercase mid-sentence («Paga el abono antes del viernes, 9 de octubre»);
+  the CSS `text-transform: capitalize` that title-cased every word is gone.
+- **Language.** With no `locale` in the snippet, the widget speaks the
+  business's language (`GET /widget/config` → `locale` / `defaultLocale`), not
+  the visitor's browser: an English browser on a Chilean clinic's page reads
+  Spanish. The browser decides only when the business offers several
+  languages (`browserLocales`), and only among those. A `locale` in the
+  snippet always wins. Before the config answers, the widget assumes Spanish.
+
 ## 0.15.0
 
 **Days first, then the day's hours** (vitrina-app#3833). The clinic calendar is

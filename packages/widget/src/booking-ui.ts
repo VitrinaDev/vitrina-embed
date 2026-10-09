@@ -313,12 +313,41 @@ function weekdayHeaders(locale: WidgetLocale): string[] {
   return out;
 }
 
-function formatMonth(anchor: Date, locale: WidgetLocale): string {
+/**
+ * Where a formatted date sits in its line. `start` opens a heading or a line
+ * on its own ("Domingo, 11 de octubre"); `inline` continues a sentence
+ * ("Paga el abono antes del viernes, 9 de octubre").
+ */
+export type DatePosition = 'start' | 'inline';
+
+/**
+ * Sentence case for a date Intl produced. Intl already writes Spanish month
+ * and weekday names lowercase, which is right mid-sentence; at the start of a
+ * line only the FIRST letter goes up ("Octubre de 2026", never the
+ * title-cased "Octubre De 2026" that CSS `text-transform: capitalize` gives).
+ * English is unchanged: Intl already capitalises its names.
+ */
+export function dateCase(text: string, locale: WidgetLocale, at: DatePosition = 'start'): string {
+  if (at === 'inline' || text.length === 0) return text;
+  let first = text.charAt(0);
   try {
-    return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
-      month: 'long',
-      year: 'numeric',
-    }).format(anchor);
+    first = first.toLocaleUpperCase(INTL_LOCALE[locale]);
+  } catch {
+    first = first.toUpperCase();
+  }
+  return first + text.slice(1);
+}
+
+/** "Octubre de 2026": the month navigator's heading. */
+export function formatMonth(anchor: Date, locale: WidgetLocale): string {
+  try {
+    return dateCase(
+      new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+        month: 'long',
+        year: 'numeric',
+      }).format(anchor),
+      locale,
+    );
   } catch {
     return `${anchor.getFullYear()}-${pad2(anchor.getMonth() + 1)}`;
   }
@@ -333,17 +362,24 @@ function formatMonthName(anchor: Date, locale: WidgetLocale): string {
   }
 }
 
-/** "miércoles, 12 de agosto" from a 'YYYY-MM-DD' key. */
-export function formatDayLong(key: string, locale: WidgetLocale): string {
+/**
+ * "Miércoles, 12 de agosto" from a 'YYYY-MM-DD' key when it opens a line (the
+ * default), "miércoles, 12 de agosto" when `at` is `inline`.
+ */
+export function formatDayLong(key: string, locale: WidgetLocale, at: DatePosition = 'start'): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
   if (!m) return key;
   const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   try {
-    return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-    }).format(date);
+    return dateCase(
+      new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      }).format(date),
+      locale,
+      at,
+    );
   } catch {
     return key;
   }

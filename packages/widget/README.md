@@ -70,7 +70,7 @@ const widget = init({
   vehicleId: 'veh_123',            // optional: pre-attach the inquiry to a vehicle
   // Appearance is managed in Vitrina and fetched at load. Set any of these only
   // to OVERRIDE it for this site — an inline value always wins.
-  locale: 'es',                    // optional: 'es' | 'en' (auto-detected otherwise)
+  locale: 'es',                    // optional: 'es' | 'en' (the business's language otherwise)
   theme: { accent: '#2563eb', position: 'br' },
   logoUrl: 'https://…/logo.png',   // optional: your mark in the panel header
   font: 'dmSans',                  // optional: 'system' (default) or a named family
@@ -273,7 +273,7 @@ The rule, in full:
 | `apiBaseUrl`     | `string`                      | **yes**  | —                  | Vitrina API base, e.g. `https://<host>/api/v1`. Trailing slash is trimmed.  |
 | `vehicleId`      | `string`                      | no       | `null`             | Pre-attach the inquiry to a vehicle (the `id` from `/stock`).               |
 | `vehicleLabel`   | `string`                      | no       | `null`             | Display title for `vehicleId`, e.g. `Toyota Yaris 2021`. Shown on the booking summary only when BOTH are set. |
-| `locale`         | `'es' \| 'en'`                | no       | auto (`navigator`) | Widget chrome language. Falls back to `es` (Chilean market default).        |
+| `locale`         | `'es' \| 'en'`                | no       | the business's     | Widget chrome language. Unset = the business's language from Vitrina; the visitor's browser decides only when the business offers several languages. Falls back to `es`. |
 | `theme.accent`   | `string` (CSS color)          | no       | `#111827`          | Brand accent for the launcher + inbound bubbles. Sanitized; bad values fall back. |
 | `theme.position` | `'br' \| 'bl'`                | no       | `'br'`             | Launcher corner: bottom-right or bottom-left.                               |
 | `theme.logoUrl`  | `string` (http/https URL)     | no       | —                  | Older spelling of `logoUrl` below. Still honoured; the top-level one wins.  |

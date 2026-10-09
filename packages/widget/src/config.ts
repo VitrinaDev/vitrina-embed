@@ -315,7 +315,20 @@ export interface ResolvedConfig {
 export interface RemoteWidgetConfig {
   theme?: WidgetTheme;
   welcomeMessage?: string | null;
+  /**
+   * The ONE language to render in: the tenant's pinned widget language, or
+   * its business language when it offers only one. Absent when the business
+   * offers several (see {@link browserLocales}) or the API predates #3957.
+   */
   locale?: WidgetLocale;
+  /** The business's own language — the fallback for everything else. */
+  defaultLocale?: WidgetLocale;
+  /**
+   * The languages the business offers, default first, sent only when there
+   * are two or more and none is pinned. Only then does the visitor's browser
+   * language decide, and only among these.
+   */
+  browserLocales?: WidgetLocale[];
   /**
    * The tenant takes bookings from the widget (`webchat.booking_enabled`).
    *
@@ -490,14 +503,47 @@ export function resolveHelp(input: WidgetHelpConfig | undefined): ResolvedHelp {
   return { enabled: input?.enabled === true && faqs.length > 0, faqs };
 }
 
-/** navigator.language heuristic → 'en' only when it clearly starts with 'en'. */
-function detectLocale(): WidgetLocale {
+/**
+ * The visitor's browser language, but only one the business offers; anything
+ * else falls back to the business's own language.
+ */
+function browserLocaleWithin(offered: WidgetLocale[], fallback: WidgetLocale): WidgetLocale {
   try {
-    const lang = (globalThis.navigator?.language ?? '').toLowerCase();
-    return lang.startsWith('en') ? 'en' : 'es';
+    const nav = globalThis.navigator;
+    const tags = nav?.languages?.length ? nav.languages : [nav?.language ?? ''];
+    for (const tag of tags) {
+      const base = String(tag).toLowerCase().split(/[-_]/)[0];
+      const match = offered.find((l) => l === base);
+      if (match) return match;
+    }
   } catch {
-    return 'es';
+    /* fall through to the business's language */
   }
+  return fallback;
+}
+
+/**
+ * The widget's language (vitrina-app#3957). Highest first:
+ *   1. `locale` in the dealer's snippet — always wins;
+ *   2. the server's `locale` — a pinned widget language, or the business's
+ *      language when it offers only one;
+ *   3. the visitor's browser, ONLY when the business offers several
+ *      (`browserLocales`), and only among those;
+ *   4. the business's `defaultLocale`, else Spanish.
+ * The browser never decides on its own: an English browser on a Chilean
+ * clinic's page reads Spanish, the clinic's language.
+ */
+export function resolveLocale(
+  inline: WidgetLocale | undefined,
+  remote: RemoteWidgetConfig | null | undefined,
+): WidgetLocale {
+  if (inline) return inline;
+  if (remote?.locale) return remote.locale;
+  const fallback = remote?.defaultLocale ?? 'es';
+  if (remote?.browserLocales && remote.browserLocales.length > 1) {
+    return browserLocaleWithin(remote.browserLocales, fallback);
+  }
+  return fallback;
 }
 
 /**
@@ -552,8 +598,7 @@ export function resolveConfig(
     throw new Error(INIT_ERROR);
   }
   const apiBaseUrl = config.apiBaseUrl.replace(/\/+$/, '');
-  const locale: WidgetLocale =
-    config.locale ?? remote?.locale ?? detectLocale();
+  const locale = resolveLocale(config.locale, remote);
   const theme = { ...defined(remote?.theme), ...defined(config.theme) };
   const welcome = config.welcomeMessage ?? remote?.welcomeMessage ?? null;
   // The logo has TWO spellings: `theme.logoUrl` (where it has always lived) and

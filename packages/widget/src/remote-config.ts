@@ -23,6 +23,7 @@ import {
   normalizeTeam,
   type RemoteWidgetConfig,
 } from './config';
+import type { WidgetLocale } from './types';
 import { isWidgetFont } from './fonts';
 import { safeLocalStorage, storageKey } from './storage';
 
@@ -59,6 +60,18 @@ export function coerceRemoteConfig(input: unknown): RemoteWidgetConfig | null {
     out.welcomeMessage = raw.welcomeMessage;
   }
   if (raw.locale === 'es' || raw.locale === 'en') out.locale = raw.locale;
+  if (raw.defaultLocale === 'es' || raw.defaultLocale === 'en') {
+    out.defaultLocale = raw.defaultLocale;
+  }
+  // Only the languages this widget ships survive, deduped; fewer than two is
+  // no choice at all, so the browser never gets a say.
+  if (Array.isArray(raw.browserLocales)) {
+    const offered: WidgetLocale[] = [];
+    for (const l of raw.browserLocales) {
+      if ((l === 'es' || l === 'en') && !offered.includes(l)) offered.push(l);
+    }
+    if (offered.length > 1) out.browserLocales = offered;
+  }
   // The three brand fields. All three arrive as `T | null` rather than being
   // omitted, and null is "nothing to say" — a non-string is simply dropped, so
   // it can never clobber the dealer's inline value or the built-in default.
