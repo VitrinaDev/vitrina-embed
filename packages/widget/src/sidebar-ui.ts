@@ -115,7 +115,15 @@ export function portrait(
     wrap.appendChild(s);
   }
   if (opts.online) wrap.appendChild(el('span', 'vtr-pt-on'));
-  if (size < 40) wrap.appendChild(el('span', 'vtr-pt-ia', opts.aiTag));
+  if (size < 40) {
+    wrap.appendChild(el('span', 'vtr-pt-ia', opts.aiTag));
+    // Where there is no room for the written label, the portrait itself names
+    // the assistant and says it is an AI: «Tomás, asistente IA de Vitrina».
+    if (agent) {
+      wrap.setAttribute('role', 'img');
+      wrap.setAttribute('aria-label', `${agent.name}, ${agent.label.charAt(0).toLowerCase()}${agent.label.slice(1)}`);
+    }
+  }
   return wrap;
 }
 

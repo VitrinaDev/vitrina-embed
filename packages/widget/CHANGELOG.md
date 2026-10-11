@@ -1,5 +1,18 @@
 # @vitrina/widget
 
+## 0.17.1
+
+**Tomás portrait** (vitrina-embed#26). No API change: `agent.avatarUrl` already
+takes the portrait.
+
+- A portrait under 40 px (the side tab, peek card and launcher) is now exposed
+  as an image named «Tomás, asistente IA de Vitrina» (from `agent.name` and
+  `agent.label`), next to its visible «IA» badge.
+- `assets/tomas/` (repo root, not published to npm) holds the generated portrait
+  of a person who does not exist: 512 px master, 96/64/40 px AVIF, a 640 px
+  WhatsApp crop, and `PROVENANCE.md`. Hosts serve the 96 px AVIF as
+  `agent.avatarUrl`.
+
 ## 0.17.0
 
 **Sidebar mode** (vitrina-embed#25, D7/D15/D16). All additive: an install
