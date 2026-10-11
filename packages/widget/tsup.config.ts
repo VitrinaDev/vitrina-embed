@@ -54,4 +54,22 @@ export default defineConfig([
       return { js: '.global.js' };
     },
   },
+  {
+    // 4. Lazy boot stub -> dist/boot.global.js (package.json exports "./boot",
+    //    embed#25): queues API calls and injects widget.js on first
+    //    interaction, idle + 4 s, or the auto-open timer. Imports nothing.
+    entry: { boot: 'src/boot.ts' },
+    format: ['iife'],
+    platform: 'browser',
+    target: 'es2019',
+    dts: false,
+    minify: true,
+    sourcemap: false,
+    clean: false,
+    globalName: 'VitrinaChatBoot',
+    outDir: 'dist',
+    outExtension() {
+      return { js: '.global.js' };
+    },
+  },
 ]);

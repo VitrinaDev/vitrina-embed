@@ -14,7 +14,15 @@
 // the dealer inbox; replies simply start arriving over the same SSE→refetch path
 // once José enables AI later — no widget change needed.
 
+import {
+  browserAutoOpenEnv,
+  createAutoOpenScheduler,
+  type AutoOpenScheduler,
+} from './auto-open';
 import { createBookingController, type BookingController } from './booking-controller';
+import { createEmitter } from './events';
+import { conversationRef, whatsappHandoffUrl } from './handoff';
+import { resolveSidebar } from './sidebar-config';
 import { createTurnstileGate, type TurnstileGate } from './turnstile';
 import { createBookingStore } from './booking-store';
 import { createClinicBookingController, type ClinicBookingController } from './clinic-booking-controller';
@@ -46,6 +54,14 @@ import type { WidgetConfig, WidgetHomeAction, WidgetInstance } from './types';
 import { createWidgetUI } from './ui';
 
 export type {
+  WidgetAgentConfig,
+  WidgetAutoOpenConfig,
+  WidgetChipConfig,
+  WidgetEventMap,
+  WidgetEventName,
+  WidgetLayout,
+  WidgetPreset,
+  WidgetWhatsAppConfig,
   WidgetConfig,
   WidgetInstance,
   WidgetTheme,
@@ -100,6 +116,17 @@ export function init(config: WidgetConfig): WidgetInstance {
 
   // Throws the same message as the original stub on a missing publicKey/apiBaseUrl.
   let resolved = resolveConfig(config, cached);
+  // Sidebar mode, auto-open, chips, WhatsApp (embed#25). Same layering as the
+  // rest: inline over the server's answer, which arrives below.
+  let sidebar = resolveSidebar(config, cached);
+  const emitter = createEmitter();
+  /** Demo mode (D60): messages carry `mode: 'demo'` while it is on. */
+  let demoMode = false;
+  /** The web conversation's external id, once bootstrapped — the WhatsApp ref. */
+  let conversationExternalId: string | null = null;
+  /** Who opened the panel that is open now: a dismiss of an auto-open is reported. */
+  let openedBy: 'api' | 'launcher' | 'auto' | 'peek' | 'chip' | null = null;
+  let autoOpen: AutoOpenScheduler | null = null;
   const t = makeT(resolved.locale);
   const tokens = createTokenStore(resolved.publicKey);
   const transport = new VitrinaTransport(
@@ -439,8 +466,8 @@ export function init(config: WidgetConfig): WidgetInstance {
     team: resolved.team,
     hidden: awaitingFirstConfig,
     callbacks: {
-      onRequestOpen: () => instanceOpen(),
-      onRequestClose: () => instanceClose(),
+      onRequestOpen: () => instanceOpen('launcher'),
+      onRequestClose: () => instanceClose('visitor'),
       onSend: (text, honeypot) => {
         void sendFlow(text, honeypot);
       },
@@ -526,6 +553,8 @@ export function init(config: WidgetConfig): WidgetInstance {
         if (remote) {
           cache?.write(remote);
           resolved = resolveConfig(config, remote);
+          sidebar = resolveSidebar(config, remote);
+          armAutoOpen();
           // A controller built from the cached config gets the live gate now.
           if (booking) booking.setTurnstile(gateForResolvedKey());
           if (clinicBooking) clinicBooking.setTurnstile(gateForResolvedKey());
@@ -646,6 +675,9 @@ export function init(config: WidgetConfig): WidgetInstance {
         return;
       }
       bootstrapped = true;
+      if (typeof boot.conversationExternalId === 'string' && boot.conversationExternalId !== '') {
+        conversationExternalId = boot.conversationExternalId;
+      }
       setConnection('ok');
       await refreshHistory();
       if (destroyed) return;
@@ -692,6 +724,8 @@ export function init(config: WidgetConfig): WidgetInstance {
       honeypot,
       clientMessageId,
       vehicleId: vehicleId ?? undefined,
+      pageContext: sidebar.pageContext,
+      ...(demoMode ? { mode: 'demo' as const } : {}),
       // Present only for a message a form composed. A composer message carries
       // no identity, and inventing one would put an empty name on every lead.
       ...(identities.get(clientMessageId) ?? {}),
@@ -811,8 +845,16 @@ export function init(config: WidgetConfig): WidgetInstance {
     ui.renderMessages(messages, notices);
   }
 
-  function instanceOpen(): void {
+  function instanceOpen(source: 'api' | 'launcher' | 'auto' | 'peek' | 'chip' = 'api'): void {
     if (destroyed) return;
+    // Any open the visitor (or the host, on the visitor's behalf) asked for
+    // spends auto-open for the session: it must never pop up again over a
+    // conversation they already started.
+    if (source !== 'auto') autoOpen?.noteOpened();
+    if (!panelOpen) {
+      openedBy = source;
+      emitter.emit('open', { source });
+    }
     panelOpen = true;
     // Opening IS reading. No timers, no scroll tracking, no read receipts.
     unread = 0;
@@ -821,8 +863,17 @@ export function init(config: WidgetConfig): WidgetInstance {
     void ensureSession();
   }
 
-  function instanceClose(): void {
+  function instanceClose(source: 'api' | 'visitor' = 'api'): void {
     if (destroyed) return;
+    if (panelOpen) {
+      emitter.emit('close', { source });
+      if (source === 'visitor') {
+        // ANY dismiss turns auto-open off for the session (D16).
+        autoOpen?.noteDismissed();
+        if (openedBy === 'auto') emitter.emit('dismiss', { surface: 'panel' });
+      }
+    }
+    openedBy = null;
     panelOpen = false;
     // Closing the panel withdraws a booking — or a quick-action form — that has
     // not opened yet. The intent belongs to the moment it was expressed, not to
@@ -889,9 +940,66 @@ export function init(config: WidgetConfig): WidgetInstance {
     return false;
   }
 
+  /**
+   * Arm auto-open once the resolved config says it is on — at init from inline
+   * or cached config, or later when the live answer turns it on. The delay
+   * counts from page load, so arming late does not push the open later.
+   */
+  function armAutoOpen(): void {
+    if (destroyed || autoOpen || !sidebar.autoOpen.enabled) return;
+    autoOpen = createAutoOpenScheduler({
+      publicKey: resolved.publicKey,
+      config: sidebar.autoOpen,
+      env: browserAutoOpenEnv(() => document.querySelector('[data-vitrina-widget]')),
+      onFire: (mode, device) => {
+        if (destroyed) return;
+        emitter.emit('autoopen', { mode, device, variant: sidebar.autoOpen.variant });
+        // The teaser (peek card) is drawn by the sidebar UI; the panel is the
+        // ordinary open, attributed to auto-open.
+        if (mode === 'panel') instanceOpen('auto');
+      },
+    });
+    autoOpen.start();
+  }
+  armAutoOpen();
+
+  async function instanceSend(text: string): Promise<boolean> {
+    if (destroyed || typeof text !== 'string') return false;
+    const message = text.trim();
+    if (message === '' || message.length > 5000) return false;
+    instanceOpen('api');
+    const clientMessageId = await beginSend(message);
+    if (clientMessageId === null) return false;
+    emitter.emit('message', { clientMessageId });
+    void deliver(clientMessageId, message, '');
+    return true;
+  }
+
   return {
-    open: instanceOpen,
-    close: instanceClose,
+    open: () => instanceOpen('api'),
+    close: () => instanceClose('api'),
+    prefill(text: string): void {
+      if (destroyed || typeof text !== 'string') return;
+      instanceOpen('api');
+      ui.focusComposer(text.slice(0, 5000));
+    },
+    send: instanceSend,
+    enterDemo(): void {
+      if (destroyed || demoMode) return;
+      demoMode = true;
+      emitter.emit('demo_enter', { entry: 'api' });
+    },
+    exitDemo(): void {
+      if (destroyed || !demoMode) return;
+      demoMode = false;
+      emitter.emit('demo_exit', { reason: 'api' });
+    },
+    whatsappUrl(): string | null {
+      if (!sidebar.whatsapp) return null;
+      const ref = conversationExternalId ? conversationRef(conversationExternalId) : null;
+      return whatsappHandoffUrl(sidebar.whatsapp.number, sidebar.whatsapp.text, ref);
+    },
+    on: (event, handler) => emitter.on(event, handler),
     openBooking: instanceOpenBooking,
     openHomeAction: instanceOpenHomeAction,
     setVehicle(id: string | null, label?: string | null): void {
@@ -926,6 +1034,9 @@ export function init(config: WidgetConfig): WidgetInstance {
         homeActions = null;
       }
       identities.clear();
+      autoOpen?.cancel();
+      autoOpen = null;
+      emitter.clear();
       if (typingTimer) {
         clearTimeout(typingTimer);
         typingTimer = null;

@@ -13,6 +13,10 @@ declare global {
   interface Window {
     vitrinaChat?: WidgetConfig;
     vitrinaChatInstance?: WidgetInstance;
+    /** Calls queued by the lazy boot stub (./boot) before this bundle loaded. */
+    vitrinaChatQueue?: [string, unknown[]][];
+    /** The public handle: the boot stub's queue proxy, then the live instance. */
+    vitrinaChatApi?: unknown;
   }
 }
 
@@ -31,11 +35,34 @@ declare global {
   }
 
   try {
-    window.vitrinaChatInstance = init(config);
+    const instance = init(config);
+    window.vitrinaChatInstance = instance;
+    window.vitrinaChatApi = instance;
+    drainQueue(instance);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[vitrina-widget] init() failed:', err);
   }
 })();
+
+/**
+ * Replay what the host asked of the boot stub, in order. One bad call (an
+ * unknown method, a throwing handler) is skipped, never fatal.
+ */
+function drainQueue(instance: WidgetInstance): void {
+  const queue = window.vitrinaChatQueue;
+  if (!Array.isArray(queue)) return;
+  const calls = queue.splice(0, queue.length);
+  for (const call of calls) {
+    try {
+      const [method, args] = call;
+      const fn = (instance as unknown as Record<string, unknown>)[method];
+      if (typeof fn === 'function') (fn as (...a: unknown[]) => unknown).apply(instance, args);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[vitrina-widget] queued call failed:', err);
+    }
+  }
+}
 
 export {};
