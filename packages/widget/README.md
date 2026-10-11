@@ -546,7 +546,7 @@ You do not need either directive when `font` is `system`.
   open, then comes back.
 - **Disclosure:** the portrait is always shown with `agent.label` beside it;
   below 40 px (side tab, launcher, peek card) it carries an «IA» badge. With no
-  `agent.avatarUrl` a neutral silhouette is drawn.
+  `agent.avatarUrl` a neutral silhouette is drawn. Under 40 px the portrait is exposed as an image named `<name>, <label in lower case>` (Tomás: «Tomás, asistente IA de Vitrina»).
 - **`anchor: 'bottom-bar'`:** a page with its own sticky bar gives the widget a
   slot (`launcherSlot`). The launcher renders there on phones, and the peek card
   sits above the bar (mark the bar `data-vtr-bar`).
