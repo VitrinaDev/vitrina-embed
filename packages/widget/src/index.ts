@@ -168,6 +168,9 @@ export function init(config: WidgetConfig): WidgetInstance {
   let bootstrapping: Promise<void> | null = null;
   let closeStream: (() => void) | null = null;
   let panelOpen = false;
+  // hide()/show(): what was on screen when the host hid the widget.
+  let hiddenByHost = false;
+  let restoreOnShow: 'panel' | 'teaser' | 'launcher' = 'launcher';
   let unread = 0;
   let typingTimer: ReturnType<typeof setTimeout> | null = null;
   // Live-only transcript notices ("an advisor joined"). Never persisted, never
@@ -948,8 +951,41 @@ export function init(config: WidgetConfig): WidgetInstance {
     ui.renderMessages(messages, notices);
   }
 
+  function instanceHide(): void {
+    if (destroyed || hiddenByHost) return;
+    hiddenByHost = true;
+    restoreOnShow = panelOpen ? 'panel' : ui.isTeaserShown() ? 'teaser' : 'launcher';
+    if (panelOpen) instanceClose('api');
+    ui.hideTeaser();
+    ui.setHostHidden(true);
+    emitter.emit('hide', {});
+  }
+
+  function instanceShow(): void {
+    if (destroyed || !hiddenByHost) return;
+    hiddenByHost = false;
+    ui.setHostHidden(false);
+    if (restoreOnShow === 'panel') {
+      // Reopen without spending auto-open or stealing the keyboard.
+      if (!panelOpen) {
+        openedBy = 'api';
+        panelOpen = true;
+        emitter.emit('open', { source: 'api' });
+        ui.openPanel(false);
+      }
+    } else if (restoreOnShow === 'teaser') {
+      ui.showTeaser();
+    }
+    emitter.emit('show', { restored: restoreOnShow });
+  }
+
   function instanceOpen(source: 'api' | 'launcher' | 'auto' | 'peek' | 'chip' = 'api'): void {
     if (destroyed) return;
+    if (hiddenByHost) {
+      // Nothing may appear while the host has the widget hidden; show() opens it.
+      restoreOnShow = 'panel';
+      return;
+    }
     // Any open the visitor (or the host, on the visitor's behalf) asked for
     // spends auto-open for the session: it must never pop up again over a
     // conversation they already started.
@@ -1053,7 +1089,11 @@ export function init(config: WidgetConfig): WidgetInstance {
     autoOpen = createAutoOpenScheduler({
       publicKey: resolved.publicKey,
       config: sidebar.autoOpen,
-      env: browserAutoOpenEnv(() => document.querySelector('[data-vitrina-widget]')),
+      env: browserAutoOpenEnv(
+        () => document.querySelector('[data-vitrina-widget]'),
+        undefined,
+        () => hiddenByHost,
+      ),
       onFire: (mode, device) => {
         if (destroyed) return;
         emitter.emit('autoopen', { mode, device, variant: sidebar.autoOpen.variant });
@@ -1264,6 +1304,8 @@ export function init(config: WidgetConfig): WidgetInstance {
     exitDemo(): void {
       setDemo(false, 'api');
     },
+    hide: instanceHide,
+    show: instanceShow,
     whatsappUrl: currentWhatsappUrl,
     on: (event, handler) => emitter.on(event, handler),
     openBooking: instanceOpenBooking,

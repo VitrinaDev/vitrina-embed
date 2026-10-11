@@ -21,7 +21,7 @@ import type { ResolvedAutoOpen } from './sidebar-config';
 
 export type AutoOpenMode = 'panel' | 'teaser';
 export type AutoOpenDevice = 'desktop' | 'mobile';
-export type BusyReason = 'input' | 'video' | 'dialog';
+export type BusyReason = 'input' | 'video' | 'dialog' | 'hidden';
 
 export interface SessionStore {
   get(key: string): string | null;
@@ -213,6 +213,7 @@ export function detectBusy(doc: Document, widgetHost?: Element | null): BusyReas
 export function browserAutoOpenEnv(
   widgetHost: () => Element | null,
   mobileQuery = '(max-width: 768px)',
+  isHidden: () => boolean = () => false,
 ): AutoOpenEnv {
   return {
     now: () => (typeof performance !== 'undefined' ? performance.now() : 0),
@@ -232,7 +233,8 @@ export function browserAutoOpenEnv(
         return '/';
       }
     },
-    busy: () => detectBusy(document, widgetHost()),
+    // Hidden by the host (hide()) counts as busy: the timer waits, like for a dialog.
+    busy: () => (isHidden() ? 'hidden' : detectBusy(document, widgetHost())),
     session: browserSessionStore(),
   };
 }

@@ -197,6 +197,8 @@ export interface WidgetUi {
   /** Show a widget mounted with `hidden`. Idempotent, and safe to call when it
    *  was never hidden in the first place. */
   reveal(): void;
+  /** Host-driven hide/show of the whole widget (hide()/show() in the public API). */
+  setHostHidden(hidden: boolean): void;
 
   // --- Booking (S15-21) -----------------------------------------------------
   // Every one of these is inert until setBookingEnabled(true). Nothing is even
@@ -1761,6 +1763,12 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     },
     reveal(): void {
       root.style.removeProperty('visibility');
+    },
+    setHostHidden(hidden: boolean): void {
+      // Same !important inline pin the host element has always carried, so page CSS
+      // cannot fight it; only the widget flips it.
+      host.style.setProperty('display', hidden ? 'none' : 'block', 'important');
+      chrome?.setSlotHidden(hidden);
     },
     setTyping(active: boolean): void {
       typingEl.hidden = !active;

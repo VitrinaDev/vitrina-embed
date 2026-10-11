@@ -591,11 +591,11 @@ pageview, never by re-mounting a widget the visitor may be typing into.
 ### The JavaScript API and events
 
 `init()` (or `window.vitrinaChatApi` with the loader) returns:
-`open()`, `close()`, `prefill(text)`, `send(text)`, `enterDemo()`, `exitDemo()`,
+`open()`, `close()`, `hide()`, `show()`, `prefill(text)`, `send(text)`, `enterDemo()`, `exitDemo()`,
 `openBooking()`, `openHomeAction(kind)`, `setVehicle(id, label)`,
 `whatsappUrl()`, `on(event, handler)` (returns the unsubscribe) and `destroy()`.
 
-Events: `open {source}`, `close {source}`, `autoopen {mode, device, variant}`,
+Events: `open {source}`, `close {source}`, `hide {}`, `show {restored}`, `autoopen {mode, device, variant}`,
 `dismiss {surface}`, `chip {index, label, action}`, `message {clientMessageId}`,
 `handoff_whatsapp {ref}`, `demo_enter {entry, world}`, `demo_turn {turns}`, `demo_exit {reason, turns}`, and
 `cta {source}`. The pinned CTA (and a `booking` chip) opens the in-widget agenda

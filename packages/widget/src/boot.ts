@@ -42,6 +42,8 @@ export const API_METHODS = [
   'send',
   'enterDemo',
   'exitDemo',
+  'hide',
+  'show',
   'openBooking',
   'openHomeAction',
   'setVehicle',
