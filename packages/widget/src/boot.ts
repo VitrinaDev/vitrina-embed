@@ -18,6 +18,10 @@
 //   <script>window.vitrinaChat = { publicKey, apiBaseUrl, layout: 'sidebar', … }</script>
 //   <script src=".../boot.global.js" data-src="https://api.vitrinadev.com/widget.js" async></script>
 //
+// With `async`, code that runs before this file may not find the stub yet; it
+// queues directly instead, and the stub keeps what is already there:
+//   (window.vitrinaChatQueue = window.vitrinaChatQueue || []).push(['on', ['cta', openSheet]]);
+//
 // Kept dependency-free on purpose: importing anything from the widget would
 // pull the widget into this file and defeat the point.
 
@@ -77,7 +81,8 @@ export const API_METHODS = [
   for (const m of API_METHODS) {
     api[m] = (...args: unknown[]) => {
       queue.push([m, args]);
-      load();
+      // Subscribing is not a reason to fetch the widget; every other call is.
+      if (m !== 'on') load();
       // `on` returns an unsubscribe; until the real widget is up, removing the
       // queued subscription is the honest equivalent.
       if (m === 'on') {

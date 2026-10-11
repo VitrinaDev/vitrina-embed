@@ -28,6 +28,8 @@ export interface RemoteSidebarConfig {
   autoOpen?: WidgetAutoOpenConfig;
   chips?: WidgetChipConfig[];
   whatsapp?: WidgetWhatsAppConfig;
+  cta?: { label: string; target?: 'auto' | 'host' };
+  demoWorld?: string;
 }
 
 /** The inline slice of `WidgetConfig` this module reads. */
@@ -74,6 +76,11 @@ export interface ResolvedSidebar {
   chips: ResolvedChip[];
   whatsapp: ResolvedWhatsApp | null;
   pageContext: Record<string, string>;
+  /** Pinned CTA label, or null for none. */
+  ctaLabel: string | null;
+  /** `host`: the CTA and booking chips always emit `cta`, never open the agenda. */
+  ctaTarget: 'auto' | 'host';
+  demoWorld: string | null;
 }
 
 export const DEFAULT_AUTO_OPEN_DELAY_S = 10;
@@ -227,6 +234,9 @@ export function resolveSidebar(
     chips: resolveChips(inline?.chips ?? remote?.chips),
     whatsapp: resolveWhatsApp(whatsapp as WidgetWhatsAppConfig),
     pageContext: resolvePageContext(inline?.pageContext),
+    ctaLabel: text(inline?.cta?.label, 40) ?? text(remote?.cta?.label, 40),
+    ctaTarget: (inline?.cta?.target ?? remote?.cta?.target) === 'host' ? 'host' : 'auto',
+    demoWorld: text(inline?.demoWorld, 40) ?? text(remote?.demoWorld, 40),
   };
 }
 
@@ -292,5 +302,10 @@ export function coerceRemoteSidebar(raw: Record<string, unknown>): RemoteSidebar
       out.whatsapp = t ? { number, text: t } : { number };
     }
   }
+  const cta = raw.cta as Record<string, unknown> | null | undefined;
+  const ctaLabel = cta && typeof cta === 'object' ? text(cta.label, 40) : null;
+  if (ctaLabel) out.cta = cta?.target === 'host' ? { label: ctaLabel, target: 'host' } : { label: ctaLabel };
+  const world = text(raw.demoWorld, 40);
+  if (world) out.demoWorld = world;
   return out;
 }

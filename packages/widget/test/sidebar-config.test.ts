@@ -21,6 +21,8 @@ describe('resolveSidebar defaults (backwards compatible)', () => {
     expect(s.chips).toEqual([]);
     expect(s.whatsapp).toBeNull();
     expect(s.pageContext).toEqual({});
+    expect(s.ctaLabel).toBeNull();
+    expect(s.ctaTarget).toBe('auto');
   });
 
   it('unknown layout / preset values collapse to the defaults', () => {

@@ -33,6 +33,28 @@ export interface WidgetStrings {
   /** Link on a vehicle card, when the listing has a URL. */
   viewVehicle: string;
 
+  // --- Sidebar mode (embed#25). `{name}` / `{world}` are filled by the UI. ---
+  sbAskAgent: string;
+  sbChatWith: string;
+  sbPreferWa: string;
+  sbContinueWa: string;
+  sbWaAria: string;
+  sbAiDisclaimer: string;
+  sbMinimize: string;
+  sbDismissTeaser: string;
+  sbAskPlaceholder: string;
+  sbAiTag: string;
+  sbDemoTag: string;
+  sbDemoPill: string;
+  sbDemoLabel: string;
+  sbDemoLabelNamed: string;
+  sbDemoFictional: string;
+  sbDemoExit: string;
+  sbDemoPlaceholder: string;
+  sbDemoDisclaimer: string;
+  sbDemoOn: string;
+  sbDemoOff: string;
+
   // --- Home / Help tabs (0.8.0) ---------------------------------------------
   // Only ever painted for a tenant who turned the tabs on. Every default here
   // is overridable per tenant except the tab labels themselves, which name the
@@ -326,6 +348,26 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     typing: 'Escribiendo una respuesta…',
     advisorJoined: 'Un asesor se unió a la conversación',
     viewVehicle: 'Ver el vehículo',
+    sbAskAgent: 'Pregúntale a {name}',
+    sbChatWith: 'Chatear con {name}',
+    sbPreferWa: '¿Prefieres WhatsApp?',
+    sbContinueWa: 'Sigue con {name} ahí',
+    sbWaAria: 'Seguir en WhatsApp',
+    sbAiDisclaimer: '{name} es una IA y puede equivocarse',
+    sbMinimize: 'Minimizar',
+    sbDismissTeaser: 'Cerrar mensaje',
+    sbAskPlaceholder: 'Escribe tu pregunta…',
+    sbAiTag: 'IA',
+    sbDemoTag: 'Demo',
+    sbDemoPill: 'Modo demo',
+    sbDemoLabel: 'Asistente de un negocio ficticio',
+    sbDemoLabelNamed: 'Asistente de {world}',
+    sbDemoFictional: 'Negocio ficticio, datos de ejemplo',
+    sbDemoExit: 'Salir del modo demo',
+    sbDemoPlaceholder: 'Escribe como cliente…',
+    sbDemoDisclaimer: 'Demo con datos ficticios: nada se agenda de verdad',
+    sbDemoOn: 'Modo demo activado',
+    sbDemoOff: 'Modo demo desactivado',
 
     homeTitle: '¡Hola! 👋',
     homeSubtitle: '¿Cómo te podemos ayudar?',
@@ -545,6 +587,26 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     typing: 'Typing a reply…',
     advisorJoined: 'An advisor joined the conversation',
     viewVehicle: 'View the vehicle',
+    sbAskAgent: 'Ask {name}',
+    sbChatWith: 'Chat with {name}',
+    sbPreferWa: 'Prefer WhatsApp?',
+    sbContinueWa: 'Continue with {name} there',
+    sbWaAria: 'Continue on WhatsApp',
+    sbAiDisclaimer: '{name} is an AI and can make mistakes',
+    sbMinimize: 'Minimize',
+    sbDismissTeaser: 'Dismiss message',
+    sbAskPlaceholder: 'Type your question…',
+    sbAiTag: 'AI',
+    sbDemoTag: 'Demo',
+    sbDemoPill: 'Demo mode',
+    sbDemoLabel: 'Assistant of a fictional business',
+    sbDemoLabelNamed: 'Assistant of {world}',
+    sbDemoFictional: 'Fictional business, sample data',
+    sbDemoExit: 'Leave demo mode',
+    sbDemoPlaceholder: 'Write as a customer…',
+    sbDemoDisclaimer: 'Demo with fictional data: nothing is really booked',
+    sbDemoOn: 'Demo mode on',
+    sbDemoOff: 'Demo mode off',
 
     homeTitle: 'Hi there 👋',
     homeSubtitle: 'How can we help?',

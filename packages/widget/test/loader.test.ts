@@ -53,3 +53,20 @@ describe('loader (<script> entry)', () => {
     expect((window as { vitrinaChatInstance?: unknown }).vitrinaChatInstance).toBeUndefined();
   });
 });
+
+describe('loader drains the boot stub queue (embed#25)', () => {
+  it('replays queued calls in order and swaps in the live instance', async () => {
+    const seen: string[] = [];
+    (window as { vitrinaChat?: unknown }).vitrinaChat = { publicKey: PK, apiBaseUrl: BASE, remoteConfig: false };
+    (window as { vitrinaChatQueue?: unknown }).vitrinaChatQueue = [
+      ['on', ['open', (p: { source: string }) => seen.push(`open:${p.source}`)]],
+      ['nope', []],
+      ['open', []],
+    ];
+    await import('../src/loader');
+    const w = window as { vitrinaChatApi?: unknown; vitrinaChatInstance?: unknown; vitrinaChatQueue?: unknown[] };
+    expect(w.vitrinaChatApi).toBe(w.vitrinaChatInstance);
+    expect(w.vitrinaChatQueue).toEqual([]);
+    expect(seen).toEqual(['open:api']);
+  });
+});

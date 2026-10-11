@@ -286,6 +286,18 @@ The rule, in full:
 | `help`           | `{ enabled?, faqs? }`         | no       | off                | The Help tab (FAQ accordion). Off unless `enabled` is `true` **and** at least one usable question survives. |
 | `team`           | `Array<{ name, avatarUrl? }>` | no       | `[]`               | Faces for the Home hero. Up to 5 accepted, first 3 drawn. Non-http(s) `avatarUrl` ⇒ initials. |
 | `remoteConfig`   | `boolean`                     | no       | `true`             | Fetch appearance from Vitrina at load. `false` = fully self-contained.      |
+| `layout`         | `'bubble' \| 'sidebar' \| 'inline'` | no | `'bubble'`      | Placement. See **Sidebar mode** below. |
+| `preset`         | `'default' \| 'cream'`        | no       | `'default'`        | Surface palette. `cream` = the Vitrina landing tokens, DM Sans, ember `#AD4E00`. |
+| `agent`          | `{ name, label, status?, avatarUrl? }` | no | none          | The named assistant. Needs BOTH `name` and `label` (the AI disclosure) or it is ignored. |
+| `chips`          | `Array<{ label, message?, action? }>` | no | `[]`           | Up to 4 suggested questions. `action`: `message` (default), `demo`, `booking`. |
+| `autoOpen`       | `WidgetAutoOpenConfig`        | no       | off                | Proactive open. See **Auto-open** below. |
+| `whatsapp`       | `{ number, text? }`           | no       | none               | One-tap continuation on WhatsApp with the conversation's reference code. |
+| `cta`            | `{ label }`                   | no       | none               | Full-width pinned button above the composer (sidebar/inline). |
+| `demoWorld`      | `string`                      | no       | none               | Name of the fictional business demo mode plays, e.g. `Automotora Demo`. |
+| `pageContext`    | `Record<string, string>`      | no       | `{}`               | Page facts sent with each message (`page_context`), ≤ 8 snake_case keys. |
+| `anchor`         | `'auto' \| 'bottom-bar'`      | no       | `'auto'`           | `bottom-bar`: on phones the launcher renders inside `launcherSlot`. |
+| `launcherSlot`   | `HTMLElement \| string`       | no       | —                  | Element or selector for the bottom-bar launcher. |
+| `container`      | `HTMLElement \| string`       | no       | —                  | Element or selector for `layout: 'inline'`. Missing ⇒ sidebar. |
 
 ### Booking ("Agendar visita", or whatever you call it)
 
@@ -521,6 +533,100 @@ font-src   https://fonts.gstatic.com;
 ```
 
 You do not need either directive when `font` is `system`.
+
+### Sidebar mode
+
+`layout: 'sidebar'` turns the floating bubble into a right-docked assistant:
+
+- **Desktop:** a 400 px panel that overlays the page (it never pushes the
+  layout) and collapses to a side tab with the assistant's portrait.
+- **Phones (≤ 768 px):** the panel only goes full screen when the visitor taps.
+  Auto-open shows a **peek card** instead (greeting in two lines, the chips, a ×),
+  and the card hides while any field on the page has focus or the keyboard is
+  open, then comes back.
+- **Disclosure:** the portrait is always shown with `agent.label` beside it;
+  below 40 px (side tab, launcher, peek card) it carries an «IA» badge. With no
+  `agent.avatarUrl` a neutral silhouette is drawn.
+- **`anchor: 'bottom-bar'`:** a page with its own sticky bar gives the widget a
+  slot (`launcherSlot`). The launcher renders there on phones, and the peek card
+  sits above the bar (mark the bar `data-vtr-bar`).
+- **`layout: 'inline'`:** the same chat inside `container`, already open.
+
+```html
+<script>
+  window.vitrinaChat = {
+    publicKey: 'pk_live_xxx',
+    apiBaseUrl: 'https://api.vitrinadev.com/api/v1',
+    layout: 'sidebar', preset: 'cream', anchor: 'bottom-bar', launcherSlot: '#tomas-slot',
+    agent: { name: 'Tomás', label: 'Asistente IA de Vitrina', status: 'Responde al instante' },
+    welcomeMessage: '¡Hola! Soy Tomás, el asistente IA de Vitrina. ¿En qué te ayudo?',
+    chips: [{ label: '¿Cuánto cuesta?' }, { label: 'Pruébalo', action: 'demo' }],
+    whatsapp: { number: '+56 9 XXXX XXXX', text: 'Hola Tomás, sigo la conversación de la web (ref {ref})' },
+    cta: { label: 'Agendar demo' },
+    autoOpen: { enabled: true, delaySeconds: 10, excludePaths: ['/agendar/*'] },
+  };
+</script>
+```
+
+Layout and chrome are decided once, at load, from the inline config plus the
+last cached server answer. A server-side change to them applies from the next
+pageview, never by re-mounting a widget the visitor may be typing into.
+
+### Auto-open
+
+`autoOpen: { enabled, delaySeconds = 10, mobileDelaySeconds, desktop = 'panel' | 'teaser' | 'off', mobile = 'teaser' | 'off', excludePaths, variant }`
+
+- Counts from page load, so a lazily loaded widget opens on time.
+- Once per browser session: never again after it fired, after the visitor
+  opened the widget themselves, or after any dismiss.
+- Never over a busy page. When it is due while a field is focused, a video with
+  sound plays, or a `<dialog open>` / `[aria-modal="true"]` / `[data-vtr-busy]`
+  element is on the page (mark your booking sheet), it waits for the page to be
+  quiet and gives up after 60 s.
+- A phone never gets the full panel on its own; `mobile: 'panel'` is read as
+  `teaser`.
+- `variant` is echoed on the `autoopen` event, for experiments.
+
+### The JavaScript API and events
+
+`init()` (or `window.vitrinaChatApi` with the loader) returns:
+`open()`, `close()`, `prefill(text)`, `send(text)`, `enterDemo()`, `exitDemo()`,
+`openBooking()`, `openHomeAction(kind)`, `setVehicle(id, label)`,
+`whatsappUrl()`, `on(event, handler)` (returns the unsubscribe) and `destroy()`.
+
+Events: `open {source}`, `close {source}`, `autoopen {mode, device, variant}`,
+`dismiss {surface}`, `chip {index, label, action}`, `message {clientMessageId}`,
+`handoff_whatsapp {ref}`, `demo_enter {entry}`, `demo_exit {reason}`, and
+`cta {source}`. The pinned CTA (and a `booking` chip) opens the in-widget agenda
+when the tenant has it on; otherwise it only emits `cta`, and the host opens
+its own booking sheet.
+
+Demo mode (D60) frames the panel («Modo demo», the `demoWorld` mark, tinted
+replies, «Salir del modo demo») and sends `mode: 'demo'` with each message.
+
+### WhatsApp continuation
+
+The link is a plain `wa.me` anchor (no `window.open`, so in-app browsers allow
+it): `https://wa.me/<number>?text=<text with (ref XXXXXX)>`. The reference is
+derived from the web conversation's external id: FNV-1a 32-bit over its UTF-8
+bytes, top 30 bits as 6 Crockford base32 characters (`0-9A-HJKMNP-TV-Z`).
+vitrina-app recomputes it to join the WhatsApp thread to the web one. Before
+the first message there is no conversation, so the text carries no ref.
+
+### Loading it lazily (`boot.global.js`)
+
+A page that guards its LCP loads the 1 KB boot stub instead of the widget:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@vitrina/widget@0.17.0/dist/boot.global.js"
+        data-src="https://api.vitrinadev.com/widget.js" async></script>
+```
+
+It injects `widget.js` on the first interaction, at idle + 4 s, shortly before
+the auto-open timer, or on the first API call. Until then
+`window.vitrinaChatApi` queues calls. Code that runs before the stub can queue
+directly: `(window.vitrinaChatQueue ||= []).push(['on', ['cta', openSheet]])`.
+`pnpm --filter @vitrina/widget size` prints the gzip report against budgets.
 
 ### Where appearance comes from
 

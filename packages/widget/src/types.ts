@@ -287,6 +287,16 @@ export interface WidgetConfig {
   /** WhatsApp continuation. */
   whatsapp?: WidgetWhatsAppConfig;
   /**
+   * A full-width pinned button above the composer ("Agendar demo"). With the
+   * tenant's in-widget booking on it opens the agenda in the panel; otherwise it
+   * emits the `cta` event so the host opens its own booking sheet.
+   * `target: 'host'` always hands it to the host, even with the agenda on (the
+   * Vitrina landing books demos in its own sheet).
+   */
+  cta?: { label: string; target?: 'auto' | 'host' };
+  /** Name of the fictional business demo mode plays (e.g. "Automotora Demo"). */
+  demoWorld?: string;
+  /**
    * Page facts the assistant may use for its first answer (spec v3 §5.2), e.g.
    * `{ page_id: 'automotoras', vertical: 'automotriz' }`. Strings only, at most
    * 8 keys; travels with each message.
@@ -378,5 +388,7 @@ export interface WidgetEventMap {
   handoff_whatsapp: { ref: string | null };
   demo_enter: { entry: 'api' | 'chip' };
   demo_exit: { reason: 'api' | 'visitor' };
+  /** The pinned CTA (or a booking chip) was tapped and the host should act. */
+  cta: { source: 'pinned' | 'chip' };
 }
 export type WidgetEventName = keyof WidgetEventMap;

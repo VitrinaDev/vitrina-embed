@@ -12,8 +12,8 @@ const dist = fileURLToPath(new URL('../dist/', import.meta.url));
 const KB = 1024;
 const budgets = {
   'boot.global.js': 2 * KB,
-  'loader.global.js': 60 * KB,
-  'tag.global.js': 62 * KB,
+  'loader.global.js': 64 * KB,
+  'tag.global.js': 66 * KB,
 };
 let failed = false;
 for (const [file, budget] of Object.entries(budgets)) {

@@ -1,5 +1,24 @@
 # @vitrina/widget
 
+## 0.17.0
+
+**Sidebar mode** (vitrina-embed#25, D7/D15/D16). All additive: an install
+that says nothing keeps the bubble widget, node for node.
+
+- `layout: 'sidebar'`: a 400 px right-docked panel over the page that collapses
+  to a side tab; on phones a peek card that opens full screen only on tap and
+  hides while a page field is focused. `layout: 'inline'` renders the same chat
+  inside a container.
+- `preset: 'cream'` (landing tokens, DM Sans, ember `#AD4E00`), a named
+  `agent` with its AI disclosure label and «IA» badge, suggested-question
+  `chips`, a pinned `cta`, `anchor: 'bottom-bar'` with a `launcherSlot`.
+- `autoOpen`: per-page delay, panel or teaser, once per session, off after any
+  dismiss, excluded paths, waits for a quiet page, experiment `variant`.
+- WhatsApp continuation with a reference code that joins the web conversation.
+- Demo mode framing; messages carry `mode: 'demo'` and `page_context`.
+- JS API: `prefill`, `send`, `enterDemo`, `exitDemo`, `whatsappUrl`, `on`
+  (events), plus the lazy `boot.global.js` stub and a bundle size report.
+
 ## 0.16.0
 
 **Spanish dates in sentence case, and the business's language by default**
