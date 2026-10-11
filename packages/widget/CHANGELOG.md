@@ -1,5 +1,21 @@
 # @vitrina/widget
 
+## 0.17.3
+
+**`hide()` / `show()` in the host JS API** (landing-cro web#21). Additive.
+
+- `hide()` takes the whole widget off the page: launcher, peek card, bottom-bar
+  slot and panel. An open panel is closed first (`close {source: 'api'}`); a
+  showing peek card is withdrawn. Works in bubble, sidebar and inline layouts.
+- `show()` puts it back and restores what was on screen: the panel reopens
+  (`open {source: 'api'}`, without taking focus), the peek card returns, or just
+  the launcher.
+- New events `hide {}` and `show {restored: 'panel' | 'teaser' | 'launcher'}`.
+- Both are idempotent. `open()` and friends do nothing visible while hidden
+  (`show()` then opens the panel). Auto-open waits while hidden, exactly like
+  for an open dialog, and fires once the widget is shown (or gives up after 60 s).
+- The stub queue (`window.vitrinaChatQueue`) accepts `hide` and `show`.
+
 ## 0.17.2
 
 **Demo mode end to end, and a 429 that says why** (vitrina-app#4144, landing-cro

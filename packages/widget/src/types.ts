@@ -372,6 +372,14 @@ export interface WidgetInstance {
   enterDemo(): void;
   exitDemo(): void;
   /**
+   * Temporarily take the whole widget off the page (launcher, peek card, bottom-bar
+   * slot and panel). An open panel is closed first and reopened by `show()`; a
+   * showing peek card comes back too. Auto-open waits while hidden. Idempotent.
+   */
+  hide(): void;
+  /** Undo `hide()`, restoring what was open. Idempotent; a no-op if never hidden. */
+  show(): void;
+  /**
    * The wa.me link for the current conversation, with its reference code —
    * null when no WhatsApp number is configured.
    */
@@ -402,6 +410,10 @@ export interface WidgetEventMap {
    * minutes without a message.
    */
   demo_exit: { reason: 'api' | 'visitor' | 'product' | 'turns' | 'idle'; turns: number };
+  /** The host called `hide()`; the widget is off the page. */
+  hide: Record<string, never>;
+  /** The host called `show()`; `restored` is what came back. */
+  show: { restored: 'panel' | 'teaser' | 'launcher' };
   /** The pinned CTA (or a booking chip) was tapped and the host should act. */
   cta: { source: 'pinned' | 'chip' };
 }

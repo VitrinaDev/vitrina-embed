@@ -146,6 +146,8 @@ export interface SidebarChrome {
   setDemo(on: boolean): void;
   /** Mount the bottom-bar slot launcher. Returns whether a slot was used. */
   mountSlot(): boolean;
+  /** Hide/show the bottom-bar slot launcher (it lives in the host page, outside our host). */
+  setSlotHidden(hidden: boolean): void;
   setT(t: Translate): void;
   launcherAria(): string;
   destroy(): void;
@@ -446,6 +448,9 @@ export function createSidebarChrome(
       sr.append(style, btn);
       opts.launcherSlot.appendChild(slotHost);
       return true;
+    },
+    setSlotHidden(hidden) {
+      if (slotHost) slotHost.style.setProperty('display', hidden ? 'none' : 'inline-block', 'important');
     },
     launcherAria,
     setT() {
