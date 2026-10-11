@@ -34,6 +34,8 @@ import {
 } from './home-actions-ui';
 import { makeT, type StringKey, type Translate } from './i18n';
 import { renderMarkdown } from './markdown';
+import { createSidebarChrome, sendIcon, type SidebarChrome, type SidebarUiCallbacks, type SidebarUiOptions } from './sidebar-ui';
+import { SIDEBAR_STYLES } from './sidebar-styles';
 import { STYLES } from './styles';
 import { resolveAccent, resolvePosition, validateLogoUrl } from './theme';
 import type { WidgetFont, WidgetHomeAction, WidgetLocale, WidgetTheme } from './types';
@@ -120,6 +122,11 @@ export interface WidgetUiOptions {
   team?: TeamMember[];
   callbacks: WidgetUiCallbacks;
   /**
+   * Sidebar / inline layout (embed#25). Absent ⇒ the bubble widget, node for
+   * node and byte for byte (no extra stylesheet, no extra element).
+   */
+  sidebar?: { options: SidebarUiOptions; callbacks: SidebarUiCallbacks; container: HTMLElement | null };
+  /**
    * Mount invisibly, awaiting `reveal()`. Used ONLY when the appearance is
    * coming from the server and we have no cached copy to paint with — showing a
    * default-black launcher that snaps to the dealer's brand colour a moment
@@ -134,7 +141,8 @@ export interface WidgetUi {
   readonly shadow: ShadowRoot;
   mount(): void;
   destroy(): void;
-  openPanel(): void;
+  /** `focus: false` leaves the page's focus where it is (auto-open). */
+  openPanel(focus?: boolean): void;
   closePanel(): void;
   isOpen(): boolean;
   /**
@@ -229,6 +237,14 @@ export interface WidgetUi {
   /** Show the conversation. Where a submitted buy/search lands: the message is
    *  in the transcript, and the transcript is the confirmation. */
   showMessages(): void;
+
+  // --- Sidebar mode (embed#25). No-ops on a bubble widget. --------------------
+  /** Show the peek card with the current greeting. */
+  showTeaser(): void;
+  hideTeaser(): void;
+  isTeaserShown(): boolean;
+  /** Demo-mode framing (D60): header, tint, exit button, placeholder. */
+  setDemo(on: boolean): void;
 }
 
 interface TrackedListener {
@@ -583,8 +599,62 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   root.append(launcher, panel);
   shadow.appendChild(root);
 
-  // --- state + listeners ---
+  // --- Sidebar / inline chrome (embed#25) ---
+  const sb = opts.sidebar ?? null;
+  let chrome: SidebarChrome | null = null;
+  // Declared before the chrome so its document listeners are tracked too.
   const listeners: TrackedListener[] = [];
+  function on(target: EventTarget, type: string, handler: EventListener): void {
+    target.addEventListener(type, handler);
+    listeners.push({ target, type, handler });
+  }
+  let demoOn = false;
+  /** The launcher's accessible name: the named assistant in sidebar mode. */
+  function launcherBase(): string {
+    return chrome ? chrome.launcherAria() : t('launcherLabel');
+  }
+  /** Re-apply the sidebar's own strings after anything that repaints chrome. */
+  function paintSidebarChrome(): void {
+    if (!chrome || !sb) return;
+    chrome.setT(t);
+    const key = demoOn ? 'sbDemoPlaceholder' : 'sbAskPlaceholder';
+    input.placeholder = t(key);
+    input.setAttribute('aria-label', t(key));
+    sendBtn.textContent = '';
+    sendBtn.setAttribute('aria-label', t('send'));
+    sendBtn.appendChild(sendIcon());
+    closeBtn.setAttribute('aria-label', t('sbMinimize'));
+    const agentName = sb.options.agent?.name;
+    if (demoOn) footer.textContent = t('sbDemoDisclaimer');
+    else if (agentName) footer.textContent = t('sbAiDisclaimer').replace('{name}', agentName);
+  }
+  if (sb) {
+    const sbStyle = document.createElement('style');
+    sbStyle.textContent = SIDEBAR_STYLES;
+    shadow.appendChild(sbStyle);
+    root.setAttribute('data-layout', sb.options.layout);
+    root.setAttribute('data-preset', sb.options.preset);
+    chrome = createSidebarChrome(sb.options, sb.callbacks, () => t, on);
+    chrome.decorateHeader(header, closeBtn);
+    chrome.decorateLauncher(launcher);
+    const cta = chrome.ctaButton();
+    panel.insertBefore(chrome.demoExitButton(), form);
+    if (cta) {
+      panel.insertBefore(cta, form);
+      panel.setAttribute('data-cta', '');
+    }
+    paintSidebarChrome();
+    root.appendChild(chrome.teaser);
+    if (sb.options.layout === 'inline') {
+      // In the page flow, not over it.
+      for (const prop of ['position', 'z-index', 'bottom', 'right', 'left']) host.style.removeProperty(prop);
+      host.style.setProperty('position', 'relative', 'important');
+      host.style.setProperty('width', '100%', 'important');
+      host.style.setProperty('height', '100%', 'important');
+    }
+  }
+
+  // --- state + listeners ---
   let open = false;
   // Remembered so a locale swap can re-derive anything already on screen. Both
   // are already implied by the DOM, but reading them back out of it would mean
@@ -613,11 +683,6 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
    * afterwards only through setHomeCards.
    */
   let homeCards: ResolvedHomeCards = resolveHomeCards(opts.home?.cards);
-
-  function on(target: EventTarget, type: string, handler: EventListener): void {
-    target.addEventListener(type, handler);
-    listeners.push({ target, type, handler });
-  }
 
   function scrollToBottom(): void {
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -773,6 +838,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     const el = bubble('outbound', greeting);
     el.dataset.welcome = '1';
     messagesEl.appendChild(el);
+    // Sidebar: the assistant caption, the suggested questions and the WhatsApp
+    // link, only while nothing has been said yet (they leave with the greeting).
+    if (chrome && !demoOn) for (const extra of chrome.welcomeExtras()) messagesEl.appendChild(extra);
   }
 
   /** Rewrite the greeting bubble if (and only if) it is currently on screen. */
@@ -1360,17 +1428,22 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     host,
     shadow,
     mount(): void {
-      if (!host.isConnected) document.body.appendChild(host);
+      if (host.isConnected) return;
+      const container = sb?.options.layout === 'inline' ? sb.container : null;
+      (container ?? document.body).appendChild(host);
+      if (chrome?.mountSlot()) root.setAttribute('data-slotted', '');
     },
     destroy(): void {
+      chrome?.destroy();
       for (const { target, type, handler } of listeners) {
         target.removeEventListener(type, handler);
       }
       listeners.length = 0;
       if (host.isConnected) host.remove();
     },
-    openPanel(): void {
+    openPanel(focus = true): void {
       open = true;
+      chrome?.hideTeaser();
       panel.hidden = false;
       launcher.hidden = true;
       // Paint the ephemeral greeting on first open if the list is still empty.
@@ -1383,7 +1456,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       hadUnreadSinceOpen = false;
       // Only when the composer is actually on screen — focusing an input inside
       // a display:none view would scroll nothing and steal nothing.
-      if (activeView === 'messages') input.focus();
+      // Never on an auto-open: a panel that opened on its own must not take the
+      // keyboard (or summon a phone keyboard) from what the visitor was doing.
+      if (focus && activeView === 'messages') input.focus();
       scrollToBottom();
     },
     closePanel(): void {
@@ -1605,6 +1680,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       // panel this method exists to prevent — and it must not lose a keystroke,
       // which is why setLocale re-renders rather than rebuilding.
       homeActionsUi?.setLocale();
+      paintSidebarChrome();
       // The tabs are chrome too. The tenant's own words — home.title,
       // home.subtitle, the FAQ text, the booking label — are NOT: paintHome and
       // paintFaqs fall back to t() only where the tenant said nothing.
@@ -1646,6 +1722,33 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       typingEl.hidden = !active;
       if (active) scrollToBottom();
     },
+    showTeaser(): void {
+      if (!chrome || open) return;
+      chrome.showTeaser(welcomeMessage ?? t('welcome'));
+    },
+    hideTeaser(): void {
+      chrome?.hideTeaser();
+    },
+    isTeaserShown(): boolean {
+      return chrome?.isTeaserShown() ?? false;
+    },
+    setDemo(on: boolean): void {
+      if (!chrome || demoOn === on) return;
+      demoOn = on;
+      chrome.setDemo(on);
+      if (on) panel.setAttribute('data-demo', '');
+      else panel.removeAttribute('data-demo');
+      const key = on ? 'sbDemoPlaceholder' : 'sbAskPlaceholder';
+      input.placeholder = t(key);
+      input.setAttribute('aria-label', t(key));
+      const agentName = sb?.options.agent?.name;
+      if (on) footer.textContent = t('sbDemoDisclaimer');
+      else if (agentName) footer.textContent = t('sbAiDisclaimer').replace('{name}', agentName);
+      // The suggested questions belong to the assistant, not to the demo world.
+      messagesEl.querySelectorAll('.vtr-sb-meta, .vtr-sb-chips, .vtr-sb-walink').forEach((n) => {
+        (n as HTMLElement).hidden = on;
+      });
+    },
     setUnread(count: number): void {
       const n = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
       unreadCount = n;
@@ -1656,14 +1759,14 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       if (n === 0) {
         badge.hidden = true;
         badge.textContent = '';
-        launcher.setAttribute('aria-label', t('launcherLabel'));
+        launcher.setAttribute('aria-label', launcherBase());
         return;
       }
       badge.hidden = false;
       // A dealer chat never has 100 unread replies; cap the glyph anyway so a
       // pathological count cannot stretch the launcher off the page.
       badge.textContent = n > 99 ? '99+' : String(n);
-      launcher.setAttribute('aria-label', `${t('launcherLabel')} — ${n} ${t('unread')}`);
+      launcher.setAttribute('aria-label', `${launcherBase()} — ${n} ${t('unread')}`);
     },
   };
 

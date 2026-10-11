@@ -2,6 +2,7 @@
 // types.ts is FROZEN (contract); everything here is internal and free to evolve.
 
 import { resolveFont } from './fonts';
+import type { RemoteSidebarConfig } from './sidebar-config';
 import { validateHttpUrl } from './theme';
 import type {
   WidgetConfig,
@@ -312,7 +313,7 @@ export interface ResolvedConfig {
  * whole contract: this object is layered UNDER the dealer's inline config, so a
  * present-but-empty key would silently clobber something they set by hand.
  */
-export interface RemoteWidgetConfig {
+export interface RemoteWidgetConfig extends RemoteSidebarConfig {
   theme?: WidgetTheme;
   welcomeMessage?: string | null;
   /**

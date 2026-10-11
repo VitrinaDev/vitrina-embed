@@ -79,6 +79,14 @@ export interface SendInput {
    * There is no round-trip: it never comes back on the read DTO.
    */
   vehicleId?: string | null;
+  /**
+   * Page facts for the assistant's first answer (spec v3 §5.2), already
+   * sanitized by sidebar-config. Sent as `page_context`; a server that does not
+   * know the field strips it (the body schema is not strict).
+   */
+  pageContext?: Record<string, string>;
+  /** `demo` while demo mode is on (D60): the server routes to the demo persona. */
+  mode?: 'demo';
 }
 
 export type SendOutcome = SendResult | { error: true; status: number | null };
@@ -713,6 +721,10 @@ export class VitrinaTransport {
     if (input.clientMessageId) body.client_message_id = input.clientMessageId;
     // Persisted onto the inbound row's metadata by the webchat ingress.
     if (input.vehicleId) body.vehicle_id = input.vehicleId;
+    if (input.pageContext && Object.keys(input.pageContext).length > 0) {
+      body.page_context = input.pageContext;
+    }
+    if (input.mode === 'demo') body.mode = 'demo';
     const payload = JSON.stringify(body);
 
     let res = await this.call<SendResult>('/widget/messages', {

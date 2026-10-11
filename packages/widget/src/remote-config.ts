@@ -25,6 +25,7 @@ import {
 } from './config';
 import type { WidgetLocale } from './types';
 import { isWidgetFont } from './fonts';
+import { coerceRemoteSidebar } from './sidebar-config';
 import { safeLocalStorage, storageKey } from './storage';
 
 const KEY_SUFFIX = ':config';
@@ -148,6 +149,9 @@ export function coerceRemoteConfig(input: unknown): RemoteWidgetConfig | null {
 
   const team = normalizeTeam(raw.team);
   if (team.length > 0) out.team = team;
+
+  // Sidebar mode (embed#25): layout, preset, agent, auto-open, chips, WhatsApp.
+  Object.assign(out, coerceRemoteSidebar(raw));
 
   return out;
 }

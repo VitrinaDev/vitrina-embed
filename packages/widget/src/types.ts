@@ -104,6 +104,93 @@ export interface WidgetTeamMemberConfig {
   avatarUrl?: string | null;
 }
 
+/**
+ * How the widget sits on the page (embed#25, D7/D15).
+ *
+ *   bubble  — the floating launcher + card it has always been. The default:
+ *             an install that says nothing keeps exactly today's widget.
+ *   sidebar — a 400 px panel docked right that OVERLAYS the page and collapses
+ *             to a side tab; on a phone a peek card that opens full screen
+ *             only when tapped, never on its own.
+ *   inline  — the same chat rendered inside a host container (`container`),
+ *             for a page section such as a live «pruébala» demo.
+ */
+export type WidgetLayout = 'bubble' | 'sidebar' | 'inline';
+
+/**
+ * A closed set of surface palettes. `cream` matches the Vitrina landing
+ * (cream surfaces, warm hairlines, darkened ember accent, DM Sans) and opts out
+ * of the automatic dark scheme, because the page around it does not switch.
+ */
+export type WidgetPreset = 'default' | 'cream';
+
+/**
+ * The named assistant shown in the header, peek card and side tab (D20/D23).
+ * The label is the disclosure and is ALWAYS rendered next to the portrait; the
+ * widget refuses to show a portrait with no label rather than imply a person.
+ */
+export interface WidgetAgentConfig {
+  /** First name, e.g. "Tomás". Trimmed, at most 24 characters. */
+  name?: string;
+  /** Disclosure label, e.g. "Asistente IA de Vitrina". At most 48 characters. */
+  label?: string;
+  /** Status line, e.g. "Responde al instante". At most 40 characters. */
+  status?: string;
+  /** Portrait (absolute http(s) URL, round-masked). Absent ⇒ initials. */
+  avatarUrl?: string;
+}
+
+/** What auto-open shows on one kind of device. A phone never gets `panel` (D15). */
+export type WidgetAutoOpenDesktop = 'panel' | 'teaser' | 'off';
+export type WidgetAutoOpenMobile = 'teaser' | 'off';
+
+/**
+ * Proactive open (D16). OFF unless `enabled` is true. Fires at most once per
+ * browser session, never after any dismiss or manual open, never while a
+ * field is focused, a video is playing or a host dialog/booking sheet is open
+ * (it waits for the page to be quiet instead), and never on an excluded path.
+ */
+export interface WidgetAutoOpenConfig {
+  enabled?: boolean;
+  /** Seconds after load. Default 10, clamped to 1..600. */
+  delaySeconds?: number;
+  /** Seconds on a phone; defaults to `delaySeconds`. */
+  mobileDelaySeconds?: number;
+  /** Default `panel`. */
+  desktop?: WidgetAutoOpenDesktop;
+  /** Default `teaser` (the peek card). */
+  mobile?: WidgetAutoOpenMobile;
+  /**
+   * Path patterns where it never fires: exact (`/agendar`) or prefix with a
+   * trailing `*` (`/agendar/*`). Matched against `location.pathname`.
+   */
+  excludePaths?: string[];
+  /** Experiment arm, echoed on every auto-open event so tests can be judged. */
+  variant?: string;
+}
+
+/**
+ * A suggested question under the greeting. Tapping it sends `message` (or the
+ * label) as the visitor's first message; `action: 'demo'` enters demo mode
+ * first, `action: 'booking'` opens the agenda instead of sending anything.
+ */
+export interface WidgetChipConfig {
+  label: string;
+  message?: string;
+  action?: 'message' | 'demo' | 'booking';
+}
+
+/** One-tap continuation on WhatsApp with the conversation's reference (D36). */
+export interface WidgetWhatsAppConfig {
+  /** International number, digits only after normalisation (e.g. 56912345678). */
+  number: string;
+  /**
+   * Prefilled text. `{ref}` is replaced by the conversation's reference code;
+   * without the placeholder the code is appended as " (ref XXXXXX)".
+   */
+  text?: string;
+}
+
 export interface WidgetConfig {
   /**
    * Publishable widget key (`pk_...`, origin-locked — Vitrina ADR 0033).
@@ -177,6 +264,44 @@ export interface WidgetConfig {
    * rather than merging into it — half of two teams is nobody's team.
    */
   team?: WidgetTeamMemberConfig[];
+  /** Placement mode. Default `bubble` (today's widget). */
+  layout?: WidgetLayout;
+  /** Surface palette. Default `default`. */
+  preset?: WidgetPreset;
+  /**
+   * `bottom-bar`: on a phone the widget draws NO floating launcher; the host
+   * page owns a sticky bar and gives the widget a slot in it (`launcherSlot`).
+   * The peek card then sits above the bar. Default `auto`.
+   */
+  anchor?: 'auto' | 'bottom-bar';
+  /** Element (or selector) the launcher renders into when `anchor` is `bottom-bar`. */
+  launcherSlot?: HTMLElement | string;
+  /** Host element (or selector) for `layout: 'inline'`. */
+  container?: HTMLElement | string;
+  /** The named assistant (portrait + disclosure label). */
+  agent?: WidgetAgentConfig;
+  /** Proactive open (D16). Field-wise merged over the server's answer. */
+  autoOpen?: WidgetAutoOpenConfig;
+  /** Up to 4 suggested questions under the greeting. Inline replaces remote. */
+  chips?: WidgetChipConfig[];
+  /** WhatsApp continuation. */
+  whatsapp?: WidgetWhatsAppConfig;
+  /**
+   * A full-width pinned button above the composer ("Agendar demo"). With the
+   * tenant's in-widget booking on it opens the agenda in the panel; otherwise it
+   * emits the `cta` event so the host opens its own booking sheet.
+   * `target: 'host'` always hands it to the host, even with the agenda on (the
+   * Vitrina landing books demos in its own sheet).
+   */
+  cta?: { label: string; target?: 'auto' | 'host' };
+  /** Name of the fictional business demo mode plays (e.g. "Automotora Demo"). */
+  demoWorld?: string;
+  /**
+   * Page facts the assistant may use for its first answer (spec v3 §5.2), e.g.
+   * `{ page_id: 'automotoras', vertical: 'automotriz' }`. Strings only, at most
+   * 8 keys; travels with each message.
+   */
+  pageContext?: Record<string, string>;
   /**
    * Fetch the dealer's appearance from Vitrina at init (default `true`).
    *
@@ -233,5 +358,37 @@ export interface WidgetInstance {
    * can never leave the previous car's name on a booking summary.
    */
   setVehicle(vehicleId: string | null, label?: string | null): void;
+  /** Put text in the composer without sending it, and open the panel. */
+  prefill(text: string): void;
+  /** Open the panel and send `text` as the visitor's message. */
+  send(text: string): Promise<boolean>;
+  /** Enter demo mode (D60): the next messages go to the demo persona. */
+  enterDemo(): void;
+  exitDemo(): void;
+  /**
+   * The wa.me link for the current conversation, with its reference code —
+   * null when no WhatsApp number is configured.
+   */
+  whatsappUrl(): string | null;
+  /** Subscribe to widget events; returns the unsubscribe function. */
+  on<E extends WidgetEventName>(event: E, handler: (payload: WidgetEventMap[E]) => void): () => void;
   destroy(): void;
 }
+
+/** Events a host page can listen to (analytics, sticky-bar coordination). */
+export interface WidgetEventMap {
+  open: { source: 'api' | 'launcher' | 'auto' | 'peek' | 'chip' };
+  close: { source: 'api' | 'visitor' };
+  /** Auto-open fired. `mode` is what was shown. */
+  autoopen: { mode: 'panel' | 'teaser'; device: 'desktop' | 'mobile'; variant: string | null };
+  /** The visitor dismissed the peek card or the auto-opened panel. */
+  dismiss: { surface: 'panel' | 'teaser' };
+  chip: { index: number; label: string; action: 'message' | 'demo' | 'booking' };
+  message: { clientMessageId: string };
+  handoff_whatsapp: { ref: string | null };
+  demo_enter: { entry: 'api' | 'chip' };
+  demo_exit: { reason: 'api' | 'visitor' };
+  /** The pinned CTA (or a booking chip) was tapped and the host should act. */
+  cta: { source: 'pinned' | 'chip' };
+}
+export type WidgetEventName = keyof WidgetEventMap;
