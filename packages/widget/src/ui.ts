@@ -51,6 +51,8 @@ export interface WidgetUiCallbacks {
   onRequestClose(): void;
   /** Retry a failed send, re-using its ORIGINAL client message id (idempotent). */
   onRetry(clientMessageId: string): void;
+  /** A button under a transcript line (demo mode's «Seguir probando», «¿Entro?»). */
+  onNoticeAction?(id: 'demo_yes' | 'demo_no' | 'demo_resume'): void;
   /** The booking chip. Absent ⇒ no booking surface is ever constructed. */
   onBookingOpen?(): void;
   /** "Mis reservas · N" chip. */
@@ -243,8 +245,8 @@ export interface WidgetUi {
   showTeaser(): void;
   hideTeaser(): void;
   isTeaserShown(): boolean;
-  /** Demo-mode framing (D60): header, tint, exit button, placeholder. */
-  setDemo(on: boolean): void;
+  /** Demo-mode framing (D60): header, exit button, placeholder (`kind` picks «paciente»). */
+  setDemo(on: boolean, kind?: 'automotora' | 'clinica' | null): void;
 }
 
 interface TrackedListener {
@@ -609,6 +611,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     listeners.push({ target, type, handler });
   }
   let demoOn = false;
+  let demoKindOn: 'automotora' | 'clinica' | null = null;
+  const demoPlaceholderKey = (): StringKey =>
+    demoKindOn === 'clinica' ? 'sbDemoPlaceholderClinic' : 'sbDemoPlaceholder';
   /** The launcher's accessible name: the named assistant in sidebar mode. */
   function launcherBase(): string {
     return chrome ? chrome.launcherAria() : t('launcherLabel');
@@ -617,7 +622,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   function paintSidebarChrome(): void {
     if (!chrome || !sb) return;
     chrome.setT(t);
-    const key = demoOn ? 'sbDemoPlaceholder' : 'sbAskPlaceholder';
+    const key = demoOn ? demoPlaceholderKey() : 'sbAskPlaceholder';
     input.placeholder = t(key);
     input.setAttribute('aria-label', t(key));
     sendBtn.textContent = '';
@@ -769,11 +774,27 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     return wrap.childElementCount > 0 ? wrap : null;
   }
 
-  function bubble(dir: 'inbound' | 'outbound', content: string, id?: string): HTMLElement {
+  function bubble(
+    dir: 'inbound' | 'outbound',
+    content: string,
+    id?: string,
+    demo = false,
+  ): HTMLElement {
     const el = document.createElement('div');
     el.className = 'vtr-msg';
     el.setAttribute('data-dir', dir);
     if (id !== undefined) el.dataset.id = id;
+    if (demo) {
+      // A demo exchange stays visibly apart from the assistant, live or after
+      // a reload: its own tint and a «Demo» tag on the business's replies.
+      el.setAttribute('data-mode', 'demo');
+      if (dir === 'outbound') {
+        const tag = document.createElement('span');
+        tag.className = 'vtr-msg-tag';
+        tag.textContent = t('sbDemoTag');
+        el.appendChild(tag);
+      }
+    }
     if (dir === 'outbound') {
       // Server-authored: the dealer's reply, the AI's reply, or the dealer's
       // configured greeting. Rendered through the safe-subset markdown parser,
@@ -818,12 +839,25 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
    * member's name must never reach an anonymous browser on a third-party origin,
    * and adding an opt-in operator name later is far easier than un-leaking one.
    */
-  function systemLine(text: string, id: string): HTMLElement {
+  function systemLine(text: string, id: string, actions?: WidgetNotice['actions']): HTMLElement {
     const el = document.createElement('div');
     el.className = 'vtr-system';
     el.dataset.id = id;
     el.setAttribute('role', 'status');
     el.textContent = text;
+    if (actions && actions.length > 0) {
+      const row = document.createElement('div');
+      row.className = 'vtr-system-actions';
+      for (const a of actions) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'vtr-system-btn';
+        b.dataset.noticeAction = a.id;
+        b.textContent = a.label;
+        row.appendChild(b);
+      }
+      el.appendChild(row);
+    }
     return el;
   }
 
@@ -1484,13 +1518,16 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
         if (open) renderWelcome();
         return;
       }
+      // Nothing said yet but a notice to show (demo mode's frame): the greeting
+      // stays above it instead of vanishing.
+      if (messages.length === 0 && open) renderWelcome();
       // Interleave notices into the transcript by timestamp, so "an advisor
       // joined" appears where it happened rather than pinned to the bottom.
       const items: Array<{ at: string; render: () => void }> = [
         ...messages.map((m) => ({
           at: m.createdAt,
           render: () => {
-            const el = bubble(m.direction, m.content, String(m.id));
+            const el = bubble(m.direction, m.content, String(m.id), m.mode === 'demo');
             if (m.status) el.setAttribute('data-status', m.status);
             // Photos ride ABOVE the caption. A row whose every URL fails
             // validation is simply its caption — never a blank bubble.
@@ -1512,7 +1549,14 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
         })),
         ...notices.map((n) => ({
           at: n.at,
-          render: () => messagesEl.appendChild(systemLine(t('advisorJoined'), n.id)),
+          render: () =>
+            messagesEl.appendChild(
+              systemLine(
+                n.kind === 'handoff_human' ? t('advisorJoined') : (n.text ?? ''),
+                n.id,
+                n.actions,
+              ),
+            ),
         })),
       ];
       items.sort((a, b) => {
@@ -1732,13 +1776,14 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     isTeaserShown(): boolean {
       return chrome?.isTeaserShown() ?? false;
     },
-    setDemo(on: boolean): void {
+    setDemo(on: boolean, kind: 'automotora' | 'clinica' | null = null): void {
       if (!chrome || demoOn === on) return;
       demoOn = on;
+      demoKindOn = on ? kind : null;
       chrome.setDemo(on);
       if (on) panel.setAttribute('data-demo', '');
       else panel.removeAttribute('data-demo');
-      const key = on ? 'sbDemoPlaceholder' : 'sbAskPlaceholder';
+      const key = on ? demoPlaceholderKey() : 'sbAskPlaceholder';
       input.placeholder = t(key);
       input.setAttribute('aria-label', t(key));
       const agentName = sb?.options.agent?.name;
@@ -1781,6 +1826,10 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     const target = e.target as HTMLElement | null;
     const clientMessageId = target?.dataset?.retry;
     if (clientMessageId) callbacks.onRetry(clientMessageId);
+    const action = target?.dataset?.noticeAction;
+    if (action === 'demo_yes' || action === 'demo_no' || action === 'demo_resume') {
+      callbacks.onNoticeAction?.(action);
+    }
   });
 
   function submit(): void {

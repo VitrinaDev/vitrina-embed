@@ -95,7 +95,11 @@ export const SIDEBAR_STYLES = `
 .vtr-root[data-layout] .vtr-msg { max-width: 86%; font-size: 14.5px; line-height: 1.5; padding: 11px 14px; border-radius: 16px; }
 .vtr-root[data-layout] .vtr-msg[data-dir="outbound"] { border-bottom-left-radius: 5px; }
 .vtr-root[data-layout] .vtr-msg[data-dir="inbound"] { border-bottom-right-radius: 5px; color: #fff; }
-.vtr-panel[data-demo] .vtr-msg[data-dir="outbound"] { background: var(--vtr-tint); }
+/* Per message, not per panel: Tomás's own earlier bubbles never take the tint. */
+.vtr-msg[data-mode="demo"][data-dir="outbound"] { background: var(--vtr-tint); }
+.vtr-msg[data-mode="demo"][data-dir="inbound"] { box-shadow: inset 0 0 0 1.5px var(--vtr-tint); }
+.vtr-msg-tag { display: block; margin-bottom: 4px; font: 500 10px/1 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--vtr-muted); }
 .vtr-sb-meta { font-size: 11.5px; color: var(--vtr-muted); margin: -4px 0 4px 4px; }
 .vtr-sb-chips { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 6px; }
 .vtr-sb-chip {

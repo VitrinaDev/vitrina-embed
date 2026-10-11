@@ -44,6 +44,12 @@ export interface WidgetMessageDto {
    * recognise the type renders that instead. The card is an enhancement of a
    * message that already reads correctly without it.
    */
+  /**
+   * `demo` on the rows of a demo-mode exchange (the visitor's words and the
+   * fictional business's replies), so they stay visibly apart from the
+   * assistant after a reload. Absent on normal rows and on older servers.
+   */
+  mode?: 'demo';
   stockCard?: {
     vehicleId: string;
     title: string;
@@ -665,5 +671,13 @@ export interface WidgetNotice {
   id: string;
   /** ISO8601 — sorts the notice into the transcript where it happened. */
   at: string;
-  kind: 'handoff_human';
+  /**
+   * `handoff_human` has its own fixed copy. The rest carry their `text`:
+   * `rate_limited` is the server's own words for a 429 (written for the
+   * visitor), the `demo_*` lines are the framing and exit lines of demo mode.
+   * `actions` render as buttons under the line.
+   */
+  kind: 'handoff_human' | 'rate_limited' | 'demo_frame' | 'demo_ask' | 'demo_exit';
+  text?: string;
+  actions?: Array<{ id: 'demo_yes' | 'demo_no' | 'demo_resume'; label: string }>;
 }

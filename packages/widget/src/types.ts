@@ -297,6 +297,12 @@ export interface WidgetConfig {
   /** Name of the fictional business demo mode plays (e.g. "Automotora Demo"). */
   demoWorld?: string;
   /**
+   * Which fictional business demo mode plays, for the server to route the turn
+   * (`automotora` or `clinica`). When absent it is read off `demoWorld`'s name,
+   * and failing that the server uses the page context's `vertical`.
+   */
+  demoKind?: 'automotora' | 'clinica';
+  /**
    * Page facts the assistant may use for its first answer (spec v3 §5.2), e.g.
    * `{ page_id: 'automotoras', vertical: 'automotriz' }`. Strings only, at most
    * 8 keys; travels with each message.
@@ -386,8 +392,16 @@ export interface WidgetEventMap {
   chip: { index: number; label: string; action: 'message' | 'demo' | 'booking' };
   message: { clientMessageId: string };
   handoff_whatsapp: { ref: string | null };
-  demo_enter: { entry: 'api' | 'chip' };
-  demo_exit: { reason: 'api' | 'visitor' };
+  /** `typed` = the visitor wrote «quiero probar» and said yes. `world` is the business played. */
+  demo_enter: { entry: 'api' | 'chip' | 'typed'; world: 'automotora' | 'clinica' | null };
+  /** One visitor message sent in demo mode; `turns` counts this stay. */
+  demo_turn: { turns: number };
+  /**
+   * `visitor` = the exit button; `api` = the host; `product` = the visitor asked
+   * about the product itself; `turns` = the 12 messages ran out; `idle` = 10
+   * minutes without a message.
+   */
+  demo_exit: { reason: 'api' | 'visitor' | 'product' | 'turns' | 'idle'; turns: number };
   /** The pinned CTA (or a booking chip) was tapped and the host should act. */
   cta: { source: 'pinned' | 'chip' };
 }

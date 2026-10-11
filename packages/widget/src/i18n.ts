@@ -54,6 +54,25 @@ export interface WidgetStrings {
   sbDemoDisclaimer: string;
   sbDemoOn: string;
   sbDemoOff: string;
+  /** The framing line shown before demo mode starts. `{world}` is the business. */
+  sbDemoFrameAuto: string;
+  sbDemoFrameClinic: string;
+  sbDemoFrame: string;
+  sbDemoPlaceholderClinic: string;
+  /** Typed intent («quiero probar»): the widget asks before entering. */
+  sbDemoAsk: string;
+  sbDemoAskYes: string;
+  sbDemoAskNo: string;
+  /** Leaving because the visitor asked about the product itself. `{name}` is the assistant. */
+  sbDemoLeaving: string;
+  /** The exit line, always shown on leaving. */
+  sbDemoExitLineAuto: string;
+  sbDemoExitLineClinic: string;
+  sbDemoExitLine: string;
+  sbDemoResume: string;
+  /** Leaving because the 12 messages or the 10 idle minutes ran out. */
+  sbDemoLeftTurns: string;
+  sbDemoLeftIdle: string;
 
   // --- Home / Help tabs (0.8.0) ---------------------------------------------
   // Only ever painted for a tenant who turned the tabs on. Every default here
@@ -368,6 +387,26 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     sbDemoDisclaimer: 'Demo con datos ficticios: nada se agenda de verdad',
     sbDemoOn: 'Modo demo activado',
     sbDemoOff: 'Modo demo desactivado',
+    sbDemoFrameAuto:
+      'Voy a responder como el asistente de {world}, una automotora ficticia con autos de ejemplo. Escríbeme como si fueras un cliente. Para volver, toca «Salir del modo demo».',
+    sbDemoFrameClinic:
+      'Voy a responder como el asistente de {world}, una clínica ficticia. Escríbeme como si fueras un paciente. No escribas datos reales de salud. Para volver, toca «Salir del modo demo».',
+    sbDemoFrame:
+      'Voy a responder como el asistente de {world}, un negocio ficticio con datos de ejemplo. Escríbeme como si fueras un cliente. Para volver, toca «Salir del modo demo».',
+    sbDemoPlaceholderClinic: 'Escribe como paciente…',
+    sbDemoAsk: '¿Entro en modo demo? Respondo como el asistente de {world}, un negocio ficticio.',
+    sbDemoAskYes: 'Sí, entrar al modo demo',
+    sbDemoAskNo: 'No, seguir con {name}',
+    sbDemoLeaving: 'Salgo del modo demo para responderte como {name}.',
+    sbDemoExitLineAuto:
+      'Volví a ser {name}. Eso que viste es lo que haría el asistente de tu negocio, con tus autos reales. ¿Te muestro cómo quedaría en una demo de 30 minutos?',
+    sbDemoExitLineClinic:
+      'Volví a ser {name}. Eso que viste es lo que haría el asistente de tu negocio, con tu agenda real. ¿Te muestro cómo quedaría en una demo de 30 minutos?',
+    sbDemoExitLine:
+      'Volví a ser {name}. Eso que viste es lo que haría el asistente de tu negocio, con tus datos reales. ¿Te muestro cómo quedaría en una demo de 30 minutos?',
+    sbDemoResume: 'Seguir probando',
+    sbDemoLeftTurns: 'Se acabaron los 12 mensajes del modo demo.',
+    sbDemoLeftIdle: 'Salí del modo demo por inactividad.',
 
     homeTitle: '¡Hola! 👋',
     homeSubtitle: '¿Cómo te podemos ayudar?',
@@ -607,6 +646,26 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     sbDemoDisclaimer: 'Demo with fictional data: nothing is really booked',
     sbDemoOn: 'Demo mode on',
     sbDemoOff: 'Demo mode off',
+    sbDemoFrameAuto:
+      "I'll answer as the assistant of {world}, a fictional car dealership with example cars. Write to me as if you were a customer. To go back, tap «Leave demo mode».",
+    sbDemoFrameClinic:
+      "I'll answer as the assistant of {world}, a fictional clinic. Write to me as if you were a patient. Do not write real health data. To go back, tap «Leave demo mode».",
+    sbDemoFrame:
+      "I'll answer as the assistant of {world}, a fictional business with sample data. Write to me as if you were a customer. To go back, tap «Leave demo mode».",
+    sbDemoPlaceholderClinic: 'Write as a patient…',
+    sbDemoAsk: 'Shall I start demo mode? I answer as the assistant of {world}, a fictional business.',
+    sbDemoAskYes: 'Yes, start demo mode',
+    sbDemoAskNo: 'No, stay with {name}',
+    sbDemoLeaving: "I'm leaving demo mode to answer you as {name}.",
+    sbDemoExitLineAuto:
+      "I'm {name} again. What you saw is what your business's assistant would do, with your real cars. Shall I show you how it would look in a 30-minute demo?",
+    sbDemoExitLineClinic:
+      "I'm {name} again. What you saw is what your business's assistant would do, with your real schedule. Shall I show you how it would look in a 30-minute demo?",
+    sbDemoExitLine:
+      "I'm {name} again. What you saw is what your business's assistant would do, with your real data. Shall I show you how it would look in a 30-minute demo?",
+    sbDemoResume: 'Keep trying',
+    sbDemoLeftTurns: 'The 12 demo-mode messages are used up.',
+    sbDemoLeftIdle: 'I left demo mode because of inactivity.',
 
     homeTitle: 'Hi there 👋',
     homeSubtitle: 'How can we help?',
