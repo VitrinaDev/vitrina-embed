@@ -30,6 +30,7 @@ export interface RemoteSidebarConfig {
   whatsapp?: WidgetWhatsAppConfig;
   cta?: { label: string; target?: 'auto' | 'host' };
   demoWorld?: string;
+  demoKind?: 'automotora' | 'clinica';
 }
 
 /** The inline slice of `WidgetConfig` this module reads. */
@@ -81,6 +82,12 @@ export interface ResolvedSidebar {
   /** `host`: the CTA and booking chips always emit `cta`, never open the agenda. */
   ctaTarget: 'auto' | 'host';
   demoWorld: string | null;
+  /** The world demo mode plays, when the page or the tenant says (else read off the name). */
+  demoKind: 'automotora' | 'clinica' | null;
+}
+
+function kindOf(v: unknown): 'automotora' | 'clinica' | null {
+  return v === 'automotora' || v === 'clinica' ? v : null;
 }
 
 export const DEFAULT_AUTO_OPEN_DELAY_S = 10;
@@ -237,6 +244,7 @@ export function resolveSidebar(
     ctaLabel: text(inline?.cta?.label, 40) ?? text(remote?.cta?.label, 40),
     ctaTarget: (inline?.cta?.target ?? remote?.cta?.target) === 'host' ? 'host' : 'auto',
     demoWorld: text(inline?.demoWorld, 40) ?? text(remote?.demoWorld, 40),
+    demoKind: kindOf(inline?.demoKind) ?? kindOf(remote?.demoKind),
   };
 }
 
@@ -307,5 +315,7 @@ export function coerceRemoteSidebar(raw: Record<string, unknown>): RemoteSidebar
   if (ctaLabel) out.cta = cta?.target === 'host' ? { label: ctaLabel, target: 'host' } : { label: ctaLabel };
   const world = text(raw.demoWorld, 40);
   if (world) out.demoWorld = world;
+  const kind = kindOf(raw.demoKind);
+  if (kind) out.demoKind = kind;
   return out;
 }

@@ -294,6 +294,7 @@ The rule, in full:
 | `whatsapp`       | `{ number, text? }`           | no       | none               | One-tap continuation on WhatsApp with the conversation's reference code. |
 | `cta`            | `{ label }`                   | no       | none               | Full-width pinned button above the composer (sidebar/inline). |
 | `demoWorld`      | `string`                      | no       | none               | Name of the fictional business demo mode plays, e.g. `Automotora Demo`. |
+| `demoKind`       | `'automotora' \| 'clinica'`    | no       | read off `demoWorld` | Which world the server plays (`demo_world` on each demo message). |
 | `pageContext`    | `Record<string, string>`      | no       | `{}`               | Page facts sent with each message (`page_context`), ≤ 8 snake_case keys. |
 | `anchor`         | `'auto' \| 'bottom-bar'`      | no       | `'auto'`           | `bottom-bar`: on phones the launcher renders inside `launcherSlot`. |
 | `launcherSlot`   | `HTMLElement \| string`       | no       | —                  | Element or selector for the bottom-bar launcher. |
@@ -596,7 +597,7 @@ pageview, never by re-mounting a widget the visitor may be typing into.
 
 Events: `open {source}`, `close {source}`, `autoopen {mode, device, variant}`,
 `dismiss {surface}`, `chip {index, label, action}`, `message {clientMessageId}`,
-`handoff_whatsapp {ref}`, `demo_enter {entry}`, `demo_exit {reason}`, and
+`handoff_whatsapp {ref}`, `demo_enter {entry, world}`, `demo_turn {turns}`, `demo_exit {reason, turns}`, and
 `cta {source}`. The pinned CTA (and a `booking` chip) opens the in-widget agenda
 when the tenant has it on; otherwise it only emits `cta`, and the host opens
 its own booking sheet.

@@ -87,9 +87,16 @@ export interface SendInput {
   pageContext?: Record<string, string>;
   /** `demo` while demo mode is on (D60): the server routes to the demo persona. */
   mode?: 'demo';
+  /** With `mode: 'demo'`: which world the server should play (`demo_world`). */
+  demoWorld?: 'automotora' | 'clinica';
+  /** With `mode: 'demo'`: the id of this stay in demo mode (`demo_session`). */
+  demoSession?: string;
 }
 
-export type SendOutcome = SendResult | { error: true; status: number | null };
+export type SendOutcome =
+  | SendResult
+  /** `message` is the server's words for a 429, written for the visitor. */
+  | { error: true; status: number | null; message?: string };
 
 /**
  * What the ledger did with a consignment intake.
@@ -188,7 +195,13 @@ type Ok<T> = { ok: true; data: T };
  * `error.details.reason` — never the free-text English message, which is not a
  * contract and must never be string-matched.
  */
-type Fail = { ok: false; status: number | null; reason?: BookFailureReason };
+type Fail = {
+  ok: false;
+  status: number | null;
+  reason?: BookFailureReason;
+  /** The server's own `error.message`, for calls that opt into showing it (send, 429). */
+  message?: string;
+};
 type CallResult<T> = Ok<T> | Fail;
 
 /** The never-throw envelope every transport method answers with. */
@@ -218,6 +231,19 @@ function refusalReason(json: unknown): BookFailureReason | undefined {
     : undefined;
 }
 
+
+/** `error.message` of a refusal body, trimmed and bounded; null when there is none. */
+async function rateLimitMessage(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { error?: { message?: unknown } } | null;
+    const m = body?.error?.message;
+    if (typeof m !== 'string') return null;
+    const text = m.trim();
+    return text !== '' && text.length <= 400 ? text : null;
+  } catch {
+    return null;
+  }
+}
 
 function str(v: unknown): string | null {
   return typeof v === 'string' && v !== '' ? v : null;
@@ -601,6 +627,8 @@ export class VitrinaTransport {
       body?: string;
       withVisitor: boolean;
       captureError?: boolean;
+      /** Keep a 429's `error.message` (the server writes it for the visitor). */
+      captureRateLimit?: boolean;
     },
   ): Promise<CallResult<T>> {
     const headers = this.authHeaders({
@@ -627,6 +655,10 @@ export class VitrinaTransport {
         } catch {
           /* no body, or not JSON — the status is all we get */
         }
+      }
+      if (opts.captureRateLimit && res.status === 429) {
+        const message = await rateLimitMessage(res);
+        if (message) return { ok: false, status: res.status, message };
       }
       return { ok: false, status: res.status };
     }
@@ -724,13 +756,18 @@ export class VitrinaTransport {
     if (input.pageContext && Object.keys(input.pageContext).length > 0) {
       body.page_context = input.pageContext;
     }
-    if (input.mode === 'demo') body.mode = 'demo';
+    if (input.mode === 'demo') {
+      body.mode = 'demo';
+      if (input.demoWorld) body.demo_world = input.demoWorld;
+      if (input.demoSession) body.demo_session = input.demoSession;
+    }
     const payload = JSON.stringify(body);
 
     let res = await this.call<SendResult>('/widget/messages', {
       method: 'POST',
       body: payload,
       withVisitor: true,
+      captureRateLimit: true,
     });
     if (!res.ok && res.status === 401) {
       const boot = await this.freshBootstrap();
@@ -739,6 +776,7 @@ export class VitrinaTransport {
           method: 'POST',
           body: payload,
           withVisitor: true,
+          captureRateLimit: true,
         });
       }
     }
@@ -746,7 +784,11 @@ export class VitrinaTransport {
       if (res.data?.visitorToken) this.tokens.set(res.data.visitorToken);
       return res.data;
     }
-    return { error: true, status: res.status };
+    return {
+      error: true,
+      status: res.status,
+      ...(res.message ? { message: res.message } : {}),
+    };
   }
 
   /**

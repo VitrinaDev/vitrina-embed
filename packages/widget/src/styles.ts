@@ -218,6 +218,16 @@ export const STYLES = `
   color: var(--vtr-muted);
 }
 
+/* Buttons under a system line (demo mode: «Seguir probando», «¿Entro?»). */
+.vtr-system-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+.vtr-system-btn {
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  padding: 7px 12px; border-radius: 999px;
+  border: 1px solid var(--vtr-border); background: var(--vtr-surface); color: var(--vtr-text);
+}
+.vtr-system-btn:hover { background: var(--vtr-bubble-out); }
+.vtr-system-btn:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+
 /* Typing indicator: three pulsing dots, no name. The visitor is never told
    whether the AI or a person is composing. */
 .vtr-typing {

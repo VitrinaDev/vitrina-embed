@@ -1,5 +1,38 @@
 # @vitrina/widget
 
+## 0.17.2
+
+**Demo mode end to end, and a 429 that says why** (vitrina-app#4144, landing-cro
+ticket 52). Additive: an install that sends no `mode: 'demo'` is unchanged.
+
+- **429 shows the server's words.** A rejected send (`POST /widget/messages` →
+  429) now writes the server's `error.message` (Spanish, written for the
+  visitor: «Estás escribiendo muy rápido…») as a line in the transcript instead
+  of a generic failure. The message stays on screen with its retry. Other
+  statuses stay generic.
+- **Demo mode frame.** Entering demo mode (chip, `enterDemo()`, or a typed
+  «quiero probar» after a yes) first writes the framing line for the world
+  («Voy a responder como el asistente de Automotora Demo, una automotora
+  ficticia…»; clinics: a patient, no real health data).
+- **Tint stays with the demo.** Bubbles are tinted per message: the replies the
+  server marks `mode: 'demo'` (also after a reload) and the visitor's local
+  echoes sent in demo mode. Tomás's own bubbles never take the tint. The demo
+  business's replies carry a «Demo» tag.
+- **Exits.** The «Salir del modo demo» button; a message about the product
+  itself («¿y esto cuánto cuesta?», «quiero contratar», «Vitrina») leaves first
+  and is sent as a normal message; the 13th message (12 turns used) and 10 idle
+  minutes leave too. The exit line («Volví a ser Tomás. Eso que viste es lo que
+  haría el asistente de tu negocio…») comes with «Seguir probando».
+- **Typed invitation.** On a page with a `demoWorld`, «quiero probar» /
+  «hazte pasar por…» is not sent: the widget asks «¿Entro en modo demo?» with
+  two buttons.
+- **Wire.** With demo mode on, `POST /widget/messages` also carries
+  `demo_world` (`automotora` | `clinica`, from the new `demoKind` option, else
+  read off `demoWorld`) and `demo_session` (one opaque id per stay). History
+  rows may carry `mode: 'demo'`.
+- **Events.** `demo_enter{entry: 'api'|'chip'|'typed', world}`,
+  `demo_turn{turns}`, `demo_exit{reason: 'api'|'visitor'|'product'|'turns'|'idle', turns}`.
+
 ## 0.17.1
 
 **Tomás portrait** (vitrina-embed#26). No API change: `agent.avatarUrl` already

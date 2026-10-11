@@ -38,6 +38,14 @@ import {
   createHomeActionsController,
   type HomeActionsController,
 } from './home-actions-controller';
+import {
+  DEMO_IDLE_MS,
+  DEMO_MAX_TURNS,
+  asksAboutProduct,
+  asksToTryDemo,
+  demoKindOf,
+  newDemoSessionId,
+} from './demo-mode';
 import { makeT } from './i18n';
 import { createRemoteConfigCache } from './remote-config';
 import { createTokenStore } from './token-store';
@@ -132,6 +140,13 @@ export function init(config: WidgetConfig): WidgetInstance {
   const emitter = createEmitter();
   /** Demo mode (D60): messages carry `mode: 'demo'` while it is on. */
   let demoMode = false;
+  /** Visitor messages sent in this stay in demo mode (the 12-turn exit). */
+  let demoTurns = 0;
+  /** One id per stay: the server grants a fresh allowance per id. */
+  let demoSession: string | null = null;
+  let demoIdleTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The text of a typed «quiero probar» waiting for the visitor's yes or no. */
+  let pendingDemoText: string | null = null;
   /** The web conversation's external id, once bootstrapped — the WhatsApp ref. */
   let conversationExternalId: string | null = null;
   /** Who opened the panel that is open now: a dismiss of an auto-open is reported. */
@@ -546,6 +561,7 @@ export function init(config: WidgetConfig): WidgetInstance {
       onRetry: (clientMessageId) => {
         void retryFlow(clientMessageId);
       },
+      onNoticeAction: (id) => onNoticeAction(id),
       onBookingOpen: () => {
         if (!bookingEnabled) return;
         showBooking();
@@ -801,7 +817,13 @@ export function init(config: WidgetConfig): WidgetInstance {
       clientMessageId,
       vehicleId: vehicleId ?? undefined,
       pageContext: sidebar.pageContext,
-      ...(demoMode ? { mode: 'demo' as const } : {}),
+      ...(demoMode
+        ? {
+            mode: 'demo' as const,
+            ...(currentDemoKind() ? { demoWorld: currentDemoKind() as 'automotora' | 'clinica' } : {}),
+            ...(demoSession ? { demoSession } : {}),
+          }
+        : {}),
       // Present only for a message a form composed. A composer message carries
       // no identity, and inventing one would put an empty name on every lead.
       ...(identities.get(clientMessageId) ?? {}),
@@ -811,6 +833,9 @@ export function init(config: WidgetConfig): WidgetInstance {
       // The message STAYS on screen, marked failed, with a retry beside it.
       setStatus(clientMessageId, 'failed');
       setSend('error');
+      // A 429 comes with words written for the visitor («Estás escribiendo muy
+      // rápido…»): show them in the transcript instead of a generic failure.
+      if (res.status === 429 && res.message) showRateLimited(res.message);
       return;
     }
     setStatus(clientMessageId, undefined);
@@ -856,13 +881,15 @@ export function init(config: WidgetConfig): WidgetInstance {
         type: 'text',
         clientMessageId,
         status: 'pending',
+        ...(demoMode ? { mode: 'demo' as const } : {}),
       },
     ];
     ui.renderMessages(messages, notices);
     return clientMessageId;
   }
 
-  async function sendFlow(text: string, honeypot: string): Promise<void> {
+  async function sendFlow(text: string, honeypot: string, skipAsk = false): Promise<void> {
+    if (prepareSend(text, skipAsk) === 'held') return;
     const clientMessageId = await beginSend(text);
     if (clientMessageId === null) return;
     await deliver(clientMessageId, text, honeypot);
@@ -1046,12 +1073,136 @@ export function init(config: WidgetConfig): WidgetInstance {
     return whatsappHandoffUrl(sidebar.whatsapp.number, sidebar.whatsapp.text, ref);
   }
 
+  // --- Demo mode (D60, spec v3 §5.8) -----------------------------------------
+
+  const currentDemoKind = () => demoKindOf(sidebar.demoKind, sidebar.demoWorld);
+  const assistantName = () => sidebar.agent?.name ?? 'Tomás';
+
+  function pushNotice(notice: Omit<WidgetNotice, 'id' | 'at'>): void {
+    notices = [
+      ...notices,
+      { ...notice, id: `notice:${notice.kind}:${Date.now()}:${notices.length}`, at: new Date().toISOString() },
+    ];
+    ui.renderMessages(messages, notices);
+  }
+
+  function dropNotices(kind: WidgetNotice['kind']): void {
+    notices = notices.filter((n) => n.kind !== kind);
+  }
+
+  /** The server's words for a 429. One at a time: a second replaces the first. */
+  function showRateLimited(text: string): void {
+    dropNotices('rate_limited');
+    pushNotice({ kind: 'rate_limited', text });
+  }
+
+  function armDemoIdle(): void {
+    if (demoIdleTimer) clearTimeout(demoIdleTimer);
+    demoIdleTimer = setTimeout(() => leaveDemo('idle'), DEMO_IDLE_MS);
+  }
+
+  function enterDemo(by: 'api' | 'chip' | 'typed'): void {
+    if (destroyed || demoMode) return;
+    demoMode = true;
+    demoTurns = 0;
+    demoSession = newDemoSessionId();
+    pendingDemoText = null;
+    dropNotices('demo_ask');
+    const kind = currentDemoKind();
+    ui.setDemo(true, kind);
+    // The frame comes first: the visitor reads what this is before anything is sent.
+    const world = sidebar.demoWorld ?? '';
+    const frame =
+      kind === 'automotora' ? t('sbDemoFrameAuto') : kind === 'clinica' ? t('sbDemoFrameClinic') : t('sbDemoFrame');
+    pushNotice({ kind: 'demo_frame', text: frame.replace('{world}', world) });
+    armDemoIdle();
+    emitter.emit('demo_enter', { entry: by, world: kind });
+  }
+
+  function leaveDemo(reason: 'api' | 'visitor' | 'product' | 'turns' | 'idle'): void {
+    if (destroyed || !demoMode) return;
+    const turns = demoTurns;
+    demoMode = false;
+    demoSession = null;
+    if (demoIdleTimer) clearTimeout(demoIdleTimer);
+    demoIdleTimer = null;
+    ui.setDemo(false);
+    const name = assistantName();
+    const kind = currentDemoKind();
+    const exitLine = (
+      kind === 'automotora' ? t('sbDemoExitLineAuto') : kind === 'clinica' ? t('sbDemoExitLineClinic') : t('sbDemoExitLine')
+    ).replace('{name}', name);
+    if (reason === 'product') {
+      // The visitor asked about the product: the answer comes next, as the
+      // assistant. The exit line's offer would come before its own answer.
+      pushNotice({ kind: 'demo_exit', text: t('sbDemoLeaving').replace('{name}', name) });
+    } else {
+      const lead =
+        reason === 'turns' ? `${t('sbDemoLeftTurns')} ` : reason === 'idle' ? `${t('sbDemoLeftIdle')} ` : '';
+      pushNotice({
+        kind: 'demo_exit',
+        text: `${lead}${exitLine}`,
+        actions: [{ id: 'demo_resume', label: t('sbDemoResume') }],
+      });
+    }
+    emitter.emit('demo_exit', { reason, turns });
+  }
+
   function setDemo(on: boolean, by: 'api' | 'visitor' | 'chip'): void {
-    if (destroyed || demoMode === on) return;
-    demoMode = on;
-    ui.setDemo(on);
-    if (on) emitter.emit('demo_enter', { entry: by === 'chip' ? 'chip' : 'api' });
-    else emitter.emit('demo_exit', { reason: by === 'visitor' ? 'visitor' : 'api' });
+    if (on) enterDemo(by === 'chip' ? 'chip' : 'api');
+    else leaveDemo(by === 'visitor' ? 'visitor' : 'api');
+  }
+
+  /**
+   * Called before every send. In demo mode it leaves the demo when the message
+   * is about the product itself or the 12 messages are used (the message then
+   * goes to the assistant), and otherwise counts the turn. Outside demo mode, a
+   * typed «quiero probar» on a page that has a demo world is not sent: the
+   * widget asks first. Returns `held` when the message must not be sent now.
+   */
+  function prepareSend(text: string, skipAsk: boolean): 'send' | 'held' {
+    if (demoMode) {
+      if (asksAboutProduct(text)) leaveDemo('product');
+      else if (demoTurns >= DEMO_MAX_TURNS) leaveDemo('turns');
+      else {
+        demoTurns += 1;
+        armDemoIdle();
+        emitter.emit('demo_turn', { turns: demoTurns });
+      }
+      return 'send';
+    }
+    if (!skipAsk && sidebar.layout !== 'bubble' && sidebar.demoWorld && asksToTryDemo(text)) {
+      pendingDemoText = text;
+      dropNotices('demo_ask');
+      pushNotice({
+        kind: 'demo_ask',
+        text: t('sbDemoAsk').replace('{world}', sidebar.demoWorld),
+        actions: [
+          { id: 'demo_yes', label: t('sbDemoAskYes') },
+          { id: 'demo_no', label: t('sbDemoAskNo').replace('{name}', assistantName()) },
+        ],
+      });
+      return 'held';
+    }
+    return 'send';
+  }
+
+  function onNoticeAction(id: 'demo_yes' | 'demo_no' | 'demo_resume'): void {
+    if (destroyed) return;
+    if (id === 'demo_resume') {
+      dropNotices('demo_exit');
+      enterDemo('api');
+      return;
+    }
+    const text = pendingDemoText;
+    pendingDemoText = null;
+    dropNotices('demo_ask');
+    if (id === 'demo_yes') {
+      enterDemo('typed');
+      return;
+    }
+    ui.renderMessages(messages, notices);
+    if (text) void sendFlow(text, '', true);
   }
 
   /**
@@ -1079,7 +1230,7 @@ export function init(config: WidgetConfig): WidgetInstance {
       return;
     }
     if (from === 'teaser') instanceOpen('chip');
-    if (chip.action === 'demo') setDemo(true, 'chip');
+    if (chip.action === 'demo') enterDemo('chip');
     void instanceSend(chip.message);
   }
 
@@ -1088,6 +1239,7 @@ export function init(config: WidgetConfig): WidgetInstance {
     const message = text.trim();
     if (message === '' || message.length > 5000) return false;
     instanceOpen('api');
+    if (prepareSend(message, false) === 'held') return true;
     const clientMessageId = await beginSend(message);
     if (clientMessageId === null) return false;
     emitter.emit('message', { clientMessageId });
@@ -1128,6 +1280,7 @@ export function init(config: WidgetConfig): WidgetInstance {
       else if (id === null) vehicleLabel = null;
     },
     destroy(): void {
+      if (demoIdleTimer) clearTimeout(demoIdleTimer);
       if (destroyed) return;
       destroyed = true;
       if (booking) {
