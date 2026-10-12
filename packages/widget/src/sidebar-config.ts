@@ -36,6 +36,7 @@ export interface RemoteSidebarConfig {
 /** The inline slice of `WidgetConfig` this module reads. */
 export interface InlineSidebarConfig extends RemoteSidebarConfig {
   anchor?: 'auto' | 'bottom-bar';
+  launcherStyle?: 'tab' | 'bubble';
   pageContext?: Record<string, string>;
 }
 
@@ -71,6 +72,8 @@ export interface ResolvedSidebar {
   layout: WidgetLayout;
   preset: WidgetPreset;
   anchor: 'auto' | 'bottom-bar';
+  /** Collapsed desktop launcher: `tab` (default, docked side tab) or `bubble` (round portrait). */
+  launcherStyle: 'tab' | 'bubble';
   /** null ⇒ no named assistant: the header keeps today's title/logo. */
   agent: ResolvedAgent | null;
   autoOpen: ResolvedAutoOpen;
@@ -249,6 +252,7 @@ export function resolveSidebar(
     layout: resolveLayout(inline?.layout ?? remote?.layout),
     preset: resolvePreset(inline?.preset ?? remote?.preset),
     anchor: inline?.anchor === 'bottom-bar' ? 'bottom-bar' : 'auto',
+    launcherStyle: inline?.launcherStyle === 'bubble' ? 'bubble' : 'tab',
     agent: resolveAgent(agent),
     autoOpen: resolveAutoOpen(autoOpen),
     chips: resolveChips(inline?.chips ?? remote?.chips),

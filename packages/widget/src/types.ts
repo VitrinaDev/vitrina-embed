@@ -279,6 +279,13 @@ export interface WidgetConfig {
    * The peek card then sits above the bar. Default `auto`.
    */
   anchor?: 'auto' | 'bottom-bar';
+  /**
+   * Collapsed launcher on desktop in sidebar mode. `tab` (default): the docked
+   * side tab with vertical text. `bubble`: a round portrait bottom-right with the
+   * online dot and the IA badge; the ask text shows only as a hover/focus tooltip
+   * and as the aria-label. Inline only; phones always get the round portrait.
+   */
+  launcherStyle?: 'tab' | 'bubble';
   /** Element (or selector) the launcher renders into when `anchor` is `bottom-bar`. */
   launcherSlot?: HTMLElement | string;
   /** Host element (or selector) for `layout: 'inline'`. */

@@ -1,5 +1,12 @@
 # @vitrina/widget
 
+## 0.17.5
+
+**`launcherStyle: 'bubble'`** (landing-cro). Additive, inline only. In sidebar mode the collapsed
+desktop launcher can be a round portrait bottom-right (online dot, IA badge) instead of the docked
+side tab; the ask text shows only as a hover/focus tooltip and as the aria-label. The default `tab`
+is unchanged, so no existing install changes. Phones already get the round portrait.
+
 ## 0.17.4
 
 **`pricePolicy` and `freshConversation`** (landing-cro ticket 35, a live patient

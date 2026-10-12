@@ -537,6 +537,7 @@ export function init(config: WidgetConfig): WidgetInstance {
               hasWhatsApp: sidebar.whatsapp !== null,
               ctaLabel: sidebar.ctaLabel,
               demoWorld: sidebar.demoWorld,
+              launcherStyle: sidebar.launcherStyle,
             },
             callbacks: {
               onChip: (index: number, from: 'panel' | 'teaser') => runChip(index, from),
