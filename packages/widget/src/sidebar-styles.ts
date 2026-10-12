@@ -86,8 +86,6 @@ export const SIDEBAR_STYLES = `
 
 /* Chips under a scripted reply: same pills, indented under the bubble. */
 .vtr-sb-chips-reply { margin: 2px 0 4px; }
-.vtr-sb-chip-book { background: var(--vtr-accent); color: #fff; border-color: var(--vtr-accent); }
-.vtr-sb-chip-book:hover { background: var(--vtr-accent); filter: brightness(1.06); }
 .vtr-typing-note { font-size: 12.5px; color: var(--vtr-muted); margin-left: 8px; }
 
 /* Portrait + IA badge (shared with the slot launcher's own stylesheet). */
