@@ -27,6 +27,8 @@ export interface SidebarUiOptions {
   hasWhatsApp: boolean;
   ctaLabel: string | null;
   demoWorld: string | null;
+  /** Collapsed launcher on desktop: the docked side tab (default) or a round portrait bubble. */
+  launcherStyle?: 'tab' | 'bubble';
 }
 
 export interface SidebarUiCallbacks {
@@ -91,7 +93,7 @@ const calendarIcon = (): SVGElement =>
 export function portrait(
   agent: ResolvedAgent | null,
   size: number,
-  opts: { online?: boolean; aiTag: string },
+  opts: { online?: boolean; aiTag: string; badge?: boolean },
 ): HTMLElement {
   const wrap = el('span', 'vtr-pt');
   wrap.style.width = `${size}px`;
@@ -115,7 +117,7 @@ export function portrait(
     wrap.appendChild(s);
   }
   if (opts.online) wrap.appendChild(el('span', 'vtr-pt-on'));
-  if (size < 40) {
+  if (size < 40 || opts.badge) {
     wrap.appendChild(el('span', 'vtr-pt-ia', opts.aiTag));
     // Where there is no room for the written label, the portrait itself names
     // the assistant and says it is an AI: «Tomás, asistente IA de Vitrina».
@@ -333,6 +335,7 @@ export function createSidebarChrome(
 
   let launcherLabel: HTMLElement | null = null;
   let launcherRef: HTMLButtonElement | null = null;
+  let tipText: Text | null = null;
 
   function launcherAria(): string {
     return agent ? `${t('sbChatWith')}, ${agent.label}` : t('sbAskPlaceholder');
@@ -385,13 +388,26 @@ export function createSidebarChrome(
       launcher.replaceChildren(
         ...Array.from(launcher.children).filter((c) => c.classList.contains('vtr-badge')),
       );
-      launcher.prepend(portrait(agent, 36, { online: true, aiTag: t('sbAiTag') }));
+      const bubble = opts.launcherStyle === 'bubble';
+      if (bubble) {
+        launcher.classList.add('vtr-sb-bubble');
+        launcher.closest('.vtr-root')?.setAttribute('data-launcher', 'bubble');
+      }
+      launcher.prepend(portrait(agent, bubble ? 52 : 36, { online: true, aiTag: t('sbAiTag'), badge: bubble }));
       if (agent) {
-        launcherLabel = el('span', 'vtr-sbtab-label', t('sbAskAgent'));
-        launcher.appendChild(launcherLabel);
+        if (!bubble) {
+          launcherLabel = el('span', 'vtr-sbtab-label', t('sbAskAgent'));
+          launcher.appendChild(launcherLabel);
+        }
         const tip = el('span', 'vtr-sbtab-tip');
-        tip.append(document.createTextNode(`${agent.name} · ${agent.label}`));
-        if (agent.status) tip.appendChild(el('small', undefined, agent.status));
+        tip.setAttribute('aria-hidden', 'true');
+        if (bubble) {
+          tipText = document.createTextNode(t('sbAskAgent'));
+          tip.append(tipText);
+        } else {
+          tip.append(document.createTextNode(`${agent.name} · ${agent.label}`));
+          if (agent.status) tip.appendChild(el('small', undefined, agent.status));
+        }
         launcher.appendChild(tip);
       }
       launcher.setAttribute('aria-label', launcherAria());
@@ -456,6 +472,7 @@ export function createSidebarChrome(
     setT() {
       exitBtn.textContent = t('sbDemoExit');
       if (launcherLabel) launcherLabel.textContent = t('sbAskAgent');
+      if (tipText) tipText.data = t('sbAskAgent');
       if (launcherRef) launcherRef.setAttribute('aria-label', launcherAria());
       buildTeaser();
     },

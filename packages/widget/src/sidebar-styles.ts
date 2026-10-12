@@ -50,6 +50,20 @@ export const SIDEBAR_STYLES = `
 .vtr-sb-tab:hover .vtr-sbtab-tip, .vtr-sb-tab:focus-visible .vtr-sbtab-tip { opacity: 1; }
 .vtr-sb-tab .vtr-badge { top: 4px; right: 6px; }
 
+/* Bubble launcher (launcherStyle: 'bubble'): a round portrait bottom-right, tooltip on hover/focus. */
+.vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-bubble {
+  top: auto; bottom: 24px; right: 24px; transform: none; width: 60px; height: 60px; padding: 0;
+  border-radius: 50%; border: 1px solid var(--vtr-border); flex-direction: row; gap: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-bubble:hover { transform: scale(1.05); box-shadow: 0 8px 28px rgba(32,23,18,0.16); }
+.vtr-sb-bubble:focus-visible { outline: 3px solid var(--vtr-accent); outline-offset: 3px; }
+.vtr-sb-bubble .vtr-pt-on { width: 13px; height: 13px; right: 1px; top: 1px; box-shadow: 0 0 0 2.5px var(--vtr-surface); }
+.vtr-sb-bubble .vtr-pt-ia { right: -5px; bottom: -4px; }
+.vtr-sb-bubble .vtr-sbtab-tip { right: 72px; font-size: 13.5px; font-weight: 500; }
+.vtr-sb-bubble .vtr-badge { top: -4px; right: -4px; }
+.vtr-root[data-launcher="bubble"] .vtr-peek { right: 24px; bottom: 100px; }
+
 /* Portrait + IA badge (shared with the slot launcher's own stylesheet). */
 .vtr-pt { position: relative; display: inline-block; flex: none; border-radius: 50%; }
 .vtr-pt[hidden] { display: none; }
@@ -177,6 +191,8 @@ export const SIDEBAR_STYLES = `
     border-radius: 50%; border: 1px solid var(--vtr-border);
   }
   .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-tab:hover { transform: none; }
+  .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-bubble { bottom: 16px; right: 16px; width: 56px; height: 56px; }
+  .vtr-root[data-launcher="bubble"] .vtr-peek { right: 12px; bottom: 88px; }
   .vtr-root[data-layout="sidebar"][data-slotted] .vtr-launcher { display: none; }
   .vtr-sb-tab .vtr-sbtab-label, .vtr-sb-tab .vtr-sbtab-tip { display: none; }
   .vtr-ib .vtr-ic-min { display: none; }
@@ -184,8 +200,11 @@ export const SIDEBAR_STYLES = `
 }
 @media (min-width: 769px) {
   .vtr-peek { left: auto; right: 72px; bottom: 24px; width: 360px; }
+  .vtr-root[data-launcher="bubble"] .vtr-peek { right: 24px; bottom: 100px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .vtr-root[data-layout="sidebar"] .vtr-panel, .vtr-peek { animation: none; }
+  .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-bubble, .vtr-sbtab-tip { transition: none; }
+  .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-bubble:hover { transform: none; }
 }
 `;
