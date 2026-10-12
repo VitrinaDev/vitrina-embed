@@ -64,6 +64,30 @@ export const SIDEBAR_STYLES = `
 .vtr-sb-bubble .vtr-badge { top: -4px; right: -4px; }
 .vtr-root[data-launcher="bubble"] .vtr-peek { right: 24px; bottom: 100px; }
 
+/* Sidetab launcher (launcherStyle: 'sidetab'): a vertical rectangle on the right-centre edge,
+   the portrait over an ember chat icon, no text. The ask is a tooltip on hover/focus. */
+.vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-sidetab {
+  width: 64px; padding: 10px 0 12px; gap: 10px; border-radius: 16px 0 0 16px;
+  box-shadow: -4px 8px 28px rgba(32,23,18,0.14);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-sidetab:hover {
+  transform: translateY(-50%) translateX(-3px); box-shadow: -8px 10px 32px rgba(32,23,18,0.18);
+}
+.vtr-sb-sidetab:focus-visible { outline: 3px solid var(--vtr-accent); outline-offset: 2px; }
+.vtr-sb-sidetab .vtr-pt-on { width: 12px; height: 12px; right: 0; top: 0; box-shadow: 0 0 0 2.5px var(--vtr-surface); }
+.vtr-sbtab-chat { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+  background: var(--vtr-accent); color: #fff; }
+.vtr-sbtab-chat svg { width: 22px; height: 22px; }
+.vtr-sbtab-chat svg path + path { stroke: var(--vtr-accent); }
+.vtr-sb-sidetab .vtr-sbtab-tip { right: 74px; font-size: 13.5px; font-weight: 500; }
+.vtr-sb-sidetab .vtr-badge { top: 4px; right: 6px; }
+.vtr-root[data-launcher="sidetab"] .vtr-peek { right: 80px; }
+
+/* Chips under a scripted reply: same pills, indented under the bubble. */
+.vtr-sb-chips-reply { margin: 2px 0 4px; }
+.vtr-typing-note { font-size: 12.5px; color: var(--vtr-muted); margin-left: 8px; }
+
 /* Portrait + IA badge (shared with the slot launcher's own stylesheet). */
 .vtr-pt { position: relative; display: inline-block; flex: none; border-radius: 50%; }
 .vtr-pt[hidden] { display: none; }
@@ -193,6 +217,9 @@ export const SIDEBAR_STYLES = `
   .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-tab:hover { transform: none; }
   .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-bubble { bottom: 16px; right: 16px; width: 56px; height: 56px; }
   .vtr-root[data-launcher="bubble"] .vtr-peek { right: 12px; bottom: 88px; }
+  .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-sidetab { width: 56px; height: 56px; padding: 0; gap: 0; border-radius: 50%; }
+  .vtr-sb-sidetab .vtr-sbtab-chat { display: none; }
+  .vtr-root[data-launcher="sidetab"] .vtr-peek { right: 12px; }
   .vtr-root[data-layout="sidebar"][data-slotted] .vtr-launcher { display: none; }
   .vtr-sb-tab .vtr-sbtab-label, .vtr-sb-tab .vtr-sbtab-tip { display: none; }
   .vtr-ib .vtr-ic-min { display: none; }
@@ -201,10 +228,13 @@ export const SIDEBAR_STYLES = `
 @media (min-width: 769px) {
   .vtr-peek { left: auto; right: 72px; bottom: 24px; width: 360px; }
   .vtr-root[data-launcher="bubble"] .vtr-peek { right: 24px; bottom: 100px; }
+  .vtr-root[data-launcher="sidetab"] .vtr-peek { right: 80px; bottom: calc(50% - 66px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .vtr-root[data-layout="sidebar"] .vtr-panel, .vtr-peek { animation: none; }
-  .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-bubble, .vtr-sbtab-tip { transition: none; }
+  .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-bubble, .vtr-sbtab-tip,
+  .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-sidetab { transition: none; }
+  .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-sidetab:hover { transform: translateY(-50%); }
   .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-bubble:hover { transform: none; }
 }
 `;

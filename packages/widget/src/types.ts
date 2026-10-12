@@ -167,17 +167,50 @@ export interface WidgetAutoOpenConfig {
   excludePaths?: string[];
   /** Experiment arm, echoed on every auto-open event so tests can be judged. */
   variant?: string;
+  /**
+   * Open only after the visitor has scrolled (0.18.0). Off by default. When on,
+   * a visitor who stays on the first screen never gets an auto-open: the timer
+   * still counts from page load, but when it is due it waits (without giving
+   * up) for the page to be scrolled at least `px` pixels, or `viewport` times
+   * the window height (`true` = half a window). Busy detection still applies.
+   */
+  requireScroll?: boolean | WidgetRequireScroll;
+}
+
+/** How far the visitor must scroll before auto-open may fire. The larger wins. */
+export interface WidgetRequireScroll {
+  /** Minimum scroll distance in CSS pixels (0..20000). */
+  px?: number;
+  /** Minimum scroll distance as a fraction of the window height (0..5). */
+  viewport?: number;
 }
 
 /**
  * A suggested question under the greeting. Tapping it sends `message` (or the
  * label) as the visitor's first message; `action: 'demo'` enters demo mode
  * first, `action: 'booking'` opens the agenda instead of sending anything.
+ *
+ * Scripted chips (0.18.0): a chip with a `reply` is answered IN THE BROWSER —
+ * the label appears as the visitor's line, a short typing effect plays, then
+ * `reply` appears as the assistant's line with the `next` chips under it. No
+ * server call and no AI tokens. The taps are sent as page context
+ * (`chips_seen`) with the visitor's next typed message, so the assistant knows
+ * what was already answered. A chip without `reply` behaves as before.
  */
 export interface WidgetChipConfig {
   label: string;
   message?: string;
-  action?: 'message' | 'demo' | 'booking';
+  /**
+   * `link` navigates to `url` (same tab). `compose` puts `message` (or nothing)
+   * in the composer and focuses it: the visitor writes to the assistant.
+   */
+  action?: 'message' | 'demo' | 'booking' | 'link' | 'compose';
+  /** Scripted answer shown locally (≤ 400 chars, plain text / the same light markdown as replies). */
+  reply?: string;
+  /** Chips under the scripted reply. Up to 3 levels in all, 4 chips per level. */
+  next?: WidgetChipConfig[];
+  /** `action: 'link'` only: an absolute http(s) URL. */
+  url?: string;
 }
 
 /** One-tap continuation on WhatsApp with the conversation's reference (D36). */
@@ -283,9 +316,12 @@ export interface WidgetConfig {
    * Collapsed launcher on desktop in sidebar mode. `tab` (default): the docked
    * side tab with vertical text. `bubble`: a round portrait bottom-right with the
    * online dot and the IA badge; the ask text shows only as a hover/focus tooltip
-   * and as the aria-label. Inline only; phones always get the round portrait.
+   * and as the aria-label. `sidetab` (0.18.0): a vertical rectangle docked at the
+   * right-centre edge with the portrait and a chat icon, no text (the ask is a
+   * hover/focus tooltip and the aria-label). Inline only; phones always get the
+   * round portrait.
    */
-  launcherStyle?: 'tab' | 'bubble';
+  launcherStyle?: 'tab' | 'bubble' | 'sidetab';
   /** Element (or selector) the launcher renders into when `anchor` is `bottom-bar`. */
   launcherSlot?: HTMLElement | string;
   /** Host element (or selector) for `layout: 'inline'`. */
@@ -333,6 +369,14 @@ export interface WidgetConfig {
    * host calls `destroy()` then `init({ ...same, freshConversation: true })`.
    */
   freshConversation?: boolean;
+  /**
+   * Show the typing dots from the moment the visitor's message is accepted
+   * until a reply lands (0.18.0), not only while the server says someone is
+   * composing. After 12 s the dots read «Sigue escribiendo…»; after 60 s
+   * without a reply they go away. Off by default: on a workspace where a
+   * person answers later, dots would promise a reply that is not coming.
+   */
+  typingOnSend?: boolean;
   /**
    * Fetch the dealer's appearance from Vitrina at init (default `true`).
    *
@@ -422,7 +466,14 @@ export interface WidgetEventMap {
   autoopen: { mode: 'panel' | 'teaser'; device: 'desktop' | 'mobile'; variant: string | null };
   /** The visitor dismissed the peek card or the auto-opened panel. */
   dismiss: { surface: 'panel' | 'teaser' };
-  chip: { index: number; label: string; action: 'message' | 'demo' | 'booking' };
+  /** `path` is the chip's place in the tree ("0", "0.2"); `scripted` = answered locally. */
+  chip: {
+    index: number;
+    label: string;
+    action: 'message' | 'demo' | 'booking' | 'link' | 'compose';
+    path: string;
+    scripted: boolean;
+  };
   message: { clientMessageId: string };
   handoff_whatsapp: { ref: string | null };
   /** `typed` = the visitor wrote «quiero probar» and said yes. `world` is the business played. */

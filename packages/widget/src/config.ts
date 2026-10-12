@@ -88,6 +88,11 @@ export type MessageStatus = 'pending' | 'failed';
  */
 export interface WidgetMessage extends WidgetMessageDto {
   status?: MessageStatus;
+  /**
+   * Local only (0.18.0): the chips under a scripted reply. Painted only while
+   * this is the last line of the transcript; never sent, never stored.
+   */
+  replyChips?: Array<{ label: string; path: string; action: string }>;
 }
 
 /** `.data` of POST /widget/conversations. */

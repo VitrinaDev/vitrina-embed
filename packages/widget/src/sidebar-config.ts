@@ -36,7 +36,7 @@ export interface RemoteSidebarConfig {
 /** The inline slice of `WidgetConfig` this module reads. */
 export interface InlineSidebarConfig extends RemoteSidebarConfig {
   anchor?: 'auto' | 'bottom-bar';
-  launcherStyle?: 'tab' | 'bubble';
+  launcherStyle?: 'tab' | 'bubble' | 'sidetab';
   pageContext?: Record<string, string>;
 }
 
@@ -55,12 +55,22 @@ export interface ResolvedAutoOpen {
   mobile: WidgetAutoOpenMobile;
   excludePaths: string[];
   variant: string | null;
+  /** null = no scroll needed (the default). Else the minimum scroll, the larger of the two. */
+  requireScroll: { px: number; viewport: number } | null;
 }
+
+export type ChipAction = 'message' | 'demo' | 'booking' | 'link' | 'compose';
 
 export interface ResolvedChip {
   label: string;
   message: string;
-  action: 'message' | 'demo' | 'booking';
+  action: ChipAction;
+  /** Scripted answer (0.18.0), or absent for a chip the assistant answers. */
+  reply?: string;
+  /** Chips under the scripted reply. */
+  next?: ResolvedChip[];
+  /** `link` only. */
+  url?: string;
 }
 
 export interface ResolvedWhatsApp {
@@ -72,8 +82,8 @@ export interface ResolvedSidebar {
   layout: WidgetLayout;
   preset: WidgetPreset;
   anchor: 'auto' | 'bottom-bar';
-  /** Collapsed desktop launcher: `tab` (default, docked side tab) or `bubble` (round portrait). */
-  launcherStyle: 'tab' | 'bubble';
+  /** Collapsed desktop launcher: `tab` (default), `bubble` (round portrait) or `sidetab` (portrait + chat icon, no text). */
+  launcherStyle: 'tab' | 'bubble' | 'sidetab';
   /** null ⇒ no named assistant: the header keeps today's title/logo. */
   agent: ResolvedAgent | null;
   autoOpen: ResolvedAutoOpen;
@@ -97,6 +107,10 @@ export const DEFAULT_AUTO_OPEN_DELAY_S = 10;
 export const MAX_CHIPS = 4;
 export const MAX_CHIP_LABEL = 60;
 export const MAX_CHIP_MESSAGE = 300;
+export const MAX_CHIP_REPLY = 400;
+/** Scripted replies in a row (the greeting's chips are level 1); the chips under the last are not scripted. */
+export const MAX_CHIP_DEPTH = 3;
+export const DEFAULT_SCROLL_VIEWPORT = 0.5;
 export const MAX_AGENT_NAME = 24;
 export const MAX_AGENT_LABEL = 48;
 export const MAX_AGENT_STATUS = 40;
@@ -174,11 +188,33 @@ export function resolveAutoOpen(input: WidgetAutoOpenConfig | undefined): Resolv
     mobile,
     excludePaths,
     variant: text(input?.variant, 40),
+    requireScroll: resolveRequireScroll(input?.requireScroll),
   };
 }
 
-/** Malformed chips are dropped one by one, never the whole list. */
-export function resolveChips(input: unknown): ResolvedChip[] {
+function bounded(v: unknown, max: number): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.min(max, v) : null;
+}
+
+/** `true` = half a window; an object needs at least one positive bound; anything else = off. */
+export function resolveRequireScroll(input: unknown): ResolvedAutoOpen['requireScroll'] {
+  if (input === true) return { px: 0, viewport: DEFAULT_SCROLL_VIEWPORT };
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const { px, viewport } = input as { px?: unknown; viewport?: unknown };
+  const p = bounded(px, 20_000);
+  const v = bounded(viewport, 5);
+  if (p === null && v === null) return null;
+  return { px: p ?? 0, viewport: v ?? 0 };
+}
+
+const CHIP_ACTIONS = new Set<ChipAction>(['demo', 'booking', 'link', 'compose']);
+
+/**
+ * Malformed chips are dropped one by one, never the whole list. A scripted
+ * tree holds at most MAX_CHIP_DEPTH replies in a row; a `link` chip without a valid http(s)
+ * `url` is dropped (it would be a button that does nothing).
+ */
+export function resolveChips(input: unknown, depth = 1): ResolvedChip[] {
   if (!Array.isArray(input)) return [];
   const out: ResolvedChip[] = [];
   for (const raw of input) {
@@ -187,10 +223,38 @@ export function resolveChips(input: unknown): ResolvedChip[] {
     const chip = raw as WidgetChipConfig;
     const label = text(chip.label, MAX_CHIP_LABEL);
     if (!label) continue;
-    const action = chip.action === 'demo' || chip.action === 'booking' ? chip.action : 'message';
-    out.push({ label, message: text(chip.message, MAX_CHIP_MESSAGE) ?? label, action });
+    const action: ChipAction = CHIP_ACTIONS.has(chip.action as ChipAction) ? (chip.action as ChipAction) : 'message';
+    const resolved: ResolvedChip = { label, message: text(chip.message, MAX_CHIP_MESSAGE) ?? label, action };
+    if (action === 'link') {
+      const url = validateHttpUrl(chip.url);
+      if (!url) continue;
+      resolved.url = url;
+    }
+    // Only a chip that would otherwise go to the assistant can be answered
+    // locally, and only down to MAX_CHIP_DEPTH replies: the chips under the
+    // deepest reply are actions or questions for the assistant.
+    const reply = action === 'message' && depth <= MAX_CHIP_DEPTH ? text(chip.reply, MAX_CHIP_REPLY) : null;
+    if (reply) {
+      resolved.reply = reply;
+      const next = resolveChips(chip.next, depth + 1);
+      if (next.length > 0) resolved.next = next;
+    }
+    out.push(resolved);
   }
   return out;
+}
+
+/** The chip at a tree path ("1", "1.0", "1.0.2"), or null. */
+export function chipAt(chips: ResolvedChip[], path: string): ResolvedChip | null {
+  if (!/^\d+(\.\d+){0,4}$/.test(path)) return null;
+  let level: ResolvedChip[] | undefined = chips;
+  let found: ResolvedChip | null = null;
+  for (const part of path.split('.')) {
+    found = level?.[Number(part)] ?? null;
+    if (!found) return null;
+    level = found.next;
+  }
+  return found;
 }
 
 /** wa.me wants the full international number as bare digits. */
@@ -252,7 +316,8 @@ export function resolveSidebar(
     layout: resolveLayout(inline?.layout ?? remote?.layout),
     preset: resolvePreset(inline?.preset ?? remote?.preset),
     anchor: inline?.anchor === 'bottom-bar' ? 'bottom-bar' : 'auto',
-    launcherStyle: inline?.launcherStyle === 'bubble' ? 'bubble' : 'tab',
+    launcherStyle:
+      inline?.launcherStyle === 'bubble' || inline?.launcherStyle === 'sidetab' ? inline.launcherStyle : 'tab',
     agent: resolveAgent(agent),
     autoOpen: resolveAutoOpen(autoOpen),
     chips: resolveChips(inline?.chips ?? remote?.chips),
@@ -313,6 +378,8 @@ export function coerceRemoteSidebar(raw: Record<string, unknown>): RemoteSidebar
     }
     const variant = text(ao.variant, 40);
     if (variant) next.variant = variant;
+    const scroll = resolveRequireScroll(ao.requireScroll);
+    if (scroll) next.requireScroll = scroll;
     if (Object.keys(next).length > 0) out.autoOpen = next;
   }
 

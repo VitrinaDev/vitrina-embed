@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   QUIET_GIVE_UP_MS,
   QUIET_RETRY_MS,
+  SCROLL_SETTLE_MS,
   createAutoOpenScheduler,
   detectBusy,
   pathExcluded,
@@ -10,7 +11,7 @@ import {
   type AutoOpenEnv,
   type BusyReason,
 } from '../src/auto-open';
-import { resolveAutoOpen } from '../src/sidebar-config';
+import { resolveAutoOpen, resolveRequireScroll } from '../src/sidebar-config';
 import type { WidgetAutoOpenConfig } from '../src/types';
 
 /** A fake page with a manual clock. */
@@ -214,5 +215,113 @@ describe('detectBusy', () => {
     Object.defineProperty(v, 'muted', { value: false, configurable: true });
     expect(detectBusy(document, null)).toBe('video');
     document.body.innerHTML = '';
+  });
+});
+
+
+/** fakeEnv plus a scrollable page. */
+function scrollEnv(opts: { vh?: number; withScroll?: boolean } = {}) {
+  const page = fakeEnv();
+  let y = 0;
+  const subs = new Set<() => void>();
+  if (opts.withScroll !== false) {
+    page.env.scrollDistance = () => y;
+    page.env.viewportHeight = () => opts.vh ?? 800;
+    page.env.onScroll = (fn) => {
+      subs.add(fn);
+      return () => subs.delete(fn);
+    };
+  }
+  return {
+    ...page,
+    subs,
+    scrollTo(next: number): void {
+      y = next;
+      for (const fn of [...subs]) fn();
+    },
+  };
+}
+
+describe('auto-open requireScroll (0.18.0)', () => {
+  it('resolves: off by default, true = half a window, bounds clamped, junk = off', () => {
+    expect(resolveAutoOpen({ enabled: true }).requireScroll).toBeNull();
+    expect(resolveRequireScroll(true)).toEqual({ px: 0, viewport: 0.5 });
+    expect(resolveRequireScroll({ px: 300 })).toEqual({ px: 300, viewport: 0 });
+    expect(resolveRequireScroll({ viewport: 99 })).toEqual({ px: 0, viewport: 5 });
+    expect(resolveRequireScroll({ px: -1 })).toBeNull();
+    expect(resolveRequireScroll('yes')).toBeNull();
+    expect(resolveRequireScroll(false)).toBeNull();
+  });
+
+  it('never fires while the visitor stays on the first screen', () => {
+    const page = scrollEnv();
+    const { s, onFire } = make({ enabled: true, requireScroll: true }, page);
+    s.start();
+    page.advance(10 * 60_000);
+    expect(onFire).not.toHaveBeenCalled();
+    expect(s.state()).toBe('waiting-scroll');
+    // A small scroll under the threshold (half of 800 px) does not count.
+    page.scrollTo(200);
+    page.advance(60_000);
+    expect(onFire).not.toHaveBeenCalled();
+  });
+
+  it('a due timer fires a beat after the visitor scrolls far enough', () => {
+    const page = scrollEnv();
+    const { s, onFire } = make({ enabled: true, requireScroll: { px: 300 } }, page);
+    s.start();
+    page.advance(30_000);
+    expect(s.state()).toBe('waiting-scroll');
+    page.scrollTo(450);
+    expect(onFire).not.toHaveBeenCalled();
+    page.advance(SCROLL_SETTLE_MS);
+    expect(onFire).toHaveBeenCalledWith('panel', 'desktop');
+    expect(page.subs.size).toBe(0);
+  });
+
+  it('a scroll before the delay counts (latched), even if they scroll back to the top', () => {
+    const page = scrollEnv();
+    const { s, onFire } = make({ enabled: true, requireScroll: true }, page);
+    s.start();
+    page.advance(2_000);
+    page.scrollTo(900);
+    page.scrollTo(0);
+    page.advance(8_000);
+    expect(onFire).toHaveBeenCalledTimes(1);
+  });
+
+  it('busy detection still applies after the scroll', () => {
+    const page = scrollEnv();
+    const { s, onFire } = make({ enabled: true, requireScroll: true }, page);
+    s.start();
+    page.advance(10_000);
+    page.setBusy('dialog');
+    page.scrollTo(900);
+    page.advance(SCROLL_SETTLE_MS + 3 * QUIET_RETRY_MS);
+    expect(onFire).not.toHaveBeenCalled();
+    expect(s.state()).toBe('waiting-quiet');
+    page.setBusy(null);
+    page.advance(QUIET_RETRY_MS);
+    expect(onFire).toHaveBeenCalledTimes(1);
+  });
+
+  it('a manual open while waiting for the scroll spends it and stops listening', () => {
+    const page = scrollEnv();
+    const { s, onFire } = make({ enabled: true, requireScroll: true }, page);
+    s.start();
+    page.advance(12_000);
+    s.noteOpened();
+    expect(page.subs.size).toBe(0);
+    page.scrollTo(2_000);
+    page.advance(60_000);
+    expect(onFire).not.toHaveBeenCalled();
+  });
+
+  it('without scroll bindings in the env it never fires (fails closed)', () => {
+    const page = scrollEnv({ withScroll: false });
+    const { s, onFire } = make({ enabled: true, requireScroll: true }, page);
+    s.start();
+    page.advance(10 * 60_000);
+    expect(onFire).not.toHaveBeenCalled();
   });
 });

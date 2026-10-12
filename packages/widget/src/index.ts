@@ -22,7 +22,11 @@ import {
 import { createBookingController, type BookingController } from './booking-controller';
 import { createEmitter } from './events';
 import { conversationRef, whatsappHandoffUrl } from './handoff';
-import { resolvePricePolicy, resolveSidebar } from './sidebar-config';
+import {
+  MAX_PAGE_CONTEXT_KEYS,
+  MAX_PAGE_CONTEXT_VALUE,
+  chipAt,
+  resolvePricePolicy, resolveSidebar, type ResolvedChip } from './sidebar-config';
 import { createTurnstileGate, type TurnstileGate } from './turnstile';
 import { createBookingStore } from './booking-store';
 import { createClinicBookingController, type ClinicBookingController } from './clinic-booking-controller';
@@ -110,6 +114,13 @@ function newClientMessageId(): string {
  * background — none of them may leave a dealer's site with no chat button.
  */
 const REVEAL_TIMEOUT_MS = 1_200;
+/** typingOnSend: after this long the dots read «Sigue escribiendo…». */
+export const AWAIT_SLOW_MS = 12_000;
+/** typingOnSend: with no reply after this long, the dots go away. */
+export const AWAIT_GIVE_UP_MS = 60_000;
+/** The typing beat before a scripted reply, picked at random in this range. */
+export const SCRIPT_BEAT_MIN_MS = 600;
+export const SCRIPT_BEAT_MAX_MS = 900;
 
 export function init(config: WidgetConfig): WidgetInstance {
   // The server-resolved appearance (ADR 0046), layered UNDER anything the
@@ -177,6 +188,20 @@ export function init(config: WidgetConfig): WidgetInstance {
   let restoreOnShow: 'panel' | 'teaser' | 'launcher' = 'launcher';
   let unread = 0;
   let typingTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The server said someone is composing (its TTL not yet run out). */
+  let serverTyping = false;
+  // typingOnSend (0.18.0): dots from the visitor's send until a reply lands.
+  const typingOnSend = config.typingOnSend === true;
+  let awaitingReply = false;
+  let awaitSlowTimer: ReturnType<typeof setTimeout> | null = null;
+  let awaitGiveUpTimer: ReturnType<typeof setTimeout> | null = null;
+  let awaitSlow = false;
+  // Scripted chips (0.18.0): the local typing beat, and the trail of taps sent
+  // as `chips_seen` page context with the next real message.
+  let scriptTyping = false;
+  let scriptTimer: ReturnType<typeof setTimeout> | null = null;
+  let scriptSeq = 0;
+  const chipsSeen: string[] = [];
   // Live-only transcript notices ("an advisor joined"). Never persisted, never
   // replayed on reload — see WidgetNotice.
   let notices: WidgetNotice[] = [];
@@ -202,13 +227,49 @@ export function init(config: WidgetConfig): WidgetInstance {
       clearTimeout(typingTimer);
       typingTimer = null;
     }
-    ui.setTyping(active);
+    serverTyping = active;
+    paintTyping();
     if (active && ttlMs) {
       typingTimer = setTimeout(() => {
         typingTimer = null;
-        if (!destroyed) ui.setTyping(false);
+        serverTyping = false;
+        paintTyping();
       }, ttlMs);
     }
+  }
+
+  /** The dots show while ANY source says a reply is coming. */
+  function paintTyping(): void {
+    if (destroyed) return;
+    const on = serverTyping || awaitingReply || scriptTyping;
+    ui.setTyping(on, on && awaitingReply && awaitSlow ? t('typingStill') : null);
+  }
+
+  function stopAwaitingReply(): void {
+    awaitingReply = false;
+    awaitSlow = false;
+    if (awaitSlowTimer) clearTimeout(awaitSlowTimer);
+    if (awaitGiveUpTimer) clearTimeout(awaitGiveUpTimer);
+    awaitSlowTimer = null;
+    awaitGiveUpTimer = null;
+  }
+
+  /** typingOnSend: the visitor's message was accepted; hold the dots until a reply. */
+  function startAwaitingReply(): void {
+    if (!typingOnSend || destroyed) return;
+    stopAwaitingReply();
+    awaitingReply = true;
+    awaitSlowTimer = setTimeout(() => {
+      awaitSlowTimer = null;
+      awaitSlow = true;
+      paintTyping();
+    }, AWAIT_SLOW_MS);
+    awaitGiveUpTimer = setTimeout(() => {
+      awaitGiveUpTimer = null;
+      stopAwaitingReply();
+      paintTyping();
+    }, AWAIT_GIVE_UP_MS);
+    paintTyping();
   }
 
   // The banner has ONE slot but TWO independent sources: how the connection is
@@ -540,7 +601,7 @@ export function init(config: WidgetConfig): WidgetInstance {
               launcherStyle: sidebar.launcherStyle,
             },
             callbacks: {
-              onChip: (index: number, from: 'panel' | 'teaser') => runChip(index, from),
+              onChip: (path: string, from: 'panel' | 'teaser' | 'reply') => runChip(path, from),
               whatsappUrl: () => currentWhatsappUrl(),
               onWhatsApp: () => {
                 emitter.emit('handoff_whatsapp', {
@@ -753,7 +814,10 @@ export function init(config: WidgetConfig): WidgetInstance {
 
       // The reply landed. Whoever was composing has finished, whatever the
       // typing event's TTL said.
-      if (arrived > 0) setTyping(false);
+      if (arrived > 0) {
+        stopAwaitingReply();
+        setTyping(false);
+      }
 
       if (arrived > 0 && !panelOpen) {
         unread += arrived;
@@ -824,7 +888,7 @@ export function init(config: WidgetConfig): WidgetInstance {
       honeypot,
       clientMessageId,
       vehicleId: vehicleId ?? undefined,
-      pageContext: sidebar.pageContext,
+      pageContext: pageContextWithChips(),
       pricePolicy,
       ...(demoMode
         ? {
@@ -840,6 +904,8 @@ export function init(config: WidgetConfig): WidgetInstance {
     if (destroyed) return;
     if ('error' in res && res.error) {
       // The message STAYS on screen, marked failed, with a retry beside it.
+      stopAwaitingReply();
+      paintTyping();
       setStatus(clientMessageId, 'failed');
       setSend('error');
       // A 429 comes with words written for the visitor («Estás escribiendo muy
@@ -849,6 +915,7 @@ export function init(config: WidgetConfig): WidgetInstance {
     }
     setStatus(clientMessageId, undefined);
     setSend('idle');
+    startAwaitingReply();
     // Pull our own now-accepted inbound. If the row has not been written yet,
     // the merge keeps the local echo and nothing is lost.
     await refreshHistory();
@@ -1266,18 +1333,88 @@ export function init(config: WidgetConfig): WidgetInstance {
     emitter.emit('cta', { source });
   }
 
-  /** A suggested question, from the panel or the peek card. */
-  function runChip(index: number, from: 'panel' | 'teaser'): void {
-    const chip = sidebar.chips[index];
+  /** A suggested question, from the panel, the peek card or under a scripted reply. */
+  function runChip(path: string, from: 'panel' | 'teaser' | 'reply'): void {
+    const chip = chipAt(sidebar.chips, path);
     if (destroyed || !chip) return;
-    emitter.emit('chip', { index, label: chip.label, action: chip.action });
+    const index = Number(path.split('.').pop());
+    emitter.emit('chip', { index, label: chip.label, action: chip.action, path, scripted: !!chip.reply });
     if (chip.action === 'booking') {
       runCta('chip');
       return;
     }
+    if (chip.action === 'link' && chip.url) {
+      // Close first: a same-page anchor (/precios#calculadora) must not land
+      // behind a full-screen panel on a phone.
+      instanceClose('api');
+      try {
+        window.location.assign(chip.url);
+      } catch {
+        /* a sandboxed frame: nothing to do */
+      }
+      return;
+    }
     if (from === 'teaser') instanceOpen('chip');
+    if (chip.action === 'compose') {
+      instanceOpen('chip');
+      ui.focusComposer(chip.message === chip.label ? '' : chip.message);
+      return;
+    }
+    if (chip.reply) {
+      runScripted(chip, path);
+      return;
+    }
     if (chip.action === 'demo') enterDemo('chip');
     void instanceSend(chip.message);
+  }
+
+  /**
+   * A scripted chip (0.18.0): the visitor's line, a short typing beat, then
+   * the reply with its next chips — all local, nothing sent. The tap joins the
+   * `chips_seen` trail so the assistant knows what was answered.
+   */
+  function runScripted(chip: ResolvedChip, path: string): void {
+    if (destroyed || scriptTimer) return;
+    instanceOpen('chip');
+    const seq = (scriptSeq += 1);
+    messages = [
+      ...messages,
+      { id: `local:script:${seq}:q`, createdAt: nextLocalTimestamp(), content: chip.label, direction: 'inbound', type: 'text' },
+    ];
+    ui.renderMessages(messages, notices);
+    chipsSeen.push(chip.label);
+    scriptTyping = true;
+    paintTyping();
+    const beat = SCRIPT_BEAT_MIN_MS + Math.floor(Math.random() * (SCRIPT_BEAT_MAX_MS - SCRIPT_BEAT_MIN_MS + 1));
+    scriptTimer = setTimeout(() => {
+      scriptTimer = null;
+      if (destroyed) return;
+      scriptTyping = false;
+      paintTyping();
+      const next = (chip.next ?? []).map((c, i) => ({ label: c.label, path: `${path}.${i}`, action: c.action }));
+      messages = [
+        ...messages,
+        {
+          id: `local:script:${seq}:a`,
+          createdAt: nextLocalTimestamp(),
+          content: chip.reply ?? '',
+          direction: 'outbound',
+          type: 'text',
+          ...(next.length > 0 ? { replyChips: next } : {}),
+        },
+      ];
+      ui.renderMessages(messages, notices);
+    }, beat);
+  }
+
+  /** The page's context plus the scripted taps so far (newest kept when it must be cut). */
+  function pageContextWithChips(): Record<string, string> {
+    const base = sidebar.pageContext;
+    if (chipsSeen.length === 0) return base;
+    if (Object.keys(base).length >= MAX_PAGE_CONTEXT_KEYS && !('chips_seen' in base)) return base;
+    let trail = chipsSeen.join(' › ');
+    if (trail.length > MAX_PAGE_CONTEXT_VALUE) trail = `…${trail.slice(-(MAX_PAGE_CONTEXT_VALUE - 1))}`;
+    return { ...base, chips_seen: trail };
   }
 
   async function instanceSend(text: string): Promise<boolean> {
@@ -1355,6 +1492,11 @@ export function init(config: WidgetConfig): WidgetInstance {
       if (typingTimer) {
         clearTimeout(typingTimer);
         typingTimer = null;
+      }
+      stopAwaitingReply();
+      if (scriptTimer) {
+        clearTimeout(scriptTimer);
+        scriptTimer = null;
       }
       if (revealTimer) {
         clearTimeout(revealTimer);

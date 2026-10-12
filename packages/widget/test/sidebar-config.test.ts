@@ -85,6 +85,7 @@ describe('resolveAutoOpen', () => {
       mobile: 'teaser',
       excludePaths: [],
       variant: null,
+      requireScroll: null,
     });
   });
 
