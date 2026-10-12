@@ -205,6 +205,19 @@ export function resolveWhatsApp(input: WidgetWhatsAppConfig | undefined): Resolv
 
 const CONTEXT_KEY = /^[a-z][a-z0-9_]{0,31}$/;
 
+const PRICE_MODES = new Set(['first_ask', 'evaluation_only', 'never', 'script']);
+const MAX_PRICE_SCRIPT = 400;
+
+/** Sanitize the host's price policy into the wire shape (`price_policy`), or null to send nothing. */
+export function resolvePricePolicy(input: unknown): { mode: string; script?: string } | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const { mode, script } = input as { mode?: unknown; script?: unknown };
+  if (typeof mode !== 'string' || !PRICE_MODES.has(mode)) return null;
+  const s = typeof script === 'string' ? script.trim().slice(0, MAX_PRICE_SCRIPT).trim() : '';
+  if (mode === 'script') return s ? { mode, script: s } : null;
+  return s ? { mode, script: s } : { mode };
+}
+
 export function resolvePageContext(input: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   if (!input || typeof input !== 'object' || Array.isArray(input)) return out;

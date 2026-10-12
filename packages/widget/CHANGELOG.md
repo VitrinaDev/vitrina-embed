@@ -1,5 +1,21 @@
 # @vitrina/widget
 
+## 0.17.4
+
+**`pricePolicy` and `freshConversation`** (landing-cro ticket 35, a live patient
+chat next to Tomás). Additive: nothing changes for an install that sets neither.
+
+- `pricePolicy: { mode: 'first_ask' | 'evaluation_only' | 'never' | 'script', script? }`
+  is sanitized (unknown mode dropped, `script` trimmed and cut to 400 chars, mode
+  `script` without text dropped) and sent as `price_policy` on every
+  `POST /widget/messages`. Inline only; never read from remote config.
+- `freshConversation: true` clears this publicKey's stored visitor token at init,
+  so the instance opens a new conversation. Restart = `destroy()` + `init(...)`.
+- Two instances on one page (an IIFE loader instance plus an ESM inline one):
+  auto-open no longer opens over a composer focused in the OTHER widget, and each
+  instance checks its own host (not the first `[data-vitrina-widget]` in the DOM).
+  An inline `destroy()` leaves its container empty, so re-init in it works.
+
 ## 0.17.3
 
 **`hide()` / `show()` in the host JS API** (landing-cro web#21). Additive.

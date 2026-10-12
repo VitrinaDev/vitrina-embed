@@ -85,6 +85,8 @@ export interface SendInput {
    * know the field strips it (the body schema is not strict).
    */
   pageContext?: Record<string, string>;
+  /** Already sanitized (sidebar-config `resolvePricePolicy`). Sent as `price_policy`. */
+  pricePolicy?: { mode: string; script?: string } | null;
   /** `demo` while demo mode is on (D60): the server routes to the demo persona. */
   mode?: 'demo';
   /** With `mode: 'demo'`: which world the server should play (`demo_world`). */
@@ -756,6 +758,7 @@ export class VitrinaTransport {
     if (input.pageContext && Object.keys(input.pageContext).length > 0) {
       body.page_context = input.pageContext;
     }
+    if (input.pricePolicy) body.price_policy = input.pricePolicy;
     if (input.mode === 'demo') {
       body.mode = 'demo';
       if (input.demoWorld) body.demo_world = input.demoWorld;

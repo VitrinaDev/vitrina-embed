@@ -22,7 +22,7 @@ import {
 import { createBookingController, type BookingController } from './booking-controller';
 import { createEmitter } from './events';
 import { conversationRef, whatsappHandoffUrl } from './handoff';
-import { resolveSidebar } from './sidebar-config';
+import { resolvePricePolicy, resolveSidebar } from './sidebar-config';
 import { createTurnstileGate, type TurnstileGate } from './turnstile';
 import { createBookingStore } from './booking-store';
 import { createClinicBookingController, type ClinicBookingController } from './clinic-booking-controller';
@@ -71,6 +71,7 @@ export type {
   WidgetPreset,
   WidgetWhatsAppConfig,
   WidgetConfig,
+  WidgetPricePolicy,
   WidgetInstance,
   WidgetTheme,
   WidgetLocale,
@@ -154,6 +155,9 @@ export function init(config: WidgetConfig): WidgetInstance {
   let autoOpen: AutoOpenScheduler | null = null;
   const t = makeT(resolved.locale);
   const tokens = createTokenStore(resolved.publicKey);
+  // A restart (0.17.4): forget the stored visitor so bootstrap opens a NEW conversation.
+  if (config.freshConversation === true) tokens.clear();
+  const pricePolicy = resolvePricePolicy(config.pricePolicy);
   const transport = new VitrinaTransport(
     { apiBaseUrl: resolved.apiBaseUrl, publicKey: resolved.publicKey },
     tokens,
@@ -820,6 +824,7 @@ export function init(config: WidgetConfig): WidgetInstance {
       clientMessageId,
       vehicleId: vehicleId ?? undefined,
       pageContext: sidebar.pageContext,
+      pricePolicy,
       ...(demoMode
         ? {
             mode: 'demo' as const,
@@ -1090,7 +1095,7 @@ export function init(config: WidgetConfig): WidgetInstance {
       publicKey: resolved.publicKey,
       config: sidebar.autoOpen,
       env: browserAutoOpenEnv(
-        () => document.querySelector('[data-vitrina-widget]'),
+        () => ui.host,
         undefined,
         () => hiddenByHost,
       ),
