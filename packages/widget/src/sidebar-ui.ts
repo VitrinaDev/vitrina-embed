@@ -27,12 +27,13 @@ export interface SidebarUiOptions {
   hasWhatsApp: boolean;
   ctaLabel: string | null;
   demoWorld: string | null;
-  /** Collapsed launcher on desktop: the docked side tab (default) or a round portrait bubble. */
-  launcherStyle?: 'tab' | 'bubble';
+  /** Collapsed launcher on desktop: the docked side tab (default), a round portrait bubble, or the textless sidetab. */
+  launcherStyle?: 'tab' | 'bubble' | 'sidetab';
 }
 
 export interface SidebarUiCallbacks {
-  onChip(index: number, from: 'panel' | 'teaser'): void;
+  /** A chip was tapped. `path` is its place in the chip tree ("0", "0.1"). */
+  onChip(path: string, from: 'panel' | 'teaser' | 'reply'): void;
   /** Current wa.me URL (with the conversation ref when there is one). */
   whatsappUrl(): string | null;
   onWhatsApp(): void;
@@ -80,6 +81,16 @@ const minusIcon = (): SVGElement => svg('0 0 24 24', [['M6 12h12', STROKE]], 'vt
 const chevronIcon = (): SVGElement => svg('0 0 24 24', [['M6 9l6 6 6-6', STROKE]], 'vtr-ic-chev');
 const xIcon = (): SVGElement => svg('0 0 24 24', [['M6 6l12 12M18 6L6 18', STROKE]]);
 export const sendIcon = (): SVGElement => svg('0 0 24 24', [['M12 19V5M5 12l7-7 7 7', STROKE]]);
+/** A speech bubble with three dots: «chat», no words. */
+const chatIcon = (): SVGElement =>
+  svg(
+    '0 0 24 24',
+    [
+      ['M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.2 3.6c-.5.4-1.3.1-1.3-.6V16A2.5 2.5 0 0 1 4 13.5z', { fill: 'currentColor' }],
+      ['M8.5 9.5h.01M12 9.5h.01M15.5 9.5h.01', { fill: 'none', stroke: '#AD4E00', 'stroke-width': '2.4', 'stroke-linecap': 'round' }],
+    ],
+    'vtr-ic-chat',
+  );
 const calendarIcon = (): SVGElement =>
   svg('0 0 24 24', [['M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM16 3v4M8 3v4M3 10h18', STROKE]]);
 
@@ -136,6 +147,8 @@ export interface SidebarChrome {
   decorateLauncher(launcher: HTMLButtonElement): void;
   /** Elements appended under the greeting while the transcript is empty. */
   welcomeExtras(): HTMLElement[];
+  /** The chips under a scripted reply (0.18.0); `paths` are their tree paths. */
+  replyChips(chips: Array<{ label: string; path: string; action: string }>): HTMLElement;
   /** The pinned CTA, inserted above the composer. null when none is configured. */
   ctaButton(): HTMLButtonElement | null;
   /** The demo-mode exit button, inserted above the CTA. */
@@ -220,14 +233,19 @@ export function createSidebarChrome(
   }
 
   // --- Chips + WhatsApp under the greeting ------------------------------------
-  function chipButton(chip: ResolvedChip, index: number, from: 'panel' | 'teaser'): HTMLButtonElement {
+  function chipButton(
+    chip: Pick<ResolvedChip, 'label'> & { action: string },
+    path: string,
+    from: 'panel' | 'teaser' | 'reply',
+  ): HTMLButtonElement {
     const b = el('button', 'vtr-sb-chip');
     b.type = 'button';
     if (chip.action === 'demo') b.appendChild(el('span', 'vtr-sb-k', t('sbDemoTag')));
+    if (chip.action === 'booking') b.classList.add('vtr-sb-chip-book');
     b.appendChild(document.createTextNode(chip.label));
     on(b, 'click', (e) => {
       e.stopPropagation();
-      cb.onChip(index, from);
+      cb.onChip(path, from);
     });
     return b;
   }
@@ -260,7 +278,7 @@ export function createSidebarChrome(
     teaser.appendChild(top);
     if (opts.chips.length > 0) {
       const row = el('div', 'vtr-peek-row');
-      opts.chips.forEach((c, i) => row.appendChild(chipButton(c, i, 'teaser')));
+      opts.chips.forEach((c, i) => row.appendChild(chipButton(c, String(i), 'teaser')));
       teaser.appendChild(row);
     }
   }
@@ -389,19 +407,31 @@ export function createSidebarChrome(
         ...Array.from(launcher.children).filter((c) => c.classList.contains('vtr-badge')),
       );
       const bubble = opts.launcherStyle === 'bubble';
+      const sidetab = opts.launcherStyle === 'sidetab';
       if (bubble) {
         launcher.classList.add('vtr-sb-bubble');
         launcher.closest('.vtr-root')?.setAttribute('data-launcher', 'bubble');
       }
-      launcher.prepend(portrait(agent, bubble ? 52 : 36, { online: true, aiTag: t('sbAiTag'), badge: bubble }));
+      if (sidetab) {
+        launcher.classList.add('vtr-sb-sidetab');
+        launcher.closest('.vtr-root')?.setAttribute('data-launcher', 'sidetab');
+      }
+      // The sidetab carries no «IA» badge: the chat icon says «talk», and the
+      // AI disclosure is the header's label inside the sheet and the aria-label.
+      launcher.prepend(portrait(agent, bubble ? 52 : sidetab ? 44 : 36, { online: true, aiTag: t('sbAiTag'), badge: bubble }));
+      if (sidetab) {
+        const ic = el('span', 'vtr-sbtab-chat');
+        ic.appendChild(chatIcon());
+        launcher.insertBefore(ic, launcher.children[1] ?? null);
+      }
       if (agent) {
-        if (!bubble) {
+        if (!bubble && !sidetab) {
           launcherLabel = el('span', 'vtr-sbtab-label', t('sbAskAgent'));
           launcher.appendChild(launcherLabel);
         }
         const tip = el('span', 'vtr-sbtab-tip');
         tip.setAttribute('aria-hidden', 'true');
-        if (bubble) {
+        if (bubble || sidetab) {
           tipText = document.createTextNode(t('sbAskAgent'));
           tip.append(tipText);
         } else {
@@ -417,7 +447,7 @@ export function createSidebarChrome(
       if (agent) out.push(el('div', 'vtr-sb-meta', `${agent.name} · ${t('sbAiTag')}`));
       if (opts.chips.length > 0) {
         const col = el('div', 'vtr-sb-chips');
-        opts.chips.forEach((c, i) => col.appendChild(chipButton(c, i, 'panel')));
+        opts.chips.forEach((c, i) => col.appendChild(chipButton(c, String(i), 'panel')));
         out.push(col);
       }
       if (opts.hasWhatsApp) {
@@ -428,6 +458,11 @@ export function createSidebarChrome(
         out.push(row);
       }
       return out;
+    },
+    replyChips(chips) {
+      const col = el('div', 'vtr-sb-chips vtr-sb-chips-reply');
+      for (const c of chips) col.appendChild(chipButton(c, c.path, 'reply'));
+      return col;
     },
     ctaButton: () => cta,
     demoExitButton: () => exitBtn,

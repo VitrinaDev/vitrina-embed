@@ -28,6 +28,8 @@ export interface WidgetStrings {
   unread: string;
   /** Screen-reader label for the typing indicator. Names nobody. */
   typing: string;
+  /** Beside the dots when a reply is taking long (typingOnSend). Names nobody. */
+  typingStill: string;
   /** Centered system line when a person takes over. Names nobody. */
   advisorJoined: string;
   /** Link on a vehicle card, when the listing has a URL. */
@@ -365,6 +367,7 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     retry: 'Reintentar',
     unread: 'mensajes sin leer',
     typing: 'Escribiendo una respuesta…',
+    typingStill: 'Sigue escribiendo…',
     advisorJoined: 'Un asesor se unió a la conversación',
     viewVehicle: 'Ver el vehículo',
     sbAskAgent: 'Pregúntale a {name}',
@@ -624,6 +627,7 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     retry: 'Retry',
     unread: 'unread messages',
     typing: 'Typing a reply…',
+    typingStill: 'Still typing…',
     advisorJoined: 'An advisor joined the conversation',
     viewVehicle: 'View the vehicle',
     sbAskAgent: 'Ask {name}',

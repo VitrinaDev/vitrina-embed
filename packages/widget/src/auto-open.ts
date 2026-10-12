@@ -16,6 +16,10 @@
 //      with sound playing, a dialog or booking sheet open), it WAITS for the
 //      page to be quiet, re-checking every second, and gives up after a while
 //      rather than interrupting the visitor later out of context.
+//   7. with `requireScroll` (0.18.0), a due timer also waits — with no give-up —
+//      until the visitor has scrolled the page far enough, ONCE, at any point
+//      since load. A visitor who stays on the first screen never gets it.
+//      It then fires a beat after the scroll (SCROLL_SETTLE_MS), never mid-gesture.
 
 import type { ResolvedAutoOpen } from './sidebar-config';
 
@@ -38,6 +42,12 @@ export interface AutoOpenEnv {
   /** Why the page is not quiet right now, or null. */
   busy(): BusyReason | null;
   session: SessionStore;
+  /** How far the page is scrolled now, in px. Needed only for `requireScroll`. */
+  scrollDistance?(): number;
+  /** The window height in px, for a `viewport` bound. */
+  viewportHeight?(): number;
+  /** Subscribe to page scrolls; returns the unsubscribe. Without it `requireScroll` never passes. */
+  onScroll?(fn: () => void): () => void;
 }
 
 export interface AutoOpenScheduler {
@@ -49,12 +59,14 @@ export interface AutoOpenScheduler {
   noteDismissed(): void;
   cancel(): void;
   /** For tests and diagnostics. */
-  state(): 'idle' | 'armed' | 'waiting-quiet' | 'fired' | 'spent' | 'off';
+  state(): 'idle' | 'armed' | 'waiting-quiet' | 'waiting-scroll' | 'fired' | 'spent' | 'off';
 }
 
 export const QUIET_RETRY_MS = 1_000;
 /** How long a due auto-open may wait for a busy page before giving up. */
 export const QUIET_GIVE_UP_MS = 60_000;
+/** A due auto-open that waited for the scroll fires this long after it. */
+export const SCROLL_SETTLE_MS = 1_200;
 
 export function sessionKey(publicKey: string): string {
   return `vtr:widget:${publicKey}:autoopen`;
@@ -83,6 +95,32 @@ export function createAutoOpenScheduler(opts: {
   let state: ReturnType<AutoOpenScheduler['state']> = 'idle';
   let timer: unknown = null;
   let waitedMs = 0;
+  // requireScroll: latched once the visitor has scrolled far enough.
+  const scrollRule = config.requireScroll;
+  let scrolledEnough = scrollRule === null;
+  let unsubscribeScroll: (() => void) | null = null;
+
+  function scrollThreshold(): number {
+    if (!scrollRule) return 0;
+    const vh = env.viewportHeight?.() ?? 0;
+    return Math.max(scrollRule.px, scrollRule.viewport * vh, 1);
+  }
+
+  function stopWatchingScroll(): void {
+    unsubscribeScroll?.();
+    unsubscribeScroll = null;
+  }
+
+  function checkScroll(): void {
+    if (scrolledEnough) return;
+    if ((env.scrollDistance?.() ?? 0) < scrollThreshold()) return;
+    scrolledEnough = true;
+    stopWatchingScroll();
+    if (state === 'waiting-scroll') {
+      state = 'armed';
+      timer = env.setTimeout(fire, SCROLL_SETTLE_MS);
+    }
+  }
 
   const spentInSession = (): boolean => env.session.get(key) !== null;
 
@@ -102,6 +140,13 @@ export function createAutoOpenScheduler(opts: {
     if (state !== 'armed' && state !== 'waiting-quiet') return;
     if (spentInSession()) {
       state = 'spent';
+      stopWatchingScroll();
+      return;
+    }
+    if (!scrolledEnough) {
+      // Not an error and not a give-up: the visitor simply has not shown
+      // interest yet. checkScroll() re-arms when they do.
+      state = 'waiting-scroll';
       return;
     }
     if (env.busy() !== null) {
@@ -138,21 +183,28 @@ export function createAutoOpenScheduler(opts: {
       }
       const delay = env.isMobile() ? config.mobileDelayMs : config.delayMs;
       state = 'armed';
+      if (!scrolledEnough) {
+        unsubscribeScroll = env.onScroll?.(checkScroll) ?? null;
+        checkScroll();
+      }
       timer = env.setTimeout(fire, Math.max(0, delay - env.now()));
     },
     noteOpened(): void {
       clear();
+      stopWatchingScroll();
       if (!spentInSession()) spend('opened');
       if (state !== 'fired') state = 'spent';
     },
     noteDismissed(): void {
       clear();
+      stopWatchingScroll();
       spend('dismissed');
       state = 'spent';
     },
     cancel(): void {
       clear();
-      if (state === 'armed' || state === 'waiting-quiet') state = 'idle';
+      stopWatchingScroll();
+      if (state === 'armed' || state === 'waiting-quiet' || state === 'waiting-scroll') state = 'idle';
     },
     state: () => state,
   };
@@ -242,5 +294,18 @@ export function browserAutoOpenEnv(
     // Hidden by the host (hide()) counts as busy: the timer waits, like for a dialog.
     busy: () => (isHidden() ? 'hidden' : detectBusy(document, widgetHost())),
     session: browserSessionStore(),
+    scrollDistance: () => {
+      try {
+        return Math.max(window.scrollY || 0, document.documentElement?.scrollTop || 0);
+      } catch {
+        return 0;
+      }
+    },
+    viewportHeight: () => (typeof innerHeight === 'number' ? innerHeight : 0),
+    onScroll: (fn) => {
+      const handler = (): void => fn();
+      window.addEventListener('scroll', handler, { passive: true });
+      return () => window.removeEventListener('scroll', handler);
+    },
   };
 }

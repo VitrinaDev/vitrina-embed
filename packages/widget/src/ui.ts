@@ -157,8 +157,11 @@ export interface WidgetUi {
   setBanner(state: BannerState): void;
   /** Unread replies waiting behind a closed panel. 0 hides the badge. */
   setUnread(count: number): void;
-  /** Someone is composing a reply. The widget never says who. */
-  setTyping(active: boolean): void;
+  /**
+   * Someone is composing a reply. The widget never says who. `note` is an
+   * optional line beside the dots («Sigue escribiendo…»).
+   */
+  setTyping(active: boolean, note?: string | null): void;
   /**
    * Re-theme a MOUNTED widget (ADR 0046) — accent, corner, header logo. Every
    * value goes through the same sanitizers as the initial paint; an unusable
@@ -570,6 +573,8 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     dot.className = 'vtr-typing-dot';
     typingEl.appendChild(dot);
   }
+  // Built on first use: a widget that never shows a note keeps the old DOM.
+  let typingNote: HTMLElement | null = null;
 
   const banner = document.createElement('div');
   banner.className = 'vtr-banner';
@@ -1525,9 +1530,10 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       if (messages.length === 0 && open) renderWelcome();
       // Interleave notices into the transcript by timestamp, so "an advisor
       // joined" appears where it happened rather than pinned to the bottom.
-      const items: Array<{ at: string; render: () => void }> = [
+      const items: Array<{ at: string; render: () => void; msg?: WidgetMessage }> = [
         ...messages.map((m) => ({
           at: m.createdAt,
+          msg: m,
           render: () => {
             const el = bubble(m.direction, m.content, String(m.id), m.mode === 'demo');
             if (m.status) el.setAttribute('data-status', m.status);
@@ -1567,6 +1573,11 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
         return Number.isFinite(ta) && Number.isFinite(tb) ? ta - tb : 0;
       });
       for (const item of items) item.render();
+      // A scripted reply's chips, only while it is the last thing said.
+      const last = items[items.length - 1]?.msg;
+      if (chrome && last?.replyChips && last.replyChips.length > 0) {
+        messagesEl.appendChild(chrome.replyChips(last.replyChips));
+      }
       scrollToBottom();
     },
     setBanner(state: BannerState): void {
@@ -1770,8 +1781,19 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       host.style.setProperty('display', hidden ? 'none' : 'block', 'important');
       chrome?.setSlotHidden(hidden);
     },
-    setTyping(active: boolean): void {
+    setTyping(active: boolean, note?: string | null): void {
       typingEl.hidden = !active;
+      if (note && active) {
+        if (!typingNote) {
+          typingNote = document.createElement('span');
+          typingNote.className = 'vtr-typing-note';
+          typingEl.appendChild(typingNote);
+        }
+        typingNote.textContent = note;
+        typingNote.hidden = false;
+      } else if (typingNote) {
+        typingNote.hidden = true;
+      }
       if (active) scrollToBottom();
     },
     showTeaser(): void {

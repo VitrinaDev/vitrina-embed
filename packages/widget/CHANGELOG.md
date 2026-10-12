@@ -1,5 +1,26 @@
 # @vitrina/widget
 
+## 0.18.0
+
+Four opt-in additions (landing-cro, Tomás feedback 2026-10-12). Nothing changes for an install that
+sets none of them.
+
+- **`launcherStyle: 'sidetab'`**: in sidebar mode the collapsed desktop launcher is a vertical
+  rectangle docked at the right-centre edge, Tomás's portrait over a chat icon, no vertical text and
+  no «IA» badge. The ask is a hover/focus tooltip and the aria-label («Chatear con Tomás, Asistente
+  IA de Vitrina»); the AI disclosure stays in the sheet header. Phones keep the round portrait.
+- **`autoOpen.requireScroll`** (`true` = half a window, or `{ px, viewport }`): a due auto-open
+  waits, without giving up, until the visitor has scrolled that far once; it then fires 1.2 s after
+  the scroll. Busy detection, session spend and excluded paths work as before.
+- **`typingOnSend`**: typing dots from the moment the server accepts the visitor's message until a
+  reply lands, «Sigue escribiendo…» beside them after 12 s, gone after 60 s with no reply. The
+  server's own typing event no longer cuts that wait short.
+- **Scripted chips** (`chips[].reply`, `chips[].next`, `action: 'link' | 'compose'`): a chip with a
+  `reply` is answered locally after a 600–900 ms typing beat, with its `next` chips under the reply
+  (up to 3 scripted replies in a row). No server call, no AI tokens. The labels tapped are sent as
+  `page_context.chips_seen` (≤ 80 chars, newest kept) with the visitor's next typed message, so the
+  assistant knows what was already answered. The `chip` event gains `path` and `scripted`.
+
 ## 0.17.5
 
 **`launcherStyle: 'bubble'`** (landing-cro). Additive, inline only. In sidebar mode the collapsed
