@@ -1344,6 +1344,9 @@ export function init(config: WidgetConfig): WidgetInstance {
       return;
     }
     if (chip.action === 'link' && chip.url) {
+      // Close first: a same-page anchor (/precios#calculadora) must not land
+      // behind a full-screen panel on a phone.
+      instanceClose('api');
       try {
         window.location.assign(chip.url);
       } catch {

@@ -392,3 +392,23 @@ describe('auto-open requireScroll in the browser', () => {
     expect($('.vtr-panel')!.hasAttribute('hidden')).toBe(false);
   });
 });
+
+describe('link chips', () => {
+  it('close the panel and navigate, without posting', async () => {
+    instance = init(
+      tomas({
+        chips: [{ label: 'Precio', reply: 'Gratis.', next: [{ label: 'Calculadora', action: 'link', url: 'https://example.com/precios#calculadora' }] }],
+      }),
+    );
+    const events: string[] = [];
+    instance.on('chip', (p) => events.push(`${p.path}:${p.action}`));
+    instance.open();
+    await flush();
+    $$<HTMLButtonElement>('.vtr-sb-chips .vtr-sb-chip')[0]!.click();
+    await flush(SCRIPT_BEAT_MAX_MS + 50);
+    $$<HTMLButtonElement>('.vtr-sb-chips-reply .vtr-sb-chip')[0]!.click();
+    expect($('.vtr-panel')!.hasAttribute('hidden')).toBe(true);
+    expect(events).toEqual(['0:message', '0.0:link']);
+    expect(posts).toHaveLength(0);
+  });
+});
