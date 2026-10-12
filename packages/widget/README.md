@@ -296,6 +296,8 @@ The rule, in full:
 | `demoWorld`      | `string`                      | no       | none               | Name of the fictional business demo mode plays, e.g. `Automotora Demo`. |
 | `demoKind`       | `'automotora' \| 'clinica'`    | no       | read off `demoWorld` | Which world the server plays (`demo_world` on each demo message). |
 | `pageContext`    | `Record<string, string>`      | no       | `{}`               | Page facts sent with each message (`page_context`), ≤ 8 snake_case keys. |
+| `pricePolicy`    | `{ mode: 'first_ask' \| 'evaluation_only' \| 'never' \| 'script'; script?: string }` | no | none | How the assistant answers price questions; sent as `price_policy` with each message (the server honours it only on the demo clinic's key). Unknown `mode` or `script` without text is dropped; `script` is trimmed and cut to 400 chars. Inline only. |
+| `freshConversation` | `boolean`                  | no       | `false`            | Forget this key's stored visitor at init so a NEW conversation starts with no history. Restart a chat with `destroy()` + `init({ ...same, freshConversation: true })`. |
 | `anchor`         | `'auto' \| 'bottom-bar'`      | no       | `'auto'`           | `bottom-bar`: on phones the launcher renders inside `launcherSlot`. |
 | `launcherSlot`   | `HTMLElement \| string`       | no       | —                  | Element or selector for the bottom-bar launcher. |
 | `container`      | `HTMLElement \| string`       | no       | —                  | Element or selector for `layout: 'inline'`. Missing ⇒ sidebar. |

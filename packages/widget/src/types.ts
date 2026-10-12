@@ -191,6 +191,11 @@ export interface WidgetWhatsAppConfig {
   text?: string;
 }
 
+export interface WidgetPricePolicy {
+  mode: 'first_ask' | 'evaluation_only' | 'never' | 'script';
+  script?: string;
+}
+
 export interface WidgetConfig {
   /**
    * Publishable widget key (`pk_...`, origin-locked — Vitrina ADR 0033).
@@ -308,6 +313,19 @@ export interface WidgetConfig {
    * 8 keys; travels with each message.
    */
   pageContext?: Record<string, string>;
+  /**
+   * How the assistant handles price questions (0.17.4). Sent as `price_policy`
+   * on every message; the server only honours it on the demo clinic's key.
+   * `script` needs a non-empty `script` (trimmed, cut to 400 chars); an unknown
+   * `mode` drops the whole field. Inline only, never read from remote config.
+   */
+  pricePolicy?: WidgetPricePolicy;
+  /**
+   * Start a NEW conversation (0.17.4): init forgets this publicKey's stored
+   * visitor token first, so no prior history comes back. To restart a chat the
+   * host calls `destroy()` then `init({ ...same, freshConversation: true })`.
+   */
+  freshConversation?: boolean;
   /**
    * Fetch the dealer's appearance from Vitrina at init (default `true`).
    *

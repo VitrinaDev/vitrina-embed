@@ -200,6 +200,12 @@ export function detectBusy(doc: Document, widgetHost?: Element | null): BusyReas
   const active = doc.activeElement as HTMLElement | null;
   if (active && active !== widgetHost && !(widgetHost && widgetHost.contains(active))) {
     if (TYPING_TAGS.has(active.tagName) || active.isContentEditable) return 'input';
+    // Another Vitrina widget on the page (e.g. an inline chat) with its composer focused:
+    // the visitor is typing there, so this instance must not open over it.
+    if (active.hasAttribute('data-vitrina-widget')) {
+      const inner = active.shadowRoot?.activeElement as HTMLElement | null | undefined;
+      if (inner && (TYPING_TAGS.has(inner.tagName) || inner.isContentEditable)) return 'input';
+    }
   }
   const videos = doc.getElementsByTagName('video');
   for (let i = 0; i < videos.length; i += 1) {
