@@ -501,9 +501,18 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   // the kind of half-branded panel applyLogo exists to prevent.
   let logoUrl: string | undefined = theme.logoUrl;
   const logoImages: HTMLImageElement[] = [];
+  // The dark-ground variant (0.18.1). Each logo slot may carry a second <img>
+  // right after it, and CSS decides which of the two the ground shows (the
+  // accent header is dark; the surface is dark only under a dark scheme) — no
+  // colour guessing in script. The second <img> exists ONLY while a usable
+  // variant is configured, so a tenant without one gets today's DOM, node for
+  // node.
+  let logoOnDarkUrl: string | undefined = theme.logoOnDarkUrl;
+  const darkLogos = new Map<HTMLImageElement, HTMLImageElement>();
 
   /** Point ONE logo <img> at the current URL, or hide it. */
   function paintLogo(el: HTMLImageElement): void {
+    paintDarkLogo(el);
     const href = validateLogoUrl(logoUrl);
     if (href) {
       el.src = href;
@@ -512,6 +521,35 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     }
     el.hidden = true;
     el.removeAttribute('src');
+  }
+
+  /** Give a logo slot its dark-ground twin, or take it away. */
+  function paintDarkLogo(el: HTMLImageElement): void {
+    const href = validateLogoUrl(logoOnDarkUrl);
+    let dark = darkLogos.get(el);
+    if (!href) {
+      dark?.remove();
+      darkLogos.delete(el);
+      el.removeAttribute('data-ondark');
+      return;
+    }
+    if (!dark) {
+      dark = document.createElement('img');
+      dark.className = 'vtr-logo vtr-logo-ondark';
+      dark.alt = '';
+      darkLogos.set(el, dark);
+    }
+    if (dark.getAttribute('src') !== href) dark.src = href;
+    // Tells the CSS "a twin exists": dark grounds then hide THIS one.
+    el.setAttribute('data-ondark', '');
+    placeDarkLogo(el);
+  }
+
+  /** Keep the twin right after its slot (a slot built before it is attached
+   *  gets placed once the caller has put it in the DOM). */
+  function placeDarkLogo(el: HTMLImageElement): void {
+    const dark = darkLogos.get(el);
+    if (dark && el.parentNode && el.nextSibling !== dark) el.after(dark);
   }
 
   /** A logo slot: always in the DOM, hidden until there is a URL worth loading. */
@@ -527,13 +565,15 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
 
   /** Point every logo slot at `url`, or hide them all. Re-validated every time:
    *  this runs again for every server-resolved config, not just the first paint. */
-  function applyLogo(url: string | undefined): void {
+  function applyLogo(url: string | undefined, onDark?: string): void {
     logoUrl = url;
+    logoOnDarkUrl = onDark;
     for (const el of logoImages) paintLogo(el);
   }
 
   const logo = makeLogo();
   header.appendChild(logo);
+  placeDarkLogo(logo);
 
   // Every view has its own close button — the panel must be dismissible from
   // wherever the visitor happens to be standing. They share one handler and one
@@ -1320,7 +1360,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     avatarsEl.className = 'vtr-avatars';
     const closeHome = makeCloseBtn();
     on(closeHome, 'click', () => callbacks.onRequestClose());
-    top.append(makeLogo(), spacer, avatarsEl, closeHome);
+    const homeLogo = makeLogo();
+    top.append(homeLogo, spacer, avatarsEl, closeHome);
+    placeDarkLogo(homeLogo);
 
     homeTitleEl = document.createElement('h2');
     homeTitleEl.className = 'vtr-home-title';
@@ -1597,7 +1639,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       // hostile or malformed colour leaves a coherent widget rather than one
       // wearing half of two themes.
       root.style.setProperty('--vtr-accent', resolveAccent(next.accent));
-      applyLogo(next.logoUrl);
+      applyLogo(next.logoUrl, next.logoOnDarkUrl);
     },
     applyFont,
     setBookingLabel(label: string | null): void {

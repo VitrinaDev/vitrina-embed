@@ -113,6 +113,24 @@ export const STYLES = `
    land without re-ordering the header. Explicit rather than relying on the UA
    [hidden] rule, which any future display declaration here would silently beat. */
 .vtr-logo[hidden] { display: none; }
+/* The dark-ground twin (.vtr-logo-ondark, 0.18.1) sits right after its slot
+   and exists only when the tenant has one; its slot then carries data-ondark.
+   The GROUND decides which of the two shows. The classic header is the accent,
+   a dark ground: the twin shows there. The tabs header, the Home hero and the
+   sidebar header are the surface: light, so the plain logo shows, unless the
+   scheme is dark (and the cream preset, pinned light, never is). */
+.vtr-panel:not([data-tabs]) .vtr-header:not(.vtr-sb-head) > .vtr-logo[data-ondark],
+.vtr-panel[data-tabs] .vtr-header > .vtr-logo-ondark,
+.vtr-sb-head > .vtr-logo-ondark,
+.vtr-home-top > .vtr-logo-ondark { display: none; }
+@media (prefers-color-scheme: dark) {
+  .vtr-root:not([data-preset="cream"]) .vtr-panel[data-tabs] .vtr-header > .vtr-logo[data-ondark],
+  .vtr-root:not([data-preset="cream"]) .vtr-sb-head > .vtr-logo[data-ondark],
+  .vtr-root:not([data-preset="cream"]) .vtr-home-top > .vtr-logo[data-ondark] { display: none; }
+  .vtr-root:not([data-preset="cream"]) .vtr-panel[data-tabs] .vtr-header:not([data-agent]) > .vtr-logo-ondark,
+  .vtr-root:not([data-preset="cream"]) .vtr-sb-head:not([data-agent]) > .vtr-logo-ondark,
+  .vtr-root:not([data-preset="cream"]) .vtr-home-top > .vtr-logo-ondark { display: block; }
+}
 /* Absolutely centered so the title sits at the header's TRUE middle no matter
    how wide the logo (up to 108px) or the close button are — flex order would
    center it between them, visibly off-center next to a wide wordmark. */

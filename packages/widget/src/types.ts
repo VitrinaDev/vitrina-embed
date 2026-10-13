@@ -31,6 +31,13 @@ export interface WidgetTheme {
   position?: 'br' | 'bl';
   /** Optional logo shown in the panel header (absolute URL). */
   logoUrl?: string;
+  /**
+   * Optional variant of the logo for DARK grounds (absolute URL): drawn
+   * instead of `logoUrl` wherever the header ground is dark (the accent
+   * header, or the surface under `prefers-color-scheme: dark`). CSS picks the
+   * variant; unset ⇒ `logoUrl` everywhere, exactly as before.
+   */
+  logoOnDarkUrl?: string;
 }
 
 /**
@@ -284,6 +291,11 @@ export interface WidgetConfig {
    * set inline; an unusable URL simply means no logo, never a broken image.
    */
   logoUrl?: string;
+  /**
+   * The logo for dark header grounds — same slot as `theme.logoOnDarkUrl`,
+   * same precedence and the same URL gate as {@link logoUrl}.
+   */
+  logoOnDarkUrl?: string;
   /** Greeting shown before the visitor sends the first message. */
   welcomeMessage?: string;
   /**
