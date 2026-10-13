@@ -55,6 +55,7 @@ export function coerceRemoteConfig(input: unknown): RemoteWidgetConfig | null {
     if (typeof t.accent === 'string') next.accent = t.accent;
     if (t.position === 'br' || t.position === 'bl') next.position = t.position;
     if (typeof t.logoUrl === 'string') next.logoUrl = t.logoUrl;
+    if (typeof t.logoOnDarkUrl === 'string') next.logoOnDarkUrl = t.logoOnDarkUrl;
     if (Object.keys(next).length > 0) out.theme = next;
   }
   if (typeof raw.welcomeMessage === 'string') {
@@ -81,6 +82,7 @@ export function coerceRemoteConfig(input: unknown): RemoteWidgetConfig | null {
   // rather than caching it: the honest render is the system stack.
   if (isWidgetFont(raw.font)) out.font = raw.font;
   if (typeof raw.logoUrl === 'string') out.logoUrl = raw.logoUrl;
+  if (typeof raw.logoOnDarkUrl === 'string') out.logoOnDarkUrl = raw.logoOnDarkUrl;
   // Booking gate. Only an explicit `true` survives — the server omits the field
   // when the tenant has bookings off, so `false`, `'true'`, `1` and everything
   // else are all "off". This coercion is also the localStorage read path, so

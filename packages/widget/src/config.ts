@@ -365,6 +365,8 @@ export interface RemoteWidgetConfig extends RemoteSidebarConfig {
    * Layered UNDER the same field passed inline, like everything else here.
    */
   logoUrl?: string;
+  /** The dark-ground logo variant, hoisted like {@link logoUrl}. */
+  logoOnDarkUrl?: string;
   /**
    * The Home tab, server-owned. Merged FIELD-WISE under the inline `home`, so a
    * page that overrides the greeting still lets Vitrina decide whether the tab
@@ -586,7 +588,8 @@ export function hasInlineAppearance(config: WidgetConfig): boolean {
     config?.locale !== undefined ||
     config?.bookingLabel !== undefined ||
     config?.font !== undefined ||
-    config?.logoUrl !== undefined
+    config?.logoUrl !== undefined ||
+    config?.logoOnDarkUrl !== undefined
   );
 }
 
@@ -618,6 +621,12 @@ export function resolveConfig(
   // top-level one simply wins WITHIN each tier, and inline still beats remote.
   const logoUrl =
     config.logoUrl ?? config.theme?.logoUrl ?? remote?.logoUrl ?? remote?.theme?.logoUrl;
+  // Its dark-ground variant follows the same two spellings and the same order.
+  const logoOnDarkUrl =
+    config.logoOnDarkUrl ??
+    config.theme?.logoOnDarkUrl ??
+    remote?.logoOnDarkUrl ??
+    remote?.theme?.logoOnDarkUrl;
   // Home and Help merge FIELD-WISE, exactly like `theme`: inline `home.title`
   // beats the server's, and the server's `home.enabled` still applies when the
   // page said nothing about it. `team` is an array and merges wholesale —
@@ -638,6 +647,7 @@ export function resolveConfig(
       ...theme,
       position: theme.position ?? 'br',
       ...(logoUrl !== undefined ? { logoUrl } : {}),
+      ...(logoOnDarkUrl !== undefined ? { logoOnDarkUrl } : {}),
     },
     welcomeMessage: welcome,
     bookingLabel: normalizeBookingLabel(config.bookingLabel ?? remote?.bookingLabel),

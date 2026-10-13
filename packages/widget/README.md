@@ -278,6 +278,7 @@ The rule, in full:
 | `theme.position` | `'br' \| 'bl'`                | no       | `'br'`             | Launcher corner: bottom-right or bottom-left.                               |
 | `theme.logoUrl`  | `string` (http/https URL)     | no       | —                  | Older spelling of `logoUrl` below. Still honoured; the top-level one wins.  |
 | `logoUrl`        | `string` (http/https URL)     | no       | —                  | Logo in the panel header, ~22px tall, never cropped. Non-http(s) URLs are ignored — no logo, never a broken image. |
+| `logoOnDarkUrl`  | `string` (http/https URL)     | no       | —                  | Logo variant for dark grounds (also `theme.logoOnDarkUrl`). Drawn instead of `logoUrl` on the accent header, and on the surface headers under `prefers-color-scheme: dark`. CSS picks the variant. Unset ⇒ `logoUrl` everywhere. |
 | `font`           | `WidgetFont`                  | no       | `'system'`         | Typeface for the whole widget. See **Fonts** below. Unknown values fall back to `system`. |
 | `bookingLabel`   | `string`                      | no       | localized copy     | What the booking chip says, verbatim — e.g. `Agendar demo`. Trimmed; blank or over 40 chars falls back to the built-in copy. Only visible when the tenant has booking on. |
 | `welcomeMessage` | `string`                      | no       | localized greeting | Greeting shown before the visitor sends the first message.                  |

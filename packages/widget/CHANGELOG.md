@@ -1,5 +1,15 @@
 # @vitrina/widget
 
+## 0.18.1
+
+**`logoOnDarkUrl`**: a logo variant for dark header grounds (reported by Up Autos: a navy wordmark
+vanished on the accent header and on an iPhone in dark mode). Top-level or `theme.logoOnDarkUrl`,
+inline or from `GET /widget/config` (`theme.logoOnDarkUrl`, from the tenant's published Sitio
+header), same URL gate and precedence as `logoUrl`. Each logo slot gets a twin `<img>` and CSS picks
+by the ground: the classic accent header shows the dark variant; the tabs header, the Home hero and
+the sidebar header (the surface) show it only under `prefers-color-scheme: dark`, never on the cream
+preset. With no variant configured the DOM is unchanged.
+
 ## 0.18.0
 
 Four opt-in additions (landing-cro, Tomás feedback 2026-10-12). Nothing changes for an install that
