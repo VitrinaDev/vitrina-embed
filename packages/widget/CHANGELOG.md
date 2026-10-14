@@ -1,5 +1,18 @@
 # @vitrina/widget
 
+## 0.19.0
+
+**«Con tecnología de Vitrina» credit, with an opt-out** (landing-cro, SEO backlink from every install).
+The footer of the open panel now ends with a small muted line, «Con tecnología de **Vitrina**»
+(«Powered by Vitrina» in English), where Vitrina is a followed link to
+`https://www.vitrinadev.com/?utm_source=widget&utm_medium=referral&utm_campaign=powered_by`
+(`target="_blank" rel="noopener"`). It uses the theme's muted colour (light and dark), takes the
+footer's existing line (the legacy panel already showed the text, unlinked), and sits next to the AI
+disclaimer in the sidebar layout.
+
+- **`showPoweredBy: false`** removes it (and the footer when nothing else is in it). Default `true`.
+- The footer's disclaimer and credit are separate nodes (`.vtr-footer-note`, `.vtr-credit`).
+
 ## 0.18.1
 
 **`logoOnDarkUrl`**: a logo variant for dark header grounds (reported by Up Autos: a navy wordmark

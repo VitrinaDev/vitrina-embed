@@ -119,7 +119,7 @@ describe('sidebar chrome', () => {
     expect($('.vtr-launcher .vtr-pt-ia')!.textContent).toBe('IA');
     expect($('.vtr-launcher .vtr-pt')!.getAttribute('aria-label')).toBe('Tomás, asistente IA de Vitrina');
     expect($('.vtr-launcher')!.getAttribute('aria-label')).toBe('Chatear con Tomás, Asistente IA de Vitrina');
-    expect($('.vtr-footer')!.textContent).toBe('Tomás es una IA y puede equivocarse');
+    expect($('.vtr-footer-note')!.textContent).toBe('Tomás es una IA y puede equivocarse');
     // The cream preset brings the darkened ember when nothing else is set.
     expect(root.style.getPropertyValue('--vtr-accent')).toBe('#AD4E00');
   });

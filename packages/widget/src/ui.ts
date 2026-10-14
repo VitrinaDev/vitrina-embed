@@ -136,6 +136,8 @@ export interface WidgetUiOptions {
    * timer regardless of the network, so this can never hide the widget.
    */
   hidden?: boolean;
+  /** The «Con tecnología de Vitrina» credit in the panel footer. Default true; false removes it. */
+  showPoweredBy?: boolean;
 }
 
 export interface WidgetUi {
@@ -386,6 +388,10 @@ const MAX_PREVIEW = 160;
  * Build the widget UI. Nothing is attached to the page until mount() is called;
  * destroy() removes the host node and every tracked listener.
  */
+/** The credit link: a plain followed backlink, tagged so Vitrina can see the traffic. */
+export const POWERED_BY_URL =
+  'https://www.vitrinadev.com/?utm_source=widget&utm_medium=referral&utm_campaign=powered_by';
+
 export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   const { theme, callbacks } = opts;
   // Both are MUTABLE: the server-resolved appearance (ADR 0046) can land after
@@ -640,9 +646,43 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   sendBtn.textContent = t('send');
   form.append(honeypot, input, sendBtn);
 
+  // The footer holds up to two lines of fine print: the AI / demo disclaimer
+  // (sidebar layouts) and the «Con tecnología de Vitrina» credit. Separate
+  // nodes so a disclaimer swap never wipes the credit link.
   const footer = document.createElement('div');
   footer.className = 'vtr-footer';
-  footer.textContent = t('poweredBy');
+  const footerNote = document.createElement('span');
+  footerNote.className = 'vtr-footer-note';
+  footerNote.hidden = true;
+  const credit = document.createElement('span');
+  credit.className = 'vtr-credit';
+  const showCredit = opts.showPoweredBy !== false;
+  function renderCredit(): void {
+    credit.textContent = '';
+    if (!showCredit) return;
+    const text = t('poweredBy');
+    const at = text.lastIndexOf('Vitrina');
+    if (at < 0) {
+      credit.textContent = text;
+      return;
+    }
+    const link = document.createElement('a');
+    link.className = 'vtr-credit-link';
+    link.href = POWERED_BY_URL;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'Vitrina';
+    credit.append(text.slice(0, at), link, text.slice(at + 'Vitrina'.length));
+  }
+  /** Sets the disclaimer line; null/'' removes it. Hides the footer when empty. */
+  function setFooterNote(text: string | null): void {
+    footerNote.textContent = text ?? '';
+    footerNote.hidden = !text;
+    footer.hidden = !text && !showCredit;
+  }
+  renderCredit();
+  footer.append(footerNote, credit);
+  footer.hidden = !showCredit;
 
   panel.append(header, messagesEl, typingEl, banner, form, footer);
   root.append(launcher, panel);
@@ -677,8 +717,8 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     sendBtn.appendChild(sendIcon());
     closeBtn.setAttribute('aria-label', t('sbMinimize'));
     const agentName = sb.options.agent?.name;
-    if (demoOn) footer.textContent = t('sbDemoDisclaimer');
-    else if (agentName) footer.textContent = t('sbAiDisclaimer').replace('{name}', agentName);
+    if (demoOn) setFooterNote(t('sbDemoDisclaimer'));
+    else if (agentName) setFooterNote(t('sbAiDisclaimer').replace('{name}', agentName));
   }
   if (sb) {
     const sbStyle = document.createElement('style');
@@ -1759,7 +1799,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       input.placeholder = t('placeholder');
       input.setAttribute('aria-label', t('placeholder'));
       sendBtn.textContent = t('send');
-      footer.textContent = t('poweredBy');
+      renderCredit();
       // Re-derive anything currently rendered from a string: the unread count
       // is folded into the launcher's aria-label, and a visible banner would
       // otherwise keep the old language until its next state change.
@@ -1859,8 +1899,8 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       input.placeholder = t(key);
       input.setAttribute('aria-label', t(key));
       const agentName = sb?.options.agent?.name;
-      if (on) footer.textContent = t('sbDemoDisclaimer');
-      else if (agentName) footer.textContent = t('sbAiDisclaimer').replace('{name}', agentName);
+      if (on) setFooterNote(t('sbDemoDisclaimer'));
+      else if (agentName) setFooterNote(t('sbAiDisclaimer').replace('{name}', agentName));
       // The suggested questions belong to the assistant, not to the demo world.
       messagesEl.querySelectorAll('.vtr-sb-meta, .vtr-sb-chips, .vtr-sb-walink').forEach((n) => {
         (n as HTMLElement).hidden = on;
