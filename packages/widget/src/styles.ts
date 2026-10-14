@@ -292,7 +292,12 @@ export const STYLES = `
 }
 .vtr-sendbtn:disabled { opacity: 0.5; cursor: default; }
 
-.vtr-footer { padding: 0 12px 10px; font-size: 11px; color: var(--vtr-muted); text-align: center; }
+.vtr-footer { padding: 0 12px 10px; font-size: 11px; line-height: 1.3; color: var(--vtr-muted); text-align: center; }
+.vtr-footer[hidden], .vtr-footer-note[hidden] { display: none; }
+.vtr-footer-note { display: block; }
+.vtr-credit-link { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.vtr-credit-link:hover { color: var(--vtr-text); }
+.vtr-credit-link:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; border-radius: 3px; }
 
 /* Honeypot: visually hidden but focusable-off-screen, NEVER display:none (bots
    skip display:none fields). Always submitted, empty for real humans. */

@@ -390,6 +390,12 @@ export interface WidgetConfig {
    */
   typingOnSend?: boolean;
   /**
+   * The small «Con tecnología de Vitrina» credit at the foot of the open
+   * panel, linking to vitrinadev.com (0.19.0). On by default; `false` removes
+   * it. The link sits inside the widget's open shadow root, in the host page.
+   */
+  showPoweredBy?: boolean;
+  /**
    * Fetch the dealer's appearance from Vitrina at init (default `true`).
    *
    * With it on, `theme` / `welcomeMessage` / `locale` / `bookingLabel` /

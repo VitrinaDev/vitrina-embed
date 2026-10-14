@@ -584,6 +584,7 @@ export function init(config: WidgetConfig): WidgetInstance {
     help: resolved.help,
     team: resolved.team,
     hidden: awaitingFirstConfig,
+    showPoweredBy: config.showPoweredBy !== false,
     ...(layout !== 'bubble'
       ? {
           sidebar: {
