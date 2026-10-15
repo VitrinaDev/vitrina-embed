@@ -1,5 +1,19 @@
 # @vitrina/widget
 
+## 0.20.0
+
+**Cards for any catalog item** (embed#36, D81 Comercio / Propiedades). A `stock_card` row now renders
+the kind-agnostic `itemCard` the API sends since vitrina-app#4411: photo, title, price, up to four of
+the kind's own facts (SKU, talla, dormitorios, superficie…) and a link labelled for the kind («Ver el
+producto», «Ver la propiedad», «Ver el servicio», «Ver el tratamiento», «Ver el vehículo», and «Ver el
+detalle» for any other kind).
+
+- Precedence: `itemCard` → `stockCard` (older servers) → the row's prose. A malformed card is prose.
+- Vehicle cards look exactly as before (no facts row).
+- Image and link URLs are still validated to http(s) in the browser.
+- Fix: the card link was nearly invisible in dark mode with a dark accent; it is now lifted toward the
+  text colour there.
+
 ## 0.19.0
 
 **«Con tecnología de Vitrina» credit, with an opt-out** (landing-cro, SEO backlink from every install).
