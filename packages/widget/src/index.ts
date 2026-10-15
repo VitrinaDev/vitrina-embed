@@ -81,6 +81,7 @@ export type {
   WidgetLocale,
   WidgetFont,
   WidgetHomeAction,
+  WidgetHomePrompt,
 } from './types';
 
 /**
@@ -692,6 +693,7 @@ export function init(config: WidgetConfig): WidgetInstance {
   // Same for the quick-action cards — and `setHomeCards` is a no-op that
   // constructs nothing when all three are off, which is every tenant today.
   applyHomeCards(homeCards);
+  ui.setHomePrompts(resolved.home.prompts);
 
   // --- Server-resolved appearance (ADR 0046) --------------------------------
   let revealTimer: ReturnType<typeof setTimeout> | null = null;
@@ -742,6 +744,8 @@ export function init(config: WidgetConfig): WidgetInstance {
           // switched off mid-session is taken away rather than left opening a
           // form the tenant no longer answers.
           applyHomeCards(resolveHomeCards(resolved.home.cards));
+          // The prompt cards follow the live answer the same way, both ways.
+          ui.setHomePrompts(resolved.home.prompts);
           // The gate is server-owned and can move in both directions: a dealer
           // who switches booking off mid-session gets the chip taken away
           // rather than a chip that opens a 404.

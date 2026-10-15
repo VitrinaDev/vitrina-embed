@@ -9,6 +9,7 @@ import type {
   WidgetFont,
   WidgetHelpConfig,
   WidgetHomeCardsConfig,
+  WidgetHomePrompt,
   WidgetHomeConfig,
   WidgetLocale,
   WidgetTeamMemberConfig,
@@ -262,6 +263,30 @@ export interface ResolvedHome {
    * read as all-off, through `resolveHomeCards`, everywhere it is consumed.
    */
   cards?: ResolvedHomeCards;
+  /**
+   * The prompt cards, in order, ABSENT when there are none — same reasoning as
+   * `cards`: a tenant without them resolves to the object it always did.
+   */
+  prompts?: WidgetHomePrompt[];
+}
+
+const HOME_PROMPTS: readonly WidgetHomePrompt[] = ['properties', 'visit', 'list_property'];
+
+/**
+ * Read a possibly-garbage `prompts` value as an ordered list of known ids.
+ * Unknown ids and repeats are dropped (first occurrence wins); anything that is
+ * not an array is no prompts at all. Pure and idempotent: it runs on the remote
+ * coercion (also the localStorage read path) and again on resolution.
+ */
+export function resolveHomePrompts(input: unknown): WidgetHomePrompt[] {
+  if (!Array.isArray(input)) return [];
+  const out: WidgetHomePrompt[] = [];
+  for (const id of input) {
+    if ((HOME_PROMPTS as readonly unknown[]).includes(id) && !out.includes(id as WidgetHomePrompt)) {
+      out.push(id as WidgetHomePrompt);
+    }
+  }
+  return out;
 }
 
 /** Read a possibly-absent `cards` bag as three hard booleans. */
@@ -524,6 +549,8 @@ export function resolveHome(input: WidgetHomeConfig | undefined): ResolvedHome {
   // resolves to exactly the object 0.8.x resolved to.
   const cards = resolveHomeCards(input?.cards);
   if (cards.buy || cards.sell || cards.search) home.cards = cards;
+  const prompts = resolveHomePrompts(input?.prompts);
+  if (prompts.length > 0) home.prompts = prompts;
   return home;
 }
 

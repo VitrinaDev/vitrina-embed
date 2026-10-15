@@ -20,6 +20,7 @@ import {
   normalizeFaqs,
   normalizeHomeSubtitle,
   normalizeHomeTitle,
+  resolveHomePrompts,
   normalizeTeam,
   type RemoteWidgetConfig,
 } from './config';
@@ -136,6 +137,10 @@ export function coerceRemoteConfig(input: unknown): RemoteWidgetConfig | null {
       if (c.search === true) kept.search = true;
       if (Object.keys(kept).length > 0) next.cards = kept;
     }
+    // The prompt cards: known ids only, no repeats, server order kept. An
+    // empty result is dropped for the same reason as an empty cards bag.
+    const prompts = resolveHomePrompts(h.prompts);
+    if (prompts.length > 0) next.prompts = prompts;
     if (Object.keys(next).length > 0) out.home = next;
   }
 

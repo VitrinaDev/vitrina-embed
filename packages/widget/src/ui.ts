@@ -18,6 +18,7 @@ import {
 } from './booking-ui';
 import {
   resolveHomeCards,
+  resolveHomePrompts,
   type ResolvedHelp,
   type ResolvedHome,
   type ResolvedHomeCards,
@@ -38,7 +39,7 @@ import { createSidebarChrome, sendIcon, type SidebarChrome, type SidebarUiCallba
 import { SIDEBAR_STYLES } from './sidebar-styles';
 import { STYLES } from './styles';
 import { resolveAccent, resolvePosition, validateLogoUrl } from './theme';
-import type { WidgetFont, WidgetHomeAction, WidgetLocale, WidgetTheme } from './types';
+import type { WidgetFont, WidgetHomeAction, WidgetHomePrompt, WidgetLocale, WidgetTheme } from './types';
 
 export type BannerState = 'none' | 'offline' | 'reconnecting' | 'error' | 'sending';
 
@@ -236,6 +237,9 @@ export interface WidgetUi {
   /** Show/hide the three quick-action cards on Home, and build the overlay the
    *  first time any of them is on. */
   setHomeCards(cards: ResolvedHomeCards | undefined): void;
+  /** The prompt cards on Home (0.21.0), in order. Nothing to build or tear
+   *  down: a tap sends a message through the composer's own send path. */
+  setHomePrompts(prompts: readonly WidgetHomePrompt[] | undefined): void;
   /** Cover the panel with one quick-action flow. The transcript is NOT destroyed. */
   openHomeAction(kind: WidgetHomeAction): void;
   /** Uncover the transcript. A `hidden` flip, never a re-render. */
@@ -327,6 +331,31 @@ const ICONS = {
   ],
   search: ['M18 10.6a7 7 0 1 1-14 0 7 7 0 0 1 14 0z', 'm16 15.6 4.5 4.5'],
 } as const;
+
+/** The Home prompt cards (0.21.0): glyph, copy, and the message a tap sends. */
+const HOME_PROMPT_CARDS: Record<
+  WidgetHomePrompt,
+  { icon: keyof typeof ICONS; title: StringKey; sub: StringKey; message: StringKey }
+> = {
+  properties: {
+    icon: 'search',
+    title: 'homePropertiesTitle',
+    sub: 'homePropertiesSub',
+    message: 'homePropertiesMessage',
+  },
+  visit: {
+    icon: 'calendar',
+    title: 'homeVisitTitle',
+    sub: 'homeVisitSub',
+    message: 'homeVisitMessage',
+  },
+  list_property: {
+    icon: 'home',
+    title: 'homeListPropertyTitle',
+    sub: 'homeListPropertySub',
+    message: 'homeListPropertyMessage',
+  },
+};
 
 /** One stroked 24×24 glyph. `paths` is always a module constant (see ICONS). */
 function strokeIcon(paths: readonly string[]): SVGElement {
@@ -775,6 +804,8 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
    * afterwards only through setHomeCards.
    */
   let homeCards: ResolvedHomeCards = resolveHomeCards(opts.home?.cards);
+  /** The prompt cards, seeded the same way; moved only through setHomePrompts. */
+  let homePrompts: WidgetHomePrompt[] = resolveHomePrompts(opts.home?.prompts);
 
   function scrollToBottom(): void {
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1404,6 +1435,8 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
    *   · send us a message — ALWAYS, because that is what the widget is for;
    *   · the booking card — only for a tenant whose agenda is on, and titled
    *     with THEIR word for it, never ours;
+   *   · ver propiedades / agendar una visita / publicar mi propiedad — one per
+   *     `home.prompts` id, in order; a tap sends a message, no form;
    *   · comprar / vender / lo buscamos — one per quick action the tenant's
    *     vertical turned on, each opening a form inside the panel.
    */
@@ -1428,6 +1461,14 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       cardLine(book, 'vtr-home-card-title', bookChipText());
       cardLine(book, 'vtr-home-card-sub', t('homeBookSub'));
       homeCardsEl.appendChild(book);
+    }
+
+    for (const id of homePrompts) {
+      const p = HOME_PROMPT_CARDS[id];
+      const card = homeCard(id, ICONS[p.icon], true);
+      cardLine(card, 'vtr-home-card-title', t(p.title));
+      cardLine(card, 'vtr-home-card-sub', t(p.sub));
+      homeCardsEl.appendChild(card);
     }
 
     if (homeCards.buy) {
@@ -1516,6 +1557,15 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
           // Same rule: the card reports the intent and the host decides, so
           // openHomeAction() from a page button and a tap here are one path.
           callbacks.onHomeAction?.(kind);
+          break;
+        case 'properties':
+        case 'visit':
+        case 'list_property':
+          // A conversation starter, not a form: land in the transcript and send
+          // the visitor's words through the composer's own path — same gates,
+          // same onSend — so there is one way a visitor message leaves.
+          setView('messages');
+          sendAsVisitor(t(HOME_PROMPT_CARDS[kind].message));
           break;
         default:
           break;
@@ -1988,6 +2038,10 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
         (n as HTMLElement).hidden = on;
       });
     },
+    setHomePrompts(prompts: readonly WidgetHomePrompt[] | undefined): void {
+      homePrompts = resolveHomePrompts(prompts);
+      paintHomeCards();
+    },
     setUnread(count: number): void {
       const n = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
       unreadCount = n;
@@ -2026,12 +2080,20 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     }
   });
 
+  /**
+   * The ONE way a visitor message leaves the UI: the composer and the Home
+   * prompt cards both end here, so the honeypot rides along and the host's
+   * consent / Turnstile gates in onSend see every send alike.
+   */
+  function sendAsVisitor(text: string): void {
+    callbacks.onSend(text, honeypot.value);
+  }
+
   function submit(): void {
     const text = input.value.trim();
     if (text === '') return;
-    const hp = honeypot.value;
     input.value = '';
-    callbacks.onSend(text, hp);
+    sendAsVisitor(text);
   }
 
   on(form, 'submit', (e) => {

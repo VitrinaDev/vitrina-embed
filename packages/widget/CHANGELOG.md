@@ -1,5 +1,18 @@
 # @vitrina/widget
 
+## 0.21.0
+
+**Real-estate prompt cards on Home** (vitrina-app#4429). Additive: a config without `home.prompts`
+paints exactly as before.
+
+- New `home.prompts: ('properties' | 'visit' | 'list_property')[]` in the remote config and the inline
+  `home` option. Unknown ids and repeats are dropped; order is kept; an inline list replaces the server's.
+- One card per prompt, after chat/booking and before buy/sell/search: «Ver propiedades», «Agendar una
+  visita», «Publicar mi propiedad» (en: "See properties", "Book a visit", "List my property").
+- A tap opens Mensajes and sends «Quiero ver propiedades» / «Quiero agendar una visita» / «Quiero
+  publicar mi propiedad» through the composer's send path (one shared helper, honeypot included).
+- A config refresh adds or removes the cards.
+
 ## 0.20.0
 
 **Cards for any catalog item** (embed#36, D81 Comercio / Propiedades). A `stock_card` row now renders

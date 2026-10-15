@@ -76,7 +76,24 @@ export interface WidgetHomeConfig {
    * others.
    */
   cards?: WidgetHomeCardsConfig;
+  /**
+   * Conversation-starter cards (0.21.0), painted in this order after the chat
+   * and booking cards. Tapping one opens the conversation and sends a fixed,
+   * localized visitor message — no form behind it. Unknown ids and repeats are
+   * dropped. An ARRAY, so an inline value replaces the server's wholesale
+   * rather than merging id by id. Absent or empty ⇒ no prompt cards.
+   */
+  prompts?: WidgetHomePrompt[];
 }
+
+/**
+ * A Home prompt card: a one-tap conversation starter.
+ *
+ *   properties    — "Ver propiedades"       → «Quiero ver propiedades»
+ *   visit         — "Agendar una visita"    → «Quiero agendar una visita»
+ *   list_property — "Publicar mi propiedad" → «Quiero publicar mi propiedad»
+ */
+export type WidgetHomePrompt = 'properties' | 'visit' | 'list_property';
 
 /** Which quick-action flow a card (or `openHomeAction`) opens. */
 export type WidgetHomeAction = 'buy' | 'sell' | 'search';
