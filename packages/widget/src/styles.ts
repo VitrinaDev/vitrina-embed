@@ -214,7 +214,7 @@ export const STYLES = `
   background: var(--vtr-bubble-out);
 }
 
-/* Vehicle card, rendered INSIDE an outbound bubble beneath the AI's prose. */
+/* Catalog card (vehicle, product, property…), rendered INSIDE an outbound bubble beneath the AI's prose. */
 .vtr-card {
   margin-top: 8px; border: 1px solid var(--vtr-border); border-radius: 10px;
   overflow: hidden; background: var(--vtr-surface);
@@ -223,8 +223,17 @@ export const STYLES = `
 .vtr-card-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
 .vtr-card-title { font-size: 13px; font-weight: 600; color: var(--vtr-text); }
 .vtr-card-price { font-size: 13px; color: var(--vtr-text); }
+.vtr-card-facts { margin: 6px 0 0; padding: 6px 0 0; border-top: 1px solid var(--vtr-border); display: flex; flex-direction: column; gap: 3px; }
+.vtr-card-fact { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 12px; line-height: 1.35; }
+.vtr-card-fact dt { color: var(--vtr-muted); flex-shrink: 0; }
+.vtr-card-fact dd { margin: 0; color: var(--vtr-text); font-weight: 500; text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vtr-card-link { font-size: 12px; font-weight: 600; color: var(--vtr-accent); text-decoration: none; margin-top: 4px; }
 .vtr-card-link:hover { text-decoration: underline; }
+/* The accent is tuned for light grounds (default #111827): on the dark card it
+   vanished. Lift it toward the text colour so any accent stays legible. */
+@media (prefers-color-scheme: dark) {
+  .vtr-card-link { color: color-mix(in srgb, var(--vtr-accent) 35%, var(--vtr-text)); }
+}
 .vtr-card-link:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
 
 /* Centered system line ("an advisor joined"). Not a bubble: it has no author,

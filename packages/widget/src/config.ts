@@ -58,6 +58,22 @@ export interface WidgetMessageDto {
     listingUrl: string | null;
   };
   /**
+   * The kind-agnostic card (vitrina-app#4411), on every `stock_card` row: a
+   * vehicle, a product, a property, a service… A vehicle row carries both this
+   * and `stockCard`; any other kind carries only this. `facts` are the kind's
+   * own, already formatted (kilometraje, SKU, dormitorios…), never the price.
+   * Takes precedence over `stockCard` when present.
+   */
+  itemCard?: {
+    kind: string;
+    itemId: string;
+    title: string;
+    price: string | null;
+    thumbnailUrl: string | null;
+    listingUrl: string | null;
+    facts: Array<{ label: string; value: string }>;
+  };
+  /**
    * Attachment URLs on a media row (`type` image/file) — the photos an agent
    * sent with send_attachment. The server projects only http(s) URLs; the UI
    * validates again anyway (same belt-and-braces as the stock card) and skips

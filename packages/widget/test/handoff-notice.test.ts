@@ -358,3 +358,184 @@ describe('X10: stock cards', () => {
     w.destroy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// embed#36 — a card for any catalog item (vitrina-app#4411's `itemCard`).
+//
+// Precedence: itemCard → stockCard → prose. A vehicle looks exactly as it did
+// (no facts); a product or a property prints its own facts and a link labelled
+// for its kind.
+// ---------------------------------------------------------------------------
+describe('embed#36: item cards', () => {
+  const row = (extra: Record<string, unknown>) => [
+    {
+      id: 'srv_item',
+      createdAt: '2026-10-15T00:00:00.000Z',
+      content: 'Mira esta opción.',
+      direction: 'outbound',
+      type: 'stock_card',
+      ...extra,
+    },
+  ];
+  const PRODUCT = {
+    kind: 'product',
+    itemId: 'prod-1',
+    title: 'Zapatilla Urbana Pro',
+    price: '$49.990',
+    thumbnailUrl: 'https://cdn.shop.cl/z.jpg',
+    listingUrl: 'https://shop.cl/p/zapatilla',
+    facts: [
+      { label: 'SKU', value: 'ZU-42' },
+      { label: 'Talla', value: '42' },
+    ],
+  };
+  const PROPERTY = {
+    kind: 'property',
+    itemId: 'prop-1',
+    title: 'Depto 2D2B en Providencia',
+    price: 'UF 5.900',
+    thumbnailUrl: 'https://cdn.corredora.cl/d.jpg',
+    listingUrl: 'https://corredora.cl/propiedad/prop-1',
+    facts: [
+      { label: 'Dormitorios', value: '2' },
+      { label: 'Baños', value: '2' },
+      { label: 'Superficie', value: '68 m²' },
+    ],
+  };
+
+  const open = async () => {
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
+    w.open();
+    await vi.waitFor(() => {
+      expect(shadowOf().querySelector('.vtr-msg[data-id="srv_item"]')).toBeTruthy();
+    });
+    return w;
+  };
+  const card = () => shadowOf().querySelector('.vtr-card') as HTMLElement | null;
+  const facts = () =>
+    [...shadowOf().querySelectorAll('.vtr-card-fact')].map((f) => [
+      f.querySelector('dt')!.textContent,
+      f.querySelector('dd')!.textContent,
+    ]);
+
+  it('renders a product card: photo, title, price, facts and «Ver el producto»', async () => {
+    history = row({ itemCard: PRODUCT }) as never;
+    const w = await open();
+    const c = card()!;
+    expect(c.dataset.kind).toBe('product');
+    expect(c.dataset.itemId).toBe('prod-1');
+    expect(c.dataset.vehicleId).toBeUndefined();
+    expect((c.querySelector('.vtr-card-img') as HTMLImageElement).src).toBe('https://cdn.shop.cl/z.jpg');
+    expect(c.querySelector('.vtr-card-title')!.textContent).toBe('Zapatilla Urbana Pro');
+    expect(c.querySelector('.vtr-card-price')!.textContent).toBe('$49.990');
+    expect(facts()).toEqual([
+      ['SKU', 'ZU-42'],
+      ['Talla', '42'],
+    ]);
+    const link = c.querySelector('.vtr-card-link') as HTMLAnchorElement;
+    expect(link.textContent).toBe('Ver el producto');
+    expect(link.getAttribute('href')).toBe('https://shop.cl/p/zapatilla');
+    // The prose is still there.
+    expect(shadowOf().querySelector('.vtr-msg[data-id="srv_item"]')!.textContent).toContain('Mira esta opción.');
+    w.destroy();
+  });
+
+  it('renders a property card with «Ver la propiedad»', async () => {
+    history = row({ itemCard: PROPERTY }) as never;
+    const w = await open();
+    expect(card()!.dataset.kind).toBe('property');
+    expect(facts()).toEqual([
+      ['Dormitorios', '2'],
+      ['Baños', '2'],
+      ['Superficie', '68 m²'],
+    ]);
+    expect(card()!.querySelector('.vtr-card-link')!.textContent).toBe('Ver la propiedad');
+    w.destroy();
+  });
+
+  it('labels an unknown kind neutrally and caps facts at four', async () => {
+    history = row({
+      itemCard: {
+        ...PRODUCT,
+        kind: 'boat',
+        facts: [1, 2, 3, 4, 5].map((n) => ({ label: `F${n}`, value: String(n) })),
+      },
+    }) as never;
+    const w = await open();
+    expect(card()!.querySelector('.vtr-card-link')!.textContent).toBe('Ver el detalle');
+    expect(facts()).toHaveLength(4);
+    w.destroy();
+  });
+
+  it('drops a non-http(s) URL instead of the card', async () => {
+    history = row({
+      itemCard: { ...PRODUCT, thumbnailUrl: 'javascript:alert(1)', listingUrl: 'data:text/html,x' },
+    }) as never;
+    const w = await open();
+    expect(card()).toBeTruthy();
+    expect(card()!.querySelector('.vtr-card-img')).toBeNull();
+    expect(card()!.querySelector('.vtr-card-link')).toBeNull();
+    w.destroy();
+  });
+
+  it('a vehicle itemCard looks like the old vehicle card (no facts, «Ver el vehículo»)', async () => {
+    const vehicle = {
+      kind: 'vehicle',
+      itemId: 'veh-1',
+      title: 'Toyota Corolla 2020',
+      price: '$12.990.000',
+      thumbnailUrl: 'https://cdn.dealer.cl/1.jpg',
+      listingUrl: 'https://dealer.cl/stock/veh-1',
+      facts: [{ label: 'Kilometraje', value: '45.000 km' }],
+    };
+    history = row({
+      itemCard: vehicle,
+      stockCard: {
+        vehicleId: 'veh-1',
+        title: vehicle.title,
+        price: vehicle.price,
+        thumbnailUrl: vehicle.thumbnailUrl,
+        listingUrl: vehicle.listingUrl,
+      },
+    }) as never;
+    const w = await open();
+    const c = card()!;
+    expect(c.dataset.vehicleId).toBe('veh-1');
+    expect(c.querySelector('.vtr-card-facts')).toBeNull();
+    expect(c.querySelector('.vtr-card-link')!.textContent).toBe('Ver el vehículo');
+    expect(shadowOf().querySelectorAll('.vtr-card')).toHaveLength(1);
+    w.destroy();
+  });
+
+  it('falls back to stockCard when an older server sends no itemCard', async () => {
+    history = row({
+      stockCard: {
+        vehicleId: 'veh-2',
+        title: 'Mazda 3 2019',
+        price: null,
+        thumbnailUrl: null,
+        listingUrl: 'https://dealer.cl/stock/veh-2',
+      },
+    }) as never;
+    const w = await open();
+    expect(card()!.dataset.vehicleId).toBe('veh-2');
+    expect(card()!.querySelector('.vtr-card-title')!.textContent).toBe('Mazda 3 2019');
+    expect(card()!.querySelector('.vtr-card-link')!.textContent).toBe('Ver el vehículo');
+    w.destroy();
+  });
+
+  it('renders text when the row has neither itemCard nor stockCard', async () => {
+    history = row({}) as never;
+    const w = await open();
+    expect(card()).toBeNull();
+    expect(shadowOf().querySelector('.vtr-msg[data-id="srv_item"]')!.textContent).toContain('Mira esta opción.');
+    w.destroy();
+  });
+
+  it('a malformed itemCard (no title) falls through to stockCard or text', async () => {
+    history = row({ itemCard: { ...PRODUCT, title: '  ' } }) as never;
+    const w = await open();
+    expect(card()).toBeNull();
+    w.destroy();
+  });
+});

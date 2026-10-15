@@ -34,6 +34,12 @@ export interface WidgetStrings {
   advisorJoined: string;
   /** Link on a vehicle card, when the listing has a URL. */
   viewVehicle: string;
+  /** Link on a product / property / service / treatment card, and any other kind. */
+  viewProduct: string;
+  viewProperty: string;
+  viewService: string;
+  viewTreatment: string;
+  viewItem: string;
 
   // --- Sidebar mode (embed#25). `{name}` / `{world}` are filled by the UI. ---
   sbAskAgent: string;
@@ -370,6 +376,11 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     typingStill: 'Sigue escribiendo…',
     advisorJoined: 'Un asesor se unió a la conversación',
     viewVehicle: 'Ver el vehículo',
+    viewProduct: 'Ver el producto',
+    viewProperty: 'Ver la propiedad',
+    viewService: 'Ver el servicio',
+    viewTreatment: 'Ver el tratamiento',
+    viewItem: 'Ver el detalle',
     sbAskAgent: 'Pregúntale a {name}',
     sbChatWith: 'Chatear con {name}',
     sbPreferWa: '¿Prefieres WhatsApp?',
@@ -630,6 +641,11 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     typingStill: 'Still typing…',
     advisorJoined: 'An advisor joined the conversation',
     viewVehicle: 'View the vehicle',
+    viewProduct: 'View the product',
+    viewProperty: 'View the property',
+    viewService: 'View the service',
+    viewTreatment: 'View the treatment',
+    viewItem: 'View details',
     sbAskAgent: 'Ask {name}',
     sbChatWith: 'Chat with {name}',
     sbPreferWa: 'Prefer WhatsApp?',

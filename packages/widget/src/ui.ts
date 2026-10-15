@@ -780,19 +780,41 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  /** The link label a card's kind earns; an unknown kind gets the neutral one. */
+  const CARD_LINK_LABEL: Record<string, Parameters<typeof t>[0]> = {
+    vehicle: 'viewVehicle',
+    product: 'viewProduct',
+    property: 'viewProperty',
+    service: 'viewService',
+    treatment: 'viewTreatment',
+  };
+
+  /** At most this many facts on a card: it is a teaser, the listing has the rest. */
+  const CARD_MAX_FACTS = 4;
+
   /**
-   * A vehicle card: photo, title, price, and a link when the listing has one.
-   * The moat — Intercom cannot show a car, and the widget already knows which
-   * car the visitor is looking at.
+   * A catalog card: photo, title, price, the kind's facts, and a link when the
+   * listing has one. One renderer for every kind (vehicle, product, property,
+   * service…); a vehicle prints no facts, so it looks exactly as it always has.
    *
    * Built from DOM nodes like everything else here. The image and link URLs were
-   * validated server-side AND are validated again through validateHttpUrl: a
+   * validated server-side AND are validated again through validateLogoUrl: a
    * card with a hostile URL renders without it rather than not at all.
    */
-  function stockCard(card: NonNullable<WidgetMessage['stockCard']>): HTMLElement {
+  function catalogCard(card: {
+    kind: string;
+    itemId: string;
+    title: string;
+    price: string | null;
+    thumbnailUrl: string | null;
+    listingUrl: string | null;
+    facts: Array<{ label: string; value: string }>;
+  }): HTMLElement {
     const el = document.createElement('div');
     el.className = 'vtr-card';
-    el.dataset.vehicleId = card.vehicleId;
+    el.dataset.kind = card.kind;
+    el.dataset.itemId = card.itemId;
+    if (card.kind === 'vehicle') el.dataset.vehicleId = card.itemId;
 
     const thumb = validateLogoUrl(card.thumbnailUrl);
     if (thumb) {
@@ -819,6 +841,23 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       body.appendChild(price);
     }
 
+    const facts = card.kind === 'vehicle' ? [] : card.facts.slice(0, CARD_MAX_FACTS);
+    if (facts.length > 0) {
+      const dl = document.createElement('dl');
+      dl.className = 'vtr-card-facts';
+      for (const f of facts) {
+        const row = document.createElement('div');
+        row.className = 'vtr-card-fact';
+        const dt = document.createElement('dt');
+        dt.textContent = f.label;
+        const dd = document.createElement('dd');
+        dd.textContent = f.value;
+        row.append(dt, dd);
+        dl.appendChild(row);
+      }
+      body.appendChild(dl);
+    }
+
     const href = validateLogoUrl(card.listingUrl);
     if (href) {
       const link = document.createElement('a');
@@ -826,12 +865,54 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       link.href = href;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      link.textContent = t('viewVehicle');
+      link.textContent = t(CARD_LINK_LABEL[card.kind] ?? 'viewItem');
       body.appendChild(link);
     }
 
     el.appendChild(body);
     return el;
+  }
+
+  /**
+   * The card a `stock_card` row carries, normalised: the generic `itemCard`
+   * first, then the vehicle-only `stockCard` an older server sends, else null
+   * (the row is its prose). A malformed card (no kind, id or title) is null.
+   */
+  function cardOf(m: WidgetMessage): Parameters<typeof catalogCard>[0] | null {
+    const ic = m.itemCard;
+    if (
+      ic &&
+      typeof ic.kind === 'string' && ic.kind &&
+      typeof ic.itemId === 'string' && ic.itemId &&
+      typeof ic.title === 'string' && ic.title.trim()
+    ) {
+      return {
+        kind: ic.kind,
+        itemId: ic.itemId,
+        title: ic.title,
+        price: typeof ic.price === 'string' && ic.price.trim() ? ic.price : null,
+        thumbnailUrl: ic.thumbnailUrl ?? null,
+        listingUrl: ic.listingUrl ?? null,
+        facts: Array.isArray(ic.facts)
+          ? ic.facts.filter(
+              (f) => f && typeof f.label === 'string' && typeof f.value === 'string' && f.value.trim(),
+            )
+          : [],
+      };
+    }
+    const sc = m.stockCard;
+    if (sc && typeof sc.title === 'string' && sc.title.trim()) {
+      return {
+        kind: 'vehicle',
+        itemId: sc.vehicleId,
+        title: sc.title,
+        price: sc.price,
+        thumbnailUrl: sc.thumbnailUrl,
+        listingUrl: sc.listingUrl,
+        facts: [],
+      };
+    }
+    return null;
   }
 
   /**
@@ -1628,8 +1709,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
             // The card ENHANCES the prose; it never replaces it. A row whose
             // type we do not recognise, or whose card the server declined to
             // project, is simply the reply it always was — never a blank bubble.
-            if (m.type === 'stock_card' && m.stockCard) {
-              el.appendChild(stockCard(m.stockCard));
+            if (m.type === 'stock_card') {
+              const card = cardOf(m);
+              if (card) el.appendChild(catalogCard(card));
             }
             messagesEl.appendChild(el);
             if (m.status === 'failed' && m.clientMessageId) {
