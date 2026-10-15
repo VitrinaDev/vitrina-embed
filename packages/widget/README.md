@@ -282,8 +282,9 @@ The rule, in full:
 | `font`           | `WidgetFont`                  | no       | `'system'`         | Typeface for the whole widget. See **Fonts** below. Unknown values fall back to `system`. |
 | `bookingLabel`   | `string`                      | no       | localized copy     | What the booking chip says, verbatim — e.g. `Agendar demo`. Trimmed; blank or over 40 chars falls back to the built-in copy. Only visible when the tenant has booking on. |
 | `welcomeMessage` | `string`                      | no       | localized greeting | Greeting shown before the visitor sends the first message.                  |
-| `home`           | `{ enabled?, title?, subtitle?, cards? }` | no | off          | The Home tab. See **Home and Help tabs** below. Off unless `enabled` is `true`. |
+| `home`           | `{ enabled?, title?, subtitle?, cards?, prompts? }` | no | off          | The Home tab. See **Home and Help tabs** below. Off unless `enabled` is `true`. |
 | `home.cards`     | `{ buy?, sell?, search? }`    | no       | all off            | The automotive quick actions. See **Quick actions** below. Each card is off unless its key is explicitly `true`. |
+| `home.prompts`   | `('properties' \| 'visit' \| 'list_property')[]` | no | none | Real-estate prompt cards, in order. See **Prompt cards** below. Unknown ids and repeats are dropped. |
 | `help`           | `{ enabled?, faqs? }`         | no       | off                | The Help tab (FAQ accordion). Off unless `enabled` is `true` **and** at least one usable question survives. |
 | `team`           | `Array<{ name, avatarUrl? }>` | no       | `[]`               | Faces for the Home hero. Up to 5 accepted, first 3 drawn. Non-http(s) `avatarUrl` ⇒ initials. |
 | `remoteConfig`   | `boolean`                     | no       | `true`             | Fetch appearance from Vitrina at load. `false` = fully self-contained.      |
@@ -442,6 +443,27 @@ URL becomes the member's initials on a stable colour, never a broken image.
 
 The panel is 400×704 (up from 360×520) whether or not you use the tabs, and
 still goes fullscreen at ≤480px.
+
+### Prompt cards — ver propiedades, agendar una visita, publicar mi propiedad
+
+One-tap conversation starters for real-estate workspaces (0.21.0). Each card
+opens Mensajes and sends a fixed visitor message through the composer's own
+send path (same honeypot, consent and Turnstile gates, same `message` event):
+
+```json
+{ "home": { "enabled": true, "prompts": ["properties", "visit", "list_property"] } }
+```
+
+| id              | Card (es)               | Message sent (es)              | Message sent (en)              |
+| --------------- | ----------------------- | ------------------------------ | ------------------------------ |
+| `properties`    | Ver propiedades         | «Quiero ver propiedades»       | "I'd like to see properties"   |
+| `visit`         | Agendar una visita      | «Quiero agendar una visita»    | "I'd like to book a visit"     |
+| `list_property` | Publicar mi propiedad   | «Quiero publicar mi propiedad» | "I'd like to list my property" |
+
+They paint in the given order, after the chat and booking cards and before the
+automotive quick actions. The server sends `home.prompts` only when at least one
+is on; an inline `home.prompts` replaces the server's list wholesale (it is an
+array, like `team`). A config refresh repaints them in both directions.
 
 ### Quick actions — comprar, vender, lo buscamos por ti
 

@@ -120,6 +120,18 @@ export interface WidgetStrings {
   homeSearchTitle: string;
   homeSearchSub: string;
 
+  /** The Home prompt cards (0.21.0): title + sub, and the visitor message a
+   *  tap sends through the composer's own send path. */
+  homePropertiesTitle: string;
+  homePropertiesSub: string;
+  homePropertiesMessage: string;
+  homeVisitTitle: string;
+  homeVisitSub: string;
+  homeVisitMessage: string;
+  homeListPropertyTitle: string;
+  homeListPropertySub: string;
+  homeListPropertyMessage: string;
+
   /** Overlay titles. Buy and sell reuse their card titles; search cannot — its
    *  card title is a question, which does not read as a header. */
   haSearchTitle: string;
@@ -440,6 +452,16 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     homeSearchTitle: '¿No encuentras el auto que buscas?',
     homeSearchSub: '¡Lo buscamos por ti!',
 
+    homePropertiesTitle: 'Ver propiedades',
+    homePropertiesSub: 'Te muestro las que calzan con lo que buscas',
+    homePropertiesMessage: 'Quiero ver propiedades',
+    homeVisitTitle: 'Agendar una visita',
+    homeVisitSub: 'Elige la propiedad y te ofrezco horarios',
+    homeVisitMessage: 'Quiero agendar una visita',
+    homeListPropertyTitle: 'Publicar mi propiedad',
+    homeListPropertySub: 'Cuéntame de tu propiedad y te contactamos',
+    homeListPropertyMessage: 'Quiero publicar mi propiedad',
+
     haSearchTitle: 'Lo buscamos por ti',
     haSellCarTitle: 'Tu auto',
     haSellDetailsTitle: 'Detalles',
@@ -704,6 +726,16 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     homeSellSub: "We'll help you sell it",
     homeSearchTitle: "Can't find the car you want?",
     homeSearchSub: "We'll find it for you!",
+
+    homePropertiesTitle: 'See properties',
+    homePropertiesSub: "I'll show you the ones that fit what you're looking for",
+    homePropertiesMessage: "I'd like to see properties",
+    homeVisitTitle: 'Book a visit',
+    homeVisitSub: "Pick the property and I'll offer you times",
+    homeVisitMessage: "I'd like to book a visit",
+    homeListPropertyTitle: 'List my property',
+    homeListPropertySub: "Tell me about your property and we'll get in touch",
+    homeListPropertyMessage: "I'd like to list my property",
 
     haSearchTitle: "We'll find it for you",
     haSellCarTitle: 'Your car',
