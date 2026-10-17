@@ -330,6 +330,12 @@ const ICONS = {
     'M7.9 7.9h.01',
   ],
   search: ['M18 10.6a7 7 0 1 1-14 0 7 7 0 0 1 14 0z', 'm16 15.6 4.5 4.5'],
+  bag: ['M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z', 'M3 6h18', 'M16 10a4 4 0 0 1-8 0'],
+  box: [
+    'M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z',
+    'm3.3 7 8.7 5 8.7-5',
+    'M12 22V12',
+  ],
 } as const;
 
 /** The Home prompt cards (0.21.0): glyph, copy, and the message a tap sends. */
@@ -354,6 +360,18 @@ const HOME_PROMPT_CARDS: Record<
     title: 'homeListPropertyTitle',
     sub: 'homeListPropertySub',
     message: 'homeListPropertyMessage',
+  },
+  products: {
+    icon: 'bag',
+    title: 'homeProductsTitle',
+    sub: 'homeProductsSub',
+    message: 'homeProductsMessage',
+  },
+  order_status: {
+    icon: 'box',
+    title: 'homeOrderStatusTitle',
+    sub: 'homeOrderStatusSub',
+    message: 'homeOrderStatusMessage',
   },
 };
 
@@ -1561,6 +1579,8 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
         case 'properties':
         case 'visit':
         case 'list_property':
+        case 'products':
+        case 'order_status':
           // A conversation starter, not a form: land in the transcript and send
           // the visitor's words through the composer's own path — same gates,
           // same onSend — so there is one way a visitor message leaves.

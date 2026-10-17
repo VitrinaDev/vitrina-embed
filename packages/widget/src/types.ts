@@ -92,8 +92,15 @@ export interface WidgetHomeConfig {
  *   properties    — "Ver propiedades"       → «Quiero ver propiedades»
  *   visit         — "Agendar una visita"    → «Quiero agendar una visita»
  *   list_property — "Publicar mi propiedad" → «Quiero publicar mi propiedad»
+ *   products      — "Ver productos"         → «Quiero ver productos» (0.22.0)
+ *   order_status  — "Estado de mi pedido"   → «¿Cuál es el estado de mi pedido?» (0.22.0)
  */
-export type WidgetHomePrompt = 'properties' | 'visit' | 'list_property';
+export type WidgetHomePrompt =
+  | 'properties'
+  | 'visit'
+  | 'list_property'
+  | 'products'
+  | 'order_status';
 
 /** Which quick-action flow a card (or `openHomeAction`) opens. */
 export type WidgetHomeAction = 'buy' | 'sell' | 'search';

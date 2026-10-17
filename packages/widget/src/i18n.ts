@@ -131,6 +131,13 @@ export interface WidgetStrings {
   homeListPropertyTitle: string;
   homeListPropertySub: string;
   homeListPropertyMessage: string;
+  /** The store's two (0.22.0). */
+  homeProductsTitle: string;
+  homeProductsSub: string;
+  homeProductsMessage: string;
+  homeOrderStatusTitle: string;
+  homeOrderStatusSub: string;
+  homeOrderStatusMessage: string;
 
   /** Overlay titles. Buy and sell reuse their card titles; search cannot — its
    *  card title is a question, which does not read as a header. */
@@ -461,6 +468,12 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     homeListPropertyTitle: 'Publicar mi propiedad',
     homeListPropertySub: 'Cuéntame de tu propiedad y te contactamos',
     homeListPropertyMessage: 'Quiero publicar mi propiedad',
+    homeProductsTitle: 'Ver productos',
+    homeProductsSub: 'Te muestro lo que tenemos, con precio y stock',
+    homeProductsMessage: 'Quiero ver productos',
+    homeOrderStatusTitle: 'Estado de mi pedido',
+    homeOrderStatusSub: 'Te digo en qué va tu compra',
+    homeOrderStatusMessage: '¿Cuál es el estado de mi pedido?',
 
     haSearchTitle: 'Lo buscamos por ti',
     haSellCarTitle: 'Tu auto',
@@ -736,6 +749,12 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     homeListPropertyTitle: 'List my property',
     homeListPropertySub: "Tell me about your property and we'll get in touch",
     homeListPropertyMessage: "I'd like to list my property",
+    homeProductsTitle: 'See products',
+    homeProductsSub: "I'll show you what we have, with price and stock",
+    homeProductsMessage: "I'd like to see products",
+    homeOrderStatusTitle: 'My order status',
+    homeOrderStatusSub: "I'll tell you where your purchase is",
+    homeOrderStatusMessage: "What's the status of my order?",
 
     haSearchTitle: "We'll find it for you",
     haSellCarTitle: 'Your car',

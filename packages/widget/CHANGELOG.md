@@ -1,5 +1,16 @@
 # @vitrina/widget
 
+## 0.22.0
+
+**Store prompt cards on Home** (vitrina-app#4419, Vitrina Comercio). Additive: a config without the new
+ids paints exactly as before.
+
+- `home.prompts` accepts `products` and `order_status`: «Ver productos» and «Estado de mi pedido» (en:
+  "See products", "My order status").
+- A tap opens Mensajes and sends «Quiero ver productos» / «¿Cuál es el estado de mi pedido?» through the
+  composer's send path, so the store agent's own tools (product search and card, order status) answer.
+- The API serves them for ecommerce workspaces from vitrina-app#4419.
+
 ## 0.21.0
 
 **Real-estate prompt cards on Home** (vitrina-app#4429). Additive: a config without `home.prompts`
