@@ -270,7 +270,13 @@ export interface ResolvedHome {
   prompts?: WidgetHomePrompt[];
 }
 
-const HOME_PROMPTS: readonly WidgetHomePrompt[] = ['properties', 'visit', 'list_property'];
+const HOME_PROMPTS: readonly WidgetHomePrompt[] = [
+  'properties',
+  'visit',
+  'list_property',
+  'products',
+  'order_status',
+];
 
 /**
  * Read a possibly-garbage `prompts` value as an ordered list of known ids.

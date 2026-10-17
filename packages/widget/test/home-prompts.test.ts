@@ -199,3 +199,47 @@ describe('prompt cards on Home', () => {
     w.destroy();
   });
 });
+
+// 0.22.0 — the store's two (vitrina-app#4419): «Ver productos» and «Estado de
+// mi pedido», the same conversation-starter path as the real-estate cards.
+describe('store prompt cards on Home', () => {
+  it('keeps the store ids through coercion, in server order', () => {
+    expect(resolveHomePrompts(['order_status', 'nope', 'products', 'order_status'])).toEqual([
+      'order_status',
+      'products',
+    ]);
+    expect(
+      coerceRemoteConfig({ home: { enabled: true, prompts: ['products', 'order_status'] } })?.home,
+    ).toEqual({ enabled: true, prompts: ['products', 'order_status'] });
+  });
+
+  it('paints both cards with es copy and sends each one’s message', async () => {
+    configData = { home: { enabled: true, prompts: ['products', 'order_status'] } };
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
+    await settled();
+    expect(cards()).toEqual(['chat', 'products', 'order_status']);
+    expect(must('.vtr-home-card[data-card="products"] .vtr-home-card-title').textContent).toBe(
+      'Ver productos',
+    );
+    expect(must('.vtr-home-card[data-card="order_status"] .vtr-home-card-title').textContent).toBe(
+      'Estado de mi pedido',
+    );
+    must<HTMLButtonElement>('.vtr-launcher').click();
+    must<HTMLButtonElement>('.vtr-home-card[data-card="order_status"]').click();
+    expect(must('.vtr-panel').getAttribute('data-active-view')).toBe('messages');
+    await vi.waitFor(() => expect(posts().length).toBe(1));
+    expect(posts()[0]).toMatchObject({ message: '¿Cuál es el estado de mi pedido?' });
+    w.destroy();
+  });
+
+  it('sends the English product message under the en locale', async () => {
+    configData = { home: { enabled: true, prompts: ['products'] } };
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'en' });
+    await settled();
+    must<HTMLButtonElement>('.vtr-launcher').click();
+    must<HTMLButtonElement>('.vtr-home-card[data-card="products"]').click();
+    await vi.waitFor(() => expect(posts().length).toBe(1));
+    expect(posts()[0]).toMatchObject({ message: "I'd like to see products" });
+    w.destroy();
+  });
+});
