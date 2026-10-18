@@ -169,6 +169,13 @@ export interface WidgetAgentConfig {
   status?: string;
   /** Portrait (absolute http(s) URL, round-masked). Absent ⇒ initials. */
   avatarUrl?: string;
+  /**
+   * `'mark'` draws the Vitrina brand mark (the isometric pyramid with the amber
+   * core) on a hairline tile instead of a portrait: no presence dot, no «IA»
+   * badge, the core bobs while the assistant types. Takes precedence over
+   * `avatarUrl`. Absent ⇒ the portrait, exactly as before (0.23.0).
+   */
+  avatar?: 'mark';
 }
 
 /** What auto-open shows on one kind of device. A phone never gets `panel` (D15). */

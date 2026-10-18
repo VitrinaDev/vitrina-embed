@@ -56,6 +56,7 @@ describe('inline over remote', () => {
       label: 'Asistente IA de Vitrina',
       status: null,
       avatarUrl: null,
+      avatar: null,
     });
     expect(s.autoOpen).toMatchObject({ enabled: true, delayMs: 25_000, desktop: 'teaser' });
     expect(s.chips.map((c) => c.label)).toEqual(['Hola']);

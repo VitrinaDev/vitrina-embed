@@ -279,7 +279,7 @@ describe('anchors and inline', () => {
 describe('sidebar with a tenant whose bubble uses tabs and booking', () => {
   function serverSays(config: Record<string, unknown>): void {
     const base = fetch as unknown as ReturnType<typeof vi.fn>;
-    const inner = base.getMockImplementation()!;
+    const inner = base.getMockImplementation()! as (url: string, initArg?: RequestInit) => Promise<Response>;
     base.mockImplementation(async (url: string, initArg?: RequestInit) =>
       new URL(url).pathname.endsWith('/widget/config') ? jsonRes(200, config) : inner(url, initArg),
     );

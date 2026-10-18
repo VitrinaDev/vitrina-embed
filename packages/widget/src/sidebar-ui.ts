@@ -13,6 +13,7 @@
 import type { ResolvedAgent, ResolvedChip } from './sidebar-config';
 import type { StringKey, Translate } from './i18n';
 import type { WidgetLayout, WidgetPreset } from './types';
+import { MARK_STYLES, markSvg } from './mark';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -109,6 +110,17 @@ export function portrait(
   const wrap = el('span', 'vtr-pt');
   wrap.style.width = `${size}px`;
   wrap.style.height = `${size}px`;
+  if (agent?.avatar === 'mark') {
+    // The brand mark (0.23.0): a geometric object, not a face, so no presence
+    // dot and no «IA» badge — but it keeps the accessible name, so a screen
+    // reader still hears that the assistant is an AI.
+    wrap.classList.add('vtr-pt-mark');
+    wrap.style.borderRadius = `${Math.round(size / 4)}px`;
+    wrap.appendChild(markSvg());
+    wrap.setAttribute('role', 'img');
+    wrap.setAttribute('aria-label', agentName(agent));
+    return wrap;
+  }
   if (agent?.avatarUrl) {
     const img = el('img', 'vtr-pt-face');
     img.src = agent.avatarUrl;
@@ -134,10 +146,15 @@ export function portrait(
     // the assistant and says it is an AI: «Tomás, asistente IA de Vitrina».
     if (agent) {
       wrap.setAttribute('role', 'img');
-      wrap.setAttribute('aria-label', `${agent.name}, ${agent.label.charAt(0).toLowerCase()}${agent.label.slice(1)}`);
+      wrap.setAttribute('aria-label', agentName(agent));
     }
   }
   return wrap;
+}
+
+/** «Tomás, asistente IA de Vitrina»: the name and the lower-cased disclosure. */
+function agentName(agent: ResolvedAgent): string {
+  return `${agent.name}, ${agent.label.charAt(0).toLowerCase()}${agent.label.slice(1)}`;
 }
 
 export interface SidebarChrome {
@@ -164,6 +181,8 @@ export interface SidebarChrome {
   /** Hide/show the bottom-bar slot launcher (it lives in the host page, outside our host). */
   setSlotHidden(hidden: boolean): void;
   setT(t: Translate): void;
+  /** The assistant is typing: the brand mark's core bobs (no-op for a portrait). */
+  setTyping(on: boolean): void;
   launcherAria(): string;
   destroy(): void;
 }
@@ -179,6 +198,18 @@ export function createSidebarChrome(
       .replace('{name}', opts.agent?.name ?? '')
       .replace('{world}', opts.demoWorld ?? '');
   const agent = opts.agent;
+
+  // Every portrait this chrome paints, so the brand mark can bob while typing.
+  let typing = false;
+  const portraits = new Set<HTMLElement>();
+  const pt = (size: number, o: { online?: boolean; aiTag: string; badge?: boolean }): HTMLElement => {
+    const p = portrait(agent, size, o);
+    if (p.classList.contains('vtr-pt-mark')) {
+      portraits.add(p);
+      p.classList.toggle('vtr-pt-typing', typing);
+    }
+    return p;
+  };
 
   // --- Header ---------------------------------------------------------------
   let headerWho: HTMLElement | null = null;
@@ -257,6 +288,7 @@ export function createSidebarChrome(
   let teaserShown = false;
   let teaserGreeting: HTMLElement | null = null;
   let greetingText = '';
+  let teaserPt: HTMLElement | null = null;
   function buildTeaser(): void {
     teaser.replaceChildren();
     teaser.setAttribute('aria-label', agent ? `${agent.name}, ${agent.label}` : t('sbAskPlaceholder'));
@@ -274,7 +306,10 @@ export function createSidebarChrome(
       e.stopPropagation();
       cb.onTeaserDismiss();
     });
-    top.append(portrait(agent, 36, { aiTag: t('sbAiTag') }), txt, x);
+    // setT rebuilds the card: forget the old portrait before painting a new one.
+    if (teaserPt) portraits.delete(teaserPt);
+    teaserPt = pt(36, { aiTag: t('sbAiTag') });
+    top.append(teaserPt, txt, x);
     teaser.appendChild(top);
     if (opts.chips.length > 0) {
       const row = el('div', 'vtr-peek-row');
@@ -364,7 +399,7 @@ export function createSidebarChrome(
     decorateHeader(header, closeBtn) {
       header.classList.add('vtr-sb-head');
       if (agent) {
-        headerPt = portrait(agent, 40, { online: true, aiTag: t('sbAiTag') });
+        headerPt = pt(40, { online: true, aiTag: t('sbAiTag') });
         const initials = (opts.demoWorld ?? 'Demo')
           .split(/\s+/)
           .filter(Boolean)
@@ -418,7 +453,7 @@ export function createSidebarChrome(
       }
       // The sidetab carries no «IA» badge: the chat icon says «talk», and the
       // AI disclosure is the header's label inside the sheet and the aria-label.
-      launcher.prepend(portrait(agent, bubble ? 52 : sidetab ? 40 : 36, { online: true, aiTag: t('sbAiTag'), badge: bubble }));
+      launcher.prepend(pt(bubble ? 52 : sidetab ? 40 : 36, { online: true, aiTag: t('sbAiTag'), badge: bubble }));
       if (sidetab) {
         const ic = el('span', 'vtr-sbtab-chat');
         ic.appendChild(chatIcon());
@@ -494,7 +529,7 @@ export function createSidebarChrome(
       const btn = el('button', 'slot');
       btn.type = 'button';
       btn.setAttribute('aria-label', launcherAria());
-      btn.appendChild(portrait(agent, 34, { online: true, aiTag: t('sbAiTag') }));
+      btn.appendChild(pt(34, { online: true, aiTag: t('sbAiTag') }));
       on(btn, 'click', () => cb.onRequestOpen());
       sr.append(style, btn);
       opts.launcherSlot.appendChild(slotHost);
@@ -511,7 +546,12 @@ export function createSidebarChrome(
       if (launcherRef) launcherRef.setAttribute('aria-label', launcherAria());
       buildTeaser();
     },
+    setTyping(on) {
+      typing = on;
+      for (const p of portraits) p.classList.toggle('vtr-pt-typing', on);
+    },
     destroy() {
+      portraits.clear();
       slotHost?.remove();
       slotHost = null;
     },
@@ -530,4 +570,5 @@ const SLOT_STYLES = `
   background: #34893C; box-shadow: 0 0 0 2px #FEF9F3; }
 .vtr-pt-ia { position: absolute; right: -4px; bottom: -3px; font: 500 9.5px/1 'IBM Plex Mono', ui-monospace, monospace;
   color: #FEF9F3; background: #201712; padding: 2px 3px; border-radius: 4px; box-shadow: 0 0 0 1.5px #FEF9F3; }
-`;
+.slot { --vtr-mk-ink: #6A615A; --vtr-mk-ground: #FEF9F3; --vtr-mk-line: transparent; }
+${MARK_STYLES}`;

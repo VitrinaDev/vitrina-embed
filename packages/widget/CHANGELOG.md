@@ -1,5 +1,21 @@
 # @vitrina/widget
 
+## 0.23.0
+
+**Brand-mark avatar** (vitrinadev.com, 2026-10-18). Additive: an install without `agent.avatar` paints
+exactly as before.
+
+- New `agent.avatar: 'mark'` (inline and remote config). The assistant's portrait becomes the Vitrina
+  mark: an isometric pyramid of two hairline rings (the client's data, the team) with the amber core on
+  top (the AI agent), on a hairline tile in the preset's colours. Header, side tab, bubble, peek card
+  and bottom-bar slot. Static SVG paths, generated once by `scripts/gen-mark.mjs` from the landing's
+  `Iso.tsx` geometry. Takes precedence over `avatarUrl`.
+- The mark carries no presence dot and no «IA» badge; it is always an image named «<name>, <label in
+  lower case>», and the header's visible disclosure label stays.
+- While the assistant is typing the core bobs gently (1.2 s, CSS only); none under
+  `prefers-reduced-motion`.
+- The assistant's fallback name in demo-mode lines is now «Asistente» (was «Tomás»).
+
 ## 0.22.1
 
 **Sidetab launcher refresh** (vitrinadev.com, 2026-10-18). Visual only, same markup and API.
