@@ -1,5 +1,13 @@
 # @vitrina/widget
 
+## 0.22.1
+
+**Sidetab launcher refresh** (vitrinadev.com, 2026-10-18). Visual only, same markup and API.
+
+- Hairline edge and a layered soft shadow; 18 px corner; slightly narrower (58 px).
+- Portrait 40 px with a hairline ring; the presence dot is smaller and sits at the portrait's foot.
+- Chat key: 13 px corner, a light top edge and an accent glow; it grows a touch on hover.
+
 ## 0.22.0
 
 **Store prompt cards on Home** (vitrina-app#4419, Vitrina Comercio). Additive: a config without the new

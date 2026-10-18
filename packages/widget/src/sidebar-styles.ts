@@ -65,22 +65,31 @@ export const SIDEBAR_STYLES = `
 .vtr-root[data-launcher="bubble"] .vtr-peek { right: 24px; bottom: 100px; }
 
 /* Sidetab launcher (launcherStyle: 'sidetab'): a vertical rectangle on the right-centre edge,
-   the portrait over an ember chat icon, no text. The ask is a tooltip on hover/focus. */
+   the portrait over an ember chat icon, no text. The ask is a tooltip on hover/focus.
+   0.22.1 (vitrinadev.com refresh, 2026-10-18): hairline edge, a layered soft shadow instead of one
+   dark blur, a 40 px portrait with a hairline ring and a small presence dot at its foot, and a chat
+   key with a light top edge, so the tab reads like the host's cards rather than a sticker. */
 .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-sidetab {
-  width: 64px; padding: 10px 0 12px; gap: 10px; border-radius: 16px 0 0 16px;
-  box-shadow: -4px 8px 28px rgba(32,23,18,0.14);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  width: 58px; padding: 9px 0; gap: 8px; border-radius: 18px 0 0 18px;
+  border: 1px solid var(--vtr-border); border-right: 0;
+  box-shadow: 0 1px 2px rgba(32,23,18,0.06), -12px 18px 40px -20px rgba(32,23,18,0.32);
+  transition: transform 0.2s cubic-bezier(.2,.7,.2,1), box-shadow 0.2s ease;
 }
 .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-sidetab:hover {
-  transform: translateY(-50%) translateX(-3px); box-shadow: -8px 10px 32px rgba(32,23,18,0.18);
+  transform: translateY(-50%) translateX(-3px);
+  box-shadow: 0 1px 2px rgba(32,23,18,0.06), -16px 22px 44px -18px rgba(32,23,18,0.38);
 }
 .vtr-sb-sidetab:focus-visible { outline: 3px solid var(--vtr-accent); outline-offset: 2px; }
-.vtr-sb-sidetab .vtr-pt-on { width: 12px; height: 12px; right: 0; top: 0; box-shadow: 0 0 0 2.5px var(--vtr-surface); }
-.vtr-sbtab-chat { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
-  background: var(--vtr-accent); color: #fff; }
-.vtr-sbtab-chat svg { width: 22px; height: 22px; }
+.vtr-sb-sidetab .vtr-pt { box-shadow: 0 0 0 1px var(--vtr-border); }
+.vtr-sb-sidetab .vtr-pt-on { width: 10px; height: 10px; right: 0; top: auto; bottom: 0; box-shadow: 0 0 0 2px var(--vtr-surface); }
+.vtr-sbtab-chat { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center;
+  background: var(--vtr-accent); color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 6px 14px -7px var(--vtr-accent);
+  transition: transform 0.2s cubic-bezier(.2,.7,.2,1); }
+.vtr-sb-sidetab:hover .vtr-sbtab-chat { transform: scale(1.05); }
+.vtr-sbtab-chat svg { width: 19px; height: 19px; }
 .vtr-sbtab-chat svg path + path { stroke: var(--vtr-accent); }
-.vtr-sb-sidetab .vtr-sbtab-tip { right: 74px; font-size: 13.5px; font-weight: 500; }
+.vtr-sb-sidetab .vtr-sbtab-tip { right: 70px; font-size: 13.5px; font-weight: 500; }
 .vtr-sb-sidetab .vtr-badge { top: 4px; right: 6px; }
 .vtr-root[data-launcher="sidetab"] .vtr-peek { right: 80px; }
 
@@ -233,7 +242,7 @@ export const SIDEBAR_STYLES = `
 @media (prefers-reduced-motion: reduce) {
   .vtr-root[data-layout="sidebar"] .vtr-panel, .vtr-peek { animation: none; }
   .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-bubble, .vtr-sbtab-tip,
-  .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-sidetab { transition: none; }
+  .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-sidetab, .vtr-sbtab-chat { transition: none; }
   .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-sidetab:hover { transform: translateY(-50%); }
   .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-bubble:hover { transform: none; }
 }
