@@ -5,6 +5,8 @@
 //
 // NOTE: one big template literal — no backticks in these comments.
 
+import { MARK_STYLES } from './mark';
+
 export const SIDEBAR_STYLES = `
 /* Cream preset: the Vitrina landing tokens (research 12, ember per D61). It
    pins its own surfaces in both colour schemes: the page around it is cream. */
@@ -108,6 +110,13 @@ export const SIDEBAR_STYLES = `
   color: var(--vtr-surface); background: var(--vtr-text); padding: 2px 3px; border-radius: 4px;
   box-shadow: 0 0 0 1.5px var(--vtr-surface); }
 
+/* Brand-mark avatar (agent.avatar mark, 0.23.0): hairline tile on the surface,
+   lines in the preset ink. In the round bubble the button is the tile. */
+.vtr-root[data-layout] { --vtr-mk-ground: var(--vtr-surface); --vtr-mk-line: var(--vtr-border);
+  --vtr-mk-ink: var(--vtr-muted); --vtr-mk-ink: color-mix(in srgb, var(--vtr-text) 70%, var(--vtr-surface)); }
+.vtr-sb-sidetab .vtr-pt-mark { box-shadow: none; }
+.vtr-sb-bubble .vtr-pt-mark { border-color: transparent; border-radius: 50% !important; }
+${MARK_STYLES}
 /* Header: the named assistant on the surface, not on an accent band. */
 .vtr-root[data-layout] .vtr-header.vtr-sb-head {
   background: var(--vtr-surface); color: var(--vtr-text); gap: 12px;

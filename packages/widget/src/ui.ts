@@ -2017,6 +2017,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     },
     setTyping(active: boolean, note?: string | null): void {
       typingEl.hidden = !active;
+      chrome?.setTyping(active);
       if (note && active) {
         if (!typingNote) {
           typingNote = document.createElement('span');

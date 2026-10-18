@@ -1194,7 +1194,7 @@ export function init(config: WidgetConfig): WidgetInstance {
   // --- Demo mode (D60, spec v3 §5.8) -----------------------------------------
 
   const currentDemoKind = () => demoKindOf(sidebar.demoKind, sidebar.demoWorld);
-  const assistantName = () => sidebar.agent?.name ?? 'Tomás';
+  const assistantName = () => sidebar.agent?.name ?? 'Asistente';
 
   function pushNotice(notice: Omit<WidgetNotice, 'id' | 'at'>): void {
     notices = [

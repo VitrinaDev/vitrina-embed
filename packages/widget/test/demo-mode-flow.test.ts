@@ -175,7 +175,7 @@ describe('leaving demo mode', () => {
     await say('busco una SUV');
     $<HTMLButtonElement>('.vtr-sb-exit')!.click();
     expect(events).toEqual([{ reason: 'visitor', turns: 1 }]);
-    const exit = lines().at(-1)!;
+    const exit = lines().slice(-1)[0]!;
     expect(exit).toContain('Volví a ser Tomás.');
     expect(exit).toContain('con tus autos reales');
     expect(exit).toContain('demo de 30 minutos');
@@ -196,7 +196,7 @@ describe('leaving demo mode', () => {
     const exits: unknown[] = [];
     instance!.on('demo_exit', (p) => exits.push(p));
     await say('¿y esto cuánto cuesta?');
-    expect(lines().at(-1)).toBe('Salgo del modo demo para responderte como Tomás.');
+    expect(lines().slice(-1)[0]).toBe('Salgo del modo demo para responderte como Tomás.');
     expect(exits).toEqual([{ reason: 'product', turns: 0 }]);
     expect(posts[0]!.mode).toBeUndefined();
     expect(posts[0]!.message).toBe('¿y esto cuánto cuesta?');
@@ -220,8 +220,8 @@ describe('leaving demo mode', () => {
     expect(posts.every((p) => p.mode === 'demo')).toBe(true);
     await say('uno más');
     expect(exits).toEqual([{ reason: 'turns', turns: 12 }]);
-    expect(lines().at(-1)).toContain('Se acabaron los 12 mensajes del modo demo.');
-    expect(posts.at(-1)!.mode).toBeUndefined();
+    expect(lines().slice(-1)[0]).toContain('Se acabaron los 12 mensajes del modo demo.');
+    expect(posts.slice(-1)[0]!.mode).toBeUndefined();
   });
 
   it('ten idle minutes leave on their own', async () => {
@@ -235,7 +235,7 @@ describe('leaving demo mode', () => {
     expect(exits).toEqual([]);
     vi.advanceTimersByTime(61_000);
     expect(exits).toEqual([{ reason: 'idle', turns: 0 }]);
-    expect(lines().at(-1)).toContain('Salí del modo demo por inactividad.');
+    expect(lines().slice(-1)[0]).toContain('Salí del modo demo por inactividad.');
   });
 });
 
@@ -245,7 +245,7 @@ describe('typed invitation', () => {
     instance.open();
     await say('quiero probar');
     expect(posts).toHaveLength(0);
-    expect(lines().at(-1)).toContain('¿Entro en modo demo?');
+    expect(lines().slice(-1)[0]).toContain('¿Entro en modo demo?');
     const buttons = [...shadow().querySelectorAll<HTMLButtonElement>('.vtr-system-btn')];
     expect(buttons.map((b) => b.textContent)).toEqual(['Sí, entrar al modo demo', 'No, seguir con Tomás']);
   });

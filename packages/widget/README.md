@@ -290,7 +290,7 @@ The rule, in full:
 | `remoteConfig`   | `boolean`                     | no       | `true`             | Fetch appearance from Vitrina at load. `false` = fully self-contained.      |
 | `layout`         | `'bubble' \| 'sidebar' \| 'inline'` | no | `'bubble'`      | Placement. See **Sidebar mode** below. |
 | `preset`         | `'default' \| 'cream'`        | no       | `'default'`        | Surface palette. `cream` = the Vitrina landing tokens, DM Sans, ember `#AD4E00`. |
-| `agent`          | `{ name, label, status?, avatarUrl? }` | no | none          | The named assistant. Needs BOTH `name` and `label` (the AI disclosure) or it is ignored. |
+| `agent`          | `{ name, label, status?, avatarUrl?, avatar? }` | no | none | The named assistant. Needs BOTH `name` and `label` (the AI disclosure) or it is ignored. `avatar: 'mark'` draws the Vitrina brand mark instead of a portrait (see **Sidebar mode**). |
 | `chips`          | `Array<{ label, message?, action? }>` | no | `[]`           | Up to 4 suggested questions. `action`: `message` (default), `demo`, `booking`. |
 | `autoOpen`       | `WidgetAutoOpenConfig`        | no       | off                | Proactive open. See **Auto-open** below. |
 | `whatsapp`       | `{ number, text? }`           | no       | none               | One-tap continuation on WhatsApp with the conversation's reference code. |
@@ -579,7 +579,16 @@ You do not need either directive when `font` is `system`.
   open, then comes back.
 - **Disclosure:** the portrait is always shown with `agent.label` beside it;
   below 40 px (side tab, launcher, peek card) it carries an «IA» badge. With no
-  `agent.avatarUrl` a neutral silhouette is drawn. Under 40 px the portrait is exposed as an image named `<name>, <label in lower case>` (Tomás: «Tomás, asistente IA de Vitrina»).
+  `agent.avatarUrl` a neutral silhouette is drawn. Under 40 px the portrait is exposed as an image named `<name>, <label in lower case>` (Ámbar: «Ámbar, asistente IA de Vitrina»).
+- **Brand mark (`agent.avatar: 'mark'`, 0.23.0):** instead of a face, the
+  Vitrina mark (an isometric pyramid of two hairline rings with the amber core
+  on top) on a hairline tile in the preset's colours, everywhere the portrait
+  appears (header, side tab, bubble, peek card, bottom-bar slot). It carries no
+  presence dot and no «IA» badge, since it is plainly not a person; it is always
+  exposed as an image named `<name>, <label in lower case>`, and the header's
+  visible label stays. While the assistant is typing the core bobs gently (none
+  under `prefers-reduced-motion`). It wins over `avatarUrl`; without it the
+  portrait behaves exactly as before.
 - **`anchor: 'bottom-bar'`:** a page with its own sticky bar gives the widget a
   slot (`launcherSlot`). The launcher renders there on phones, and the peek card
   sits above the bar (mark the bar `data-vtr-bar`).
@@ -590,11 +599,11 @@ You do not need either directive when `font` is `system`.
   window.vitrinaChat = {
     publicKey: 'pk_live_xxx',
     apiBaseUrl: 'https://api.vitrinadev.com/api/v1',
-    layout: 'sidebar', preset: 'cream', anchor: 'bottom-bar', launcherSlot: '#tomas-slot',
-    agent: { name: 'Tomás', label: 'Asistente IA de Vitrina', status: 'Responde al instante' },
-    welcomeMessage: '¡Hola! Soy Tomás, el asistente IA de Vitrina. ¿En qué te ayudo?',
+    layout: 'sidebar', preset: 'cream', anchor: 'bottom-bar', launcherSlot: '#ambar-slot',
+    agent: { name: 'Ámbar', label: 'Asistente IA de Vitrina', status: 'Responde al instante', avatar: 'mark' },
+    welcomeMessage: '¡Hola! Soy Ámbar, la asistente IA de Vitrina. ¿En qué te ayudo?',
     chips: [{ label: '¿Cuánto cuesta?' }, { label: 'Pruébalo', action: 'demo' }],
-    whatsapp: { number: '+56 9 XXXX XXXX', text: 'Hola Tomás, sigo la conversación de la web (ref {ref})' },
+    whatsapp: { number: '+56 9 XXXX XXXX', text: 'Hola Ámbar, sigo la conversación de la web (ref {ref})' },
     cta: { label: 'Agendar demo' },
     autoOpen: { enabled: true, delaySeconds: 10, excludePaths: ['/agendar/*'] },
   };

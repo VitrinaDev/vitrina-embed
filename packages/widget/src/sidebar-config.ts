@@ -45,6 +45,8 @@ export interface ResolvedAgent {
   label: string;
   status: string | null;
   avatarUrl: string | null;
+  /** `'mark'`: the brand mark instead of a portrait (0.23.0). */
+  avatar: 'mark' | null;
 }
 
 export interface ResolvedAutoOpen {
@@ -155,6 +157,7 @@ export function resolveAgent(input: WidgetAgentConfig | undefined): ResolvedAgen
     label,
     status: text(input?.status, MAX_AGENT_STATUS),
     avatarUrl: validateHttpUrl(input?.avatarUrl),
+    avatar: input?.avatar === 'mark' ? 'mark' : null,
   };
 }
 
@@ -355,6 +358,7 @@ export function coerceRemoteSidebar(raw: Record<string, unknown>): RemoteSidebar
     if (label) agent.label = label;
     if (status) agent.status = status;
     if (avatarUrl) agent.avatarUrl = avatarUrl;
+    if (a.avatar === 'mark') agent.avatar = 'mark';
     if (Object.keys(agent).length > 0) out.agent = agent;
   }
 
