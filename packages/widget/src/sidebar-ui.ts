@@ -418,7 +418,7 @@ export function createSidebarChrome(
       }
       // The sidetab carries no «IA» badge: the chat icon says «talk», and the
       // AI disclosure is the header's label inside the sheet and the aria-label.
-      launcher.prepend(portrait(agent, bubble ? 52 : sidetab ? 44 : 36, { online: true, aiTag: t('sbAiTag'), badge: bubble }));
+      launcher.prepend(portrait(agent, bubble ? 52 : sidetab ? 40 : 36, { online: true, aiTag: t('sbAiTag'), badge: bubble }));
       if (sidetab) {
         const ic = el('span', 'vtr-sbtab-chat');
         ic.appendChild(chatIcon());
