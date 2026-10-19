@@ -1,5 +1,17 @@
 # @vitrina/widget
 
+## 0.23.3
+
+**Phones: follow the visual viewport only while the keyboard is up** (iOS 26 check of 0.23.2,
+2026-10-19). Patch.
+
+- 0.23.2 sized the open phone panel to the visual viewport at all times. On iOS 26 that viewport
+  stops above Safari's floating toolbar, so with the keyboard down the panel could end short of
+  100dvh and leave the page showing under the toolbar. The panel now follows the visual viewport
+  only while the on-screen keyboard is up (the visual viewport is more than 150 px shorter than the
+  layout viewport, the same reading the vitrinadev.com sticky bar uses); otherwise it keeps the
+  0.23.1 full-screen layout.
+
 ## 0.23.2
 
 **Phones: the keyboard no longer covers the composer** (vitrinadev.com, Android Chrome, 2026-10-19).
