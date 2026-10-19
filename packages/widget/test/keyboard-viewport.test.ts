@@ -102,6 +102,32 @@ describe('panel follows the visual viewport on phones', () => {
     expect(vars()).toEqual({ top: '', h: '' });
   });
 
+  it('a focused composer follows the visual viewport from the first open, whatever the toolbar did', async () => {
+    // Reload mid-page on Android Chrome: the toolbar is collapsed (layout 840),
+    // and the tap shows toolbar + keyboard at once. The readings along the way
+    // need not add up to a 150 px gap; a focused field is enough.
+    vi.stubGlobal('innerHeight', 840);
+    mockPointer(true);
+    instance = init({ publicKey: PK, apiBaseUrl: BASE, remoteConfig: false, locale: 'es' });
+    $<HTMLButtonElement>('.vtr-launcher').click();
+    expect(vars()).toEqual({ top: '', h: '' });
+
+    $<HTMLTextAreaElement>('.vtr-input').focus();
+    vv.height = 784; // toolbar back, keyboard on its way: no event for the final step
+    vi.stubGlobal('innerHeight', 784);
+    await new Promise((r) => setTimeout(r, 450));
+    expect(vars()).toEqual({ top: '0px', h: '784px' });
+
+    vv.height = 472; // keyboard up, reported only through window resize
+    window.dispatchEvent(new Event('resize'));
+    expect(vars()).toEqual({ top: '0px', h: '472px' });
+
+    $<HTMLTextAreaElement>('.vtr-input').blur();
+    vv.height = 784;
+    await new Promise((r) => setTimeout(r, 20));
+    expect(vars()).toEqual({ top: '', h: '' });
+  });
+
   it('keeps the latest message in view when the keyboard takes the bottom of the list', () => {
     mockPointer(true);
     instance = init({ publicKey: PK, apiBaseUrl: BASE, remoteConfig: false, locale: 'es' });

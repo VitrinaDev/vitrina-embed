@@ -1720,6 +1720,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     },
     destroy(): void {
       chrome?.destroy();
+      settleTimers.forEach(clearTimeout);
       for (const { target, type, handler } of listeners) {
         target.removeEventListener(type, handler);
       }
@@ -2159,22 +2160,41 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   // and the panel keeps 100dvh: on iOS 26 the visual viewport stops above the
   // floating toolbar, and a panel cut there would show the page under it.
   // A pinch-zoomed page keeps the plain layout too.
+  //
+  // "Keyboard up" is read fresh on every event, never from a stored baseline,
+  // and a focused widget field counts on its own (0.23.4). Chrome on Android
+  // shows its collapsed toolbar and the keyboard in one go when the page was
+  // scrolled (a reload restores the scroll with the toolbar hidden), and the
+  // viewport heights it reports along the way did not always add up to a
+  // keyboard, so the first open after a reload kept the full-height panel.
   const vv = (globalThis as { visualViewport?: VisualViewport }).visualViewport;
   /** Whether the transcript sat at its foot before the viewport changed. */
   let transcriptAtFoot = true;
   on(messagesEl, 'scroll', () => {
     transcriptAtFoot = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 48;
   });
+  const TYPING_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
+  /** A text field inside the widget has focus: on a touch screen, the keyboard is up or coming. */
+  function widgetFieldFocused(): boolean {
+    const a = shadow.activeElement as HTMLElement | null;
+    return !!a && (TYPING_TAGS.has(a.tagName) || a.isContentEditable);
+  }
+  /** The layout viewport's height right now (the larger reading wins). */
+  function layoutHeight(): number {
+    const ih = typeof innerHeight === 'number' ? innerHeight : 0;
+    const ch = document.documentElement?.clientHeight ?? 0;
+    return Math.max(ih, ch);
+  }
   function clearViewportFit(): void {
     panel.style.removeProperty('--vtr-vv-top');
     panel.style.removeProperty('--vtr-vv-h');
     panel.removeAttribute('data-kbd');
   }
   function fitToViewport(): void {
-    // The keyboard is up when it takes more of the layout viewport than any
-    // browser toolbar does (the landing's sticky bar uses the same reading).
     const keyboardUp =
-      !!vv && typeof innerHeight === 'number' && innerHeight - vv.height > 150 && Math.abs(vv.scale - 1) <= 0.01;
+      !!vv &&
+      Math.abs(vv.scale - 1) <= 0.01 &&
+      (widgetFieldFocused() || layoutHeight() - vv.height > 150);
     if (!vv || !open || !coarsePointer() || !keyboardUp) {
       clearViewportFit();
       return;
@@ -2187,9 +2207,14 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     // The keyboard took the bottom of the list: keep the latest message in view.
     if (foot && activeView === 'messages') scrollToBottom();
   }
-  // resize and scroll arrive in bursts while the keyboard animates: one fit a frame.
+  // Fit at once (no frame of the composer under the keyboard), again on the
+  // next frame (resize and scroll arrive in bursts while the keyboard
+  // animates), and a few times after a focus change: the keyboard and the
+  // browser toolbar settle over ~half a second, and the last step does not
+  // always fire an event.
   let fitPending = false;
   function scheduleFit(): void {
+    fitToViewport();
     if (fitPending) return;
     fitPending = true;
     const run = (): void => {
@@ -2199,9 +2224,17 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
     else setTimeout(run, 16);
   }
+  let settleTimers: ReturnType<typeof setTimeout>[] = [];
+  function settleFit(): void {
+    settleTimers.forEach(clearTimeout);
+    settleTimers = [0, 150, 400, 800].map((ms) => setTimeout(scheduleFit, ms));
+  }
   if (vv) {
     on(vv, 'resize', scheduleFit);
     on(vv, 'scroll', scheduleFit);
+    if (typeof window !== 'undefined') on(window, 'resize', scheduleFit);
+    on(shadow, 'focusin', settleFit);
+    on(shadow, 'focusout', settleFit);
   }
   fitPanel = fitToViewport;
 
