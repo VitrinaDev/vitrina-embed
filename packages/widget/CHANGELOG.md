@@ -1,5 +1,22 @@
 # @vitrina/widget
 
+## 0.23.4
+
+**Phones: the keyboard fit works on the first open after a reload** (Android Chrome, real device,
+2026-10-19). Patch.
+
+- After a reload mid-page (Chrome restores the scroll with its toolbar collapsed), the first tap on
+  the composer showed the toolbar and the keyboard together. 0.23.3 only treated the keyboard as up
+  when the visual viewport was more than 150 px shorter than `innerHeight`, and on that path the
+  readings did not cross that line, so the panel kept its full height under the keyboard. Closing
+  and reopening worked because by then the toolbar was already visible.
+- A focused widget field now counts as "keyboard up" on its own (the size gap still counts too).
+  The layout height is read fresh on every event as the larger of `innerHeight` and
+  `documentElement.clientHeight`, never from a stored baseline.
+- The panel re-fits at once on visual viewport resize and scroll, on window resize, and on focus
+  changes inside the widget, then again 150, 400 and 800 ms later, because the last step of the
+  keyboard and toolbar animation does not always fire an event.
+
 ## 0.23.3
 
 **Phones: follow the visual viewport only while the keyboard is up** (iOS 26 check of 0.23.2,
