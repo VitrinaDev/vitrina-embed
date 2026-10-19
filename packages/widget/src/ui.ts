@@ -2153,9 +2153,12 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   // height, so the composer ends up under the keyboard. iOS Safari behaves the
   // same way and pans the page instead. We are embedded on sites whose
   // viewport meta we do not control, so the widget does not rely on it: while
-  // the panel is open on a touch screen it publishes the visible area as
-  // --vtr-vv-top / --vtr-vv-h, and the phone CSS (full-screen panel only)
-  // places the panel there. A pinch-zoomed page keeps the plain layout.
+  // the keyboard is up on a touch screen the open panel publishes the visible
+  // area as --vtr-vv-top / --vtr-vv-h, and the phone CSS (full-screen panel
+  // only) places the panel there. With the keyboard down the vars are cleared
+  // and the panel keeps 100dvh: on iOS 26 the visual viewport stops above the
+  // floating toolbar, and a panel cut there would show the page under it.
+  // A pinch-zoomed page keeps the plain layout too.
   const vv = (globalThis as { visualViewport?: VisualViewport }).visualViewport;
   /** Whether the transcript sat at its foot before the viewport changed. */
   let transcriptAtFoot = true;
@@ -2168,15 +2171,19 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     panel.removeAttribute('data-kbd');
   }
   function fitToViewport(): void {
-    if (!vv || !open || !coarsePointer() || Math.abs(vv.scale - 1) > 0.01) {
+    // The keyboard is up when it takes more of the layout viewport than any
+    // browser toolbar does (the landing's sticky bar uses the same reading).
+    const keyboardUp =
+      !!vv && typeof innerHeight === 'number' && innerHeight - vv.height > 150 && Math.abs(vv.scale - 1) <= 0.01;
+    if (!vv || !open || !coarsePointer() || !keyboardUp) {
       clearViewportFit();
       return;
     }
     const foot = transcriptAtFoot;
     panel.style.setProperty('--vtr-vv-top', `${Math.max(0, Math.round(vv.offsetTop))}px`);
     panel.style.setProperty('--vtr-vv-h', `${Math.round(vv.height)}px`);
-    // Keyboard up: the footer's home-indicator inset would float above it.
-    panel.toggleAttribute('data-kbd', typeof innerHeight === 'number' && innerHeight - vv.height > 150);
+    // The footer's home-indicator inset would float above the keyboard.
+    panel.setAttribute('data-kbd', '');
     // The keyboard took the bottom of the list: keep the latest message in view.
     if (foot && activeView === 'messages') scrollToBottom();
   }

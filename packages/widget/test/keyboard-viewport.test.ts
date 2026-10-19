@@ -78,8 +78,13 @@ describe('panel follows the visual viewport on phones', () => {
     mockPointer(true);
     instance = init({ publicKey: PK, apiBaseUrl: BASE, remoteConfig: false, locale: 'es' });
     $<HTMLButtonElement>('.vtr-launcher').click();
-    expect(vars()).toEqual({ top: '0px', h: '800px' });
+    // Keyboard down: the plain 100dvh layout (iOS 26's visual viewport stops
+    // above its floating toolbar; cutting the panel there would show the page).
+    expect(vars()).toEqual({ top: '', h: '' });
     expect($('.vtr-panel').hasAttribute('data-kbd')).toBe(false);
+
+    vv.set(740); // a toolbar's worth of difference is not a keyboard
+    expect(vars()).toEqual({ top: '', h: '' });
 
     vv.set(420, 0); // keyboard up (Android: the visual viewport shrinks in place)
     expect(vars()).toEqual({ top: '0px', h: '420px' });
@@ -90,7 +95,8 @@ describe('panel follows the visual viewport on phones', () => {
     expect(vars()).toEqual({ top: '260px', h: '420px' });
 
     vv.set(800, 0); // keyboard down
-    expect(vars()).toEqual({ top: '0px', h: '800px' });
+    expect(vars()).toEqual({ top: '', h: '' });
+    expect($('.vtr-panel').hasAttribute('data-kbd')).toBe(false);
 
     instance.close();
     expect(vars()).toEqual({ top: '', h: '' });
