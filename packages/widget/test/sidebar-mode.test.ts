@@ -237,6 +237,26 @@ describe('auto-open', () => {
     expect(sessionStorage.getItem(`vtr:widget:${PK}:autoopen`)).toBe('dismissed');
   });
 
+  it('mobile: the peek card sits above the host bar, and drops to the edge when the bar fades out', async () => {
+    mockMatchMedia(true);
+    document.body.innerHTML = '<div data-vtr-bar><span id="slot"></span></div>';
+    const bar = document.querySelector<HTMLElement>('[data-vtr-bar]')!;
+    const slot = document.getElementById('slot')!;
+    const rect = (top: number, height: number) => ({ top, height, bottom: top + height, left: 0, right: 390, width: 390, x: 0, y: top, toJSON() {} }) as DOMRect;
+    vi.spyOn(bar, 'getBoundingClientRect').mockReturnValue(rect(innerHeight - 64, 64));
+    vi.spyOn(slot, 'getBoundingClientRect').mockReturnValue(rect(innerHeight - 56, 48));
+    instance = init(tomas({ anchor: 'bottom-bar', launcherSlot: '#slot', autoOpen: { enabled: true, delaySeconds: 1 } }));
+    await pastDelay();
+    const peek = $('.vtr-peek')!;
+    expect(peek.hidden).toBe(false);
+    expect(peek.style.bottom).toBe('72px');
+
+    // The landing hides its bar with opacity + visibility (iOS 26 clips a bar that slides down).
+    bar.style.visibility = 'hidden';
+    window.dispatchEvent(new Event('resize'));
+    expect(peek.style.bottom).toBe('16px');
+  });
+
   it('tapping the peek card opens the full panel', async () => {
     mockMatchMedia(true);
     instance = init(tomas({ autoOpen: { enabled: true, delaySeconds: 1 } }));

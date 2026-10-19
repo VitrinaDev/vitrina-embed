@@ -1,5 +1,20 @@
 # @vitrina/widget
 
+## 0.23.1
+
+**Phones: no keyboard on open, no focus zoom** (vitrinadev.com, iOS 26 Safari, 2026-10-19). Patch:
+desktop behaviour is unchanged.
+
+- Opening the panel on a touch-first device (`(pointer: coarse)`) no longer focuses the composer, so
+  the on-screen keyboard does not cover the panel before the visitor has read it; they tap the field
+  to type. A mouse or trackpad still lands in the composer. Explicit "write a message" actions
+  (compose chips, the Home «chat» card, `prefill()`) still focus it.
+- On touch screens every widget field (composer, booking and Home-action forms) is 16px. Under 16px,
+  iOS zooms the page into the focused field, which left the panel zoomed and cut off on the right.
+  Pinch zoom is untouched.
+- The mobile peek card drops to the screen edge when the host's `[data-vtr-bar]` is hidden with
+  `visibility: hidden` (a bar that fades out in place), instead of floating over the bar's empty box.
+
 ## 0.23.0
 
 **Brand-mark avatar** (vitrinadev.com, 2026-10-18). Additive: an install without `agent.avatar` paints

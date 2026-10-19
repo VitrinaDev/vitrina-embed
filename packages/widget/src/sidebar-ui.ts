@@ -346,8 +346,11 @@ export function createSidebarChrome(
       const r = opts.launcherSlot.getBoundingClientRect();
       if (r.height > 0 && typeof innerHeight === 'number') {
         const bar = opts.launcherSlot.closest('[data-vtr-bar]') as HTMLElement | null;
+        // A bar that steps aside by fading (visibility: hidden) keeps its box in
+        // place; the card then drops to the screen edge as if the bar were gone.
+        const barGone = !!bar && getComputedStyle(bar).visibility === 'hidden';
         const top = bar ? bar.getBoundingClientRect().top : r.top - 10;
-        bottom = Math.max(16, Math.round(innerHeight - top + 8));
+        bottom = barGone ? 16 : Math.max(16, Math.round(innerHeight - top + 8));
       }
     }
     teaser.style.bottom = `${bottom}px`;

@@ -38,6 +38,15 @@ import { renderMarkdown } from './markdown';
 import { createSidebarChrome, sendIcon, type SidebarChrome, type SidebarUiCallbacks, type SidebarUiOptions } from './sidebar-ui';
 import { SIDEBAR_STYLES } from './sidebar-styles';
 import { STYLES } from './styles';
+
+/**
+ * A touch-first device (phone, tablet without a trackpad). Opening the panel
+ * there does not focus the composer: focusing pops the on-screen keyboard
+ * uninvited. No matchMedia (old engines, test DOMs) means a fine pointer.
+ */
+export function coarsePointer(): boolean {
+  return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+}
 import { resolveAccent, resolvePosition, validateLogoUrl } from './theme';
 import type { WidgetFont, WidgetHomeAction, WidgetHomePrompt, WidgetLocale, WidgetTheme } from './types';
 
@@ -1732,7 +1741,10 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       // a display:none view would scroll nothing and steal nothing.
       // Never on an auto-open: a panel that opened on its own must not take the
       // keyboard (or summon a phone keyboard) from what the visitor was doing.
-      if (focus && activeView === 'messages') input.focus();
+      // Nor on a touch screen: the focus summons the keyboard over the panel
+      // before the visitor has read anything (embed: mobile no-autofocus). They
+      // tap the field when they want to type; a mouse/trackpad keeps autofocus.
+      if (focus && activeView === 'messages' && !coarsePointer()) input.focus();
       scrollToBottom();
     },
     closePanel(): void {
