@@ -797,11 +797,14 @@ select.vtr-ha-input { cursor: pointer; }
     /* fixed, not absolute: the panel's offset parent is the 0x0 .vtr-root
        pinned 20px off the corner, so inset:0 against IT would fill nothing. */
     position: fixed;
-    inset: 0;
+    /* --vtr-vv-*: the visible area while the panel is open on a touch screen
+       (ui.ts, fitToViewport). The keyboard shrinks only the visual viewport on
+       Android Chrome and iOS Safari, so 100dvh alone sits under it. */
+    inset: var(--vtr-vv-top, 0px) 0 auto 0;
     width: 100%;
-    height: 100dvh;
+    height: var(--vtr-vv-h, 100dvh);
     max-width: 100%;
-    max-height: 100dvh;
+    max-height: var(--vtr-vv-h, 100dvh);
     border-radius: 0;
     border: none;
   }

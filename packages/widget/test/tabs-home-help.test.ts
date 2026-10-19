@@ -708,7 +708,7 @@ describe('panel dimensions', () => {
 
   it('is still fullscreen on a phone', () => {
     expect(STYLES).toContain('@media (max-width: 480px)');
-    expect(STYLES).toContain('height: 100dvh;');
+    expect(STYLES).toContain('height: var(--vtr-vv-h, 100dvh);'); // the visible area, else the full screen
   });
 });
 

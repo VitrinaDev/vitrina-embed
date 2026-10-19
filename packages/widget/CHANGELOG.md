@@ -1,5 +1,21 @@
 # @vitrina/widget
 
+## 0.23.2
+
+**Phones: the keyboard no longer covers the composer** (vitrinadev.com, Android Chrome, 2026-10-19).
+Patch: desktop behaviour is unchanged.
+
+- Since Chrome 108 the Android keyboard shrinks only the visual viewport (`interactive-widget=
+  resizes-visual`, the default), and iOS Safari behaves the same way, so the full-screen phone panel
+  (`position: fixed`, `100dvh`) stayed laid out under the keyboard: the browser panned the page, the
+  header slid off the top and the composer could end up under the keyboard. While the panel is open on
+  a touch screen it now follows `window.visualViewport` (resize and scroll): it is placed at the
+  visible area's offset and sized to its height, so the composer sits right above the keyboard and
+  the header stays on screen. Nothing depends on the host page's viewport meta.
+- The transcript stays scrolled to the latest message when the keyboard opens, if it was there.
+- With the keyboard up the sidebar sheet drops the home-indicator inset under the composer.
+- A pinch-zoomed page, a desktop pointer and a closed panel keep the plain layout.
+
 ## 0.23.1
 
 **Phones: no keyboard on open, no focus zoom** (vitrinadev.com, iOS 26 Safari, 2026-10-19). Patch:
