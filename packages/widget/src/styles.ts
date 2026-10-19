@@ -806,4 +806,12 @@ select.vtr-ha-input { cursor: pointer; }
     border: none;
   }
 }
+
+/* iOS zooms the page into any field under 16px when it takes focus, and the
+   zoom leaves the panel cut off on the right. On touch screens every text
+   field is 16px; !important because the sidebar sheet (a later stylesheet)
+   sets its own, more specific sizes. Pinch zoom stays available. */
+@media (pointer: coarse) {
+  input, textarea, select { font-size: 16px !important; }
+}
 `;
