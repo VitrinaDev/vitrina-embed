@@ -804,6 +804,8 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
 
   // --- state + listeners ---
   let open = false;
+  /** Places the open panel over the visible area on phones (wired below). */
+  let fitPanel: () => void = () => {};
   // Remembered so a locale swap can re-derive anything already on screen. Both
   // are already implied by the DOM, but reading them back out of it would mean
   // parsing our own rendered strings.
@@ -1746,10 +1748,13 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       // tap the field when they want to type; a mouse/trackpad keeps autofocus.
       if (focus && activeView === 'messages' && !coarsePointer()) input.focus();
       scrollToBottom();
+      transcriptAtFoot = true;
+      fitPanel();
     },
     closePanel(): void {
       open = false;
       panel.hidden = true;
+      fitPanel();
       launcher.hidden = false;
     },
     isOpen(): boolean {
@@ -2140,6 +2145,58 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       submit();
     }
   }) as EventListener);
+
+  // --- Phones: the panel follows the visual viewport (embed: Android keyboard) ---
+  // Since Chrome 108 on Android the on-screen keyboard shrinks only the VISUAL
+  // viewport (interactive-widget=resizes-visual, the default); the layout
+  // viewport, and with it a position:fixed panel sized 100dvh, stays full
+  // height, so the composer ends up under the keyboard. iOS Safari behaves the
+  // same way and pans the page instead. We are embedded on sites whose
+  // viewport meta we do not control, so the widget does not rely on it: while
+  // the panel is open on a touch screen it publishes the visible area as
+  // --vtr-vv-top / --vtr-vv-h, and the phone CSS (full-screen panel only)
+  // places the panel there. A pinch-zoomed page keeps the plain layout.
+  const vv = (globalThis as { visualViewport?: VisualViewport }).visualViewport;
+  /** Whether the transcript sat at its foot before the viewport changed. */
+  let transcriptAtFoot = true;
+  on(messagesEl, 'scroll', () => {
+    transcriptAtFoot = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 48;
+  });
+  function clearViewportFit(): void {
+    panel.style.removeProperty('--vtr-vv-top');
+    panel.style.removeProperty('--vtr-vv-h');
+    panel.removeAttribute('data-kbd');
+  }
+  function fitToViewport(): void {
+    if (!vv || !open || !coarsePointer() || Math.abs(vv.scale - 1) > 0.01) {
+      clearViewportFit();
+      return;
+    }
+    const foot = transcriptAtFoot;
+    panel.style.setProperty('--vtr-vv-top', `${Math.max(0, Math.round(vv.offsetTop))}px`);
+    panel.style.setProperty('--vtr-vv-h', `${Math.round(vv.height)}px`);
+    // Keyboard up: the footer's home-indicator inset would float above it.
+    panel.toggleAttribute('data-kbd', typeof innerHeight === 'number' && innerHeight - vv.height > 150);
+    // The keyboard took the bottom of the list: keep the latest message in view.
+    if (foot && activeView === 'messages') scrollToBottom();
+  }
+  // resize and scroll arrive in bursts while the keyboard animates: one fit a frame.
+  let fitPending = false;
+  function scheduleFit(): void {
+    if (fitPending) return;
+    fitPending = true;
+    const run = (): void => {
+      fitPending = false;
+      fitToViewport();
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+    else setTimeout(run, 16);
+  }
+  if (vv) {
+    on(vv, 'resize', scheduleFit);
+    on(vv, 'scroll', scheduleFit);
+  }
+  fitPanel = fitToViewport;
 
   // Build the tab chrome NOW when the caller already knows the answer — a
   // repeat visitor whose cached config says Home is on gets the tab bar on the

@@ -225,9 +225,12 @@ ${MARK_STYLES}
 /* Phones: full screen only when tapped open; the tab becomes a round portrait,
    or disappears into the host's sticky bar. */
 @media (max-width: 768px) {
-  .vtr-root[data-layout="sidebar"] .vtr-panel { left: 0; width: 100%; border-left: none; box-shadow: none; animation: none; }
+  .vtr-root[data-layout="sidebar"] .vtr-panel { left: 0; width: 100%; border-left: none; box-shadow: none; animation: none;
+    /* Over the visible area, above the on-screen keyboard (ui.ts, fitToViewport). */
+    top: var(--vtr-vv-top, 0px); bottom: auto; height: var(--vtr-vv-h, 100dvh); }
   .vtr-root[data-layout="sidebar"] .vtr-panel .vtr-header { padding-top: calc(14px + env(safe-area-inset-top)); }
   .vtr-root[data-layout="sidebar"] .vtr-footer { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .vtr-root[data-layout="sidebar"] .vtr-panel[data-kbd] .vtr-footer { padding-bottom: 12px; }
   .vtr-root[data-layout="sidebar"] .vtr-launcher.vtr-sb-tab {
     top: auto; bottom: 16px; right: 16px; transform: none; width: 56px; height: 56px; padding: 0;
     border-radius: 50%; border: 1px solid var(--vtr-border);
