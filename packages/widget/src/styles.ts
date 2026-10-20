@@ -209,6 +209,9 @@ export const STYLES = `
 /* Attachment photos, rendered INSIDE a bubble above the caption. */
 .vtr-media { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
 .vtr-media:last-child { margin-bottom: 0; }
+/* Two or more photos (a leak, a crack): a tidy grid, not a tall stack. */
+.vtr-media:has(> a + a) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.vtr-media:has(> a + a) .vtr-media-img { width: 100%; height: 110px; object-fit: cover; }
 .vtr-media-img {
   display: block; max-width: 100%; border-radius: 10px;
   background: var(--vtr-bubble-out);
@@ -220,21 +223,80 @@ export const STYLES = `
   overflow: hidden; background: var(--vtr-surface);
 }
 .vtr-card-img { display: block; width: 100%; height: 132px; object-fit: cover; background: var(--vtr-bubble-out); }
-.vtr-card-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
-.vtr-card-title { font-size: 13px; font-weight: 600; color: var(--vtr-text); }
-.vtr-card-price { font-size: 13px; color: var(--vtr-text); }
-.vtr-card-facts { margin: 6px 0 0; padding: 6px 0 0; border-top: 1px solid var(--vtr-border); display: flex; flex-direction: column; gap: 3px; }
-.vtr-card-fact { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 12px; line-height: 1.35; }
-.vtr-card-fact dt { color: var(--vtr-muted); flex-shrink: 0; }
-.vtr-card-fact dd { margin: 0; color: var(--vtr-text); font-weight: 500; text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vtr-card-link { font-size: 12px; font-weight: 600; color: var(--vtr-accent); text-decoration: none; margin-top: 4px; }
-.vtr-card-link:hover { text-decoration: underline; }
-/* The accent is tuned for light grounds (default #111827): on the dark card it
-   vanished. Lift it toward the text colour so any accent stays legible. */
-@media (prefers-color-scheme: dark) {
-  .vtr-card-link { color: color-mix(in srgb, var(--vtr-accent) 35%, var(--vtr-text)); }
+.vtr-card-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 2px; }
+.vtr-card-title { font-size: 14px; font-weight: 650; line-height: 1.3; color: var(--vtr-text); }
+.vtr-card-sub { font-size: 12px; line-height: 1.35; color: var(--vtr-muted); }
+.vtr-card-price { font-size: 15px; font-weight: 700; color: var(--vtr-text); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.vtr-card-facts {
+  margin: 8px 0 0; padding: 8px 0 0; border-top: 1px solid var(--vtr-border);
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px;
 }
-.vtr-card-link:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+.vtr-card-fact { display: flex; flex-direction: column-reverse; gap: 1px; min-width: 0; }
+.vtr-card-fact dt { font-size: 10.5px; letter-spacing: 0.02em; color: var(--vtr-muted); }
+.vtr-card-fact dd { margin: 0; font-size: 13px; font-weight: 600; color: var(--vtr-text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.vtr-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.vtr-card-btn {
+  flex: 1 1 auto; min-width: 0; box-sizing: border-box; text-align: center; cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 600; text-decoration: none;
+  padding: 9px 12px; border-radius: 9px; border: 1px solid var(--vtr-accent);
+  background: var(--vtr-accent); color: #fff;
+}
+.vtr-card-btn:hover { filter: brightness(1.08); }
+.vtr-card-btn-alt { background: transparent; color: var(--vtr-accent); }
+.vtr-card-btn:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+/* The accent is tuned for light grounds (default #111827): on the dark card the
+   outline button vanished. Lift it toward the text colour so any accent stays legible. */
+@media (prefers-color-scheme: dark) {
+  .vtr-card-btn-alt { color: color-mix(in srgb, var(--vtr-accent) 35%, var(--vtr-text)); border-color: color-mix(in srgb, var(--vtr-accent) 45%, var(--vtr-text)); }
+}
+
+/* Document card (a PDF the agent sent): page glyph + extension, name, meta, action. */
+.vtr-files { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.vtr-files:last-child { margin-bottom: 0; }
+.vtr-file {
+  display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 10px;
+  border: 1px solid var(--vtr-border); border-radius: 10px; background: var(--vtr-surface);
+  color: var(--vtr-text); text-decoration: none;
+}
+.vtr-file:hover { background: var(--vtr-bubble-out); }
+.vtr-file:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 2px; }
+.vtr-file-icon { position: relative; flex: none; width: 38px; height: 40px; display: grid; place-items: center; color: var(--vtr-accent); }
+.vtr-file-icon svg { width: 36px; height: 36px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.vtr-file-ext {
+  position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+  font-size: 8px; font-weight: 800; letter-spacing: 0.02em; white-space: nowrap; color: #fff; background: var(--vtr-accent);
+  border-radius: 3px; padding: 1px 3px; line-height: 1.2;
+}
+.vtr-file-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.vtr-file-name { font-size: 13px; font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vtr-file-meta { font-size: 11.5px; color: var(--vtr-muted); }
+.vtr-file-action { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 999px; background: var(--vtr-bubble-out); color: var(--vtr-text); }
+.vtr-file-action svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+@media (prefers-color-scheme: dark) {
+  .vtr-file-icon { color: color-mix(in srgb, var(--vtr-accent) 35%, var(--vtr-text)); }
+}
+
+/* Photo attach: the paperclip beside the input and the staged tray above it. */
+.vtr-attach {
+  flex: none; width: 40px; height: 40px; display: grid; place-items: center; cursor: pointer;
+  border: none; border-radius: 10px; background: transparent; color: var(--vtr-muted); padding: 0;
+}
+.vtr-attach[hidden] { display: none; }
+.vtr-attach:hover:not(:disabled) { background: var(--vtr-bubble-out); color: var(--vtr-text); }
+.vtr-attach:disabled { opacity: 0.4; cursor: default; }
+.vtr-attach:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 1px; }
+.vtr-attach svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.vtr-tray { display: flex; gap: 8px; padding: 8px 12px 0; border-top: 1px solid var(--vtr-border); overflow-x: auto; }
+.vtr-tray[hidden] { display: none; }
+.vtr-tray-item { position: relative; flex: none; width: 56px; height: 56px; }
+.vtr-tray-item img { width: 56px; height: 56px; object-fit: cover; border-radius: 9px; display: block; border: 1px solid var(--vtr-border); }
+.vtr-tray-x {
+  position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; padding: 0; display: grid; place-items: center;
+  border-radius: 999px; border: 2px solid var(--vtr-surface); background: var(--vtr-text); color: var(--vtr-surface); cursor: pointer;
+}
+.vtr-tray-x svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.vtr-tray-x:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: 1px; }
+.vtr-tray + .vtr-banner, .vtr-tray ~ .vtr-composer { border-top: none; }
 
 /* Centered system line ("an advisor joined"). Not a bubble: it has no author,
    no direction, and it names nobody. */
@@ -345,6 +407,8 @@ export const STYLES = `
 .vtr-panel[data-booking] .vtr-actions,
 .vtr-panel[data-booking] .vtr-tabs,
 .vtr-panel[data-home-action] .vtr-composer,
+.vtr-panel[data-booking] .vtr-tray,
+.vtr-panel[data-home-action] .vtr-tray,
 .vtr-panel[data-home-action] .vtr-actions,
 .vtr-panel[data-home-action] .vtr-tabs { display: none; }
 
@@ -651,6 +715,11 @@ select.vtr-ha-input { cursor: pointer; }
 .vtr-tab[aria-selected="true"] { color: var(--vtr-accent); font-weight: 600; }
 .vtr-tab:hover { color: var(--vtr-text); }
 .vtr-tab[aria-selected="true"]:hover { color: var(--vtr-accent); }
+/* Dark: the accent (a mid blue) disappeared on the navy bar. Lift the selected
+   tab toward the text colour so any accent stays readable. */
+@media (prefers-color-scheme: dark) {
+  .vtr-tab[aria-selected="true"], .vtr-tab[aria-selected="true"]:hover { color: color-mix(in srgb, var(--vtr-accent) 40%, var(--vtr-text)); }
+}
 .vtr-tab:focus-visible { outline: 2px solid var(--vtr-accent); outline-offset: -3px; border-radius: 8px; }
 .vtr-tab-dot {
   position: absolute; top: -1px; right: -3px;

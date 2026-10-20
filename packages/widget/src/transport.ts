@@ -95,6 +95,15 @@ export interface SendInput {
   demoSession?: string;
 }
 
+export interface SendPhotosInput {
+  /** The caption; may be empty when the visitor only sent photos. */
+  message: string;
+  files: File[];
+  clientMessageId?: string;
+  honeypot?: string;
+  pageContext?: Record<string, string>;
+}
+
 export type SendOutcome =
   | SendResult
   /** `message` is the server's words for a 429, written for the visitor. */
@@ -626,7 +635,8 @@ export class VitrinaTransport {
     path: string,
     opts: {
       method: 'GET' | 'POST' | 'DELETE';
-      body?: string;
+      /** A FormData body goes out multipart: the browser sets the Content-Type. */
+      body?: string | FormData;
       withVisitor: boolean;
       captureError?: boolean;
       /** Keep a 429's `error.message` (the server writes it for the visitor). */
@@ -637,7 +647,7 @@ export class VitrinaTransport {
       withVisitor: opts.withVisitor,
       // DELETE carries no body, so it carries no Content-Type either — one
       // fewer header for the preflight allow-list to have to admit.
-      json: opts.method === 'POST',
+      json: opts.method === 'POST' && !(opts.body instanceof FormData),
     });
     let res: Response;
     try {
@@ -778,6 +788,51 @@ export class VitrinaTransport {
         res = await this.call<SendResult>('/widget/messages', {
           method: 'POST',
           body: payload,
+          withVisitor: true,
+          captureRateLimit: true,
+        });
+      }
+    }
+    if (res.ok) {
+      if (res.data?.visitorToken) this.tokens.set(res.data.visitorToken);
+      return res.data;
+    }
+    return {
+      error: true,
+      status: res.status,
+      ...(res.message ? { message: res.message } : {}),
+    };
+  }
+
+  /**
+   * Post a message that carries photos (0.24.0): `POST /widget/messages/photos`,
+   * multipart. The same identity, honeypot and idempotency key as `send`; the
+   * photos ride as a repeated `photos` field. Returns the same typed outcome.
+   */
+  async sendPhotos(input: SendPhotosInput): Promise<SendOutcome> {
+    const build = (): FormData => {
+      const form = new FormData();
+      form.append('message', input.message);
+      form.append('hp_website', input.honeypot ?? '');
+      if (input.clientMessageId) form.append('client_message_id', input.clientMessageId);
+      if (input.pageContext && Object.keys(input.pageContext).length > 0) {
+        form.append('page_context', JSON.stringify(input.pageContext));
+      }
+      for (const file of input.files) form.append('photos', file, file.name);
+      return form;
+    };
+    let res = await this.call<SendResult>('/widget/messages/photos', {
+      method: 'POST',
+      body: build(),
+      withVisitor: true,
+      captureRateLimit: true,
+    });
+    if (!res.ok && res.status === 401) {
+      const boot = await this.freshBootstrap();
+      if (boot) {
+        res = await this.call<SendResult>('/widget/messages/photos', {
+          method: 'POST',
+          body: build(),
           withVisitor: true,
           captureRateLimit: true,
         });

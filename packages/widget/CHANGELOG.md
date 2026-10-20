@@ -1,5 +1,26 @@
 # @vitrina/widget
 
+## 0.24.0
+
+**Inmobiliarias: documents, developer actions, buyer photos and richer unit cards.** Minor.
+
+- **Document card.** A `file` row (`files: [{ url, filename, mimeType, size? }]`, or a document URL in
+  `mediaUrls`) renders as a card with the file's name, «PDF · 2,4 MB» and a download button, above
+  its caption. Before, the brochure showed only the caption.
+- **Developer Home actions.** Three new `home.prompts` ids: `projects` («Ver proyectos»),
+  `showroom_visit` («Agendar visita a sala») and `after_sales` («Post-venta»). The server picks the
+  set per tenant (an inmobiliaria running Módulo Proyectos gets these instead of «Publicar mi
+  propiedad»); the widget just renders what it is sent.
+- **Buyer photos.** When the server sends `photoUploadEnabled: true`, the composer gets a paperclip.
+  Up to four photos are staged in a tray, shrunk on the device (longest side 1600 px, JPEG) and sent
+  with the next message to `POST /widget/messages/photos` (multipart). The echo shows the photos at
+  once; a failed send keeps the files for Retry.
+- **Item cards.** `itemCard.subtitle`, up to six facts as a value-over-label grid (was four rows),
+  a bigger price, and up to two buttons from `itemCard.cta` / `itemCard.actions`: a `url` opens a
+  link, a `message` sends that line as the visitor. A card with no button still gets the generic
+  link when it has a `listingUrl`. No labels are hardcoded.
+- Dark mode: the selected tab is readable on the navy bar.
+
 ## 0.23.4
 
 **Phones: the keyboard fit works on the first open after a reload** (Android Chrome, real device,

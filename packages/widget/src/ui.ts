@@ -55,6 +55,8 @@ export type BannerState = 'none' | 'offline' | 'reconnecting' | 'error' | 'sendi
 export interface WidgetUiCallbacks {
   /** Composer submit: raw text + the honeypot field value (empty for humans). */
   onSend(text: string, honeypot: string): void;
+  /** Composer submit with staged photos (0.24.0). Only reachable once `setPhotoUpload(true)`. */
+  onSendPhotos?(files: File[], text: string, honeypot: string): void;
   /** Launcher clicked — host decides to open (and kick off the session). */
   onRequestOpen(): void;
   /** Close button clicked. */
@@ -249,6 +251,8 @@ export interface WidgetUi {
   /** The prompt cards on Home (0.21.0), in order. Nothing to build or tear
    *  down: a tap sends a message through the composer's own send path. */
   setHomePrompts(prompts: readonly WidgetHomePrompt[] | undefined): void;
+  /** Show or hide the composer's photo button (server-owned gate). */
+  setPhotoUpload(enabled: boolean): void;
   /** Cover the panel with one quick-action flow. The transcript is NOT destroyed. */
   openHomeAction(kind: WidgetHomeAction): void;
   /** Uncover the transcript. A `hidden` flip, never a re-render. */
@@ -345,6 +349,33 @@ const ICONS = {
     'm3.3 7 8.7 5 8.7-5',
     'M12 22V12',
   ],
+  // The inmobiliaria's three (0.24.0): a building (proyectos), a map pin (sala
+  // de ventas) and a wrench (post-venta).
+  building: [
+    'M5 21V4.5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1V21',
+    'M15 9.5h3.5a1 1 0 0 1 1 1V21',
+    'M3 21h18',
+    'M8.5 7.5h3',
+    'M8.5 11h3',
+    'M8.5 14.5h3',
+  ],
+  pin: [
+    'M12 21s6.5-5.6 6.5-11a6.5 6.5 0 1 0-13 0c0 5.4 6.5 11 6.5 11z',
+    'M14.4 10a2.4 2.4 0 1 1-4.8 0 2.4 2.4 0 0 1 4.8 0z',
+  ],
+  wrench: [
+    'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z',
+  ],
+  // The composer's photo button, the document card's page and its arrow.
+  paperclip: ['m20.3 11.3-8.2 8.2a5.2 5.2 0 0 1-7.4-7.3l8.2-8.2a3.5 3.5 0 0 1 4.9 4.9l-8.2 8.2a1.7 1.7 0 0 1-2.5-2.4l7.5-7.5'],
+  file: [
+    'M14 3.5H7a1.5 1.5 0 0 0-1.5 1.5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z',
+    'M14 3.5V8h4.5',
+    'M9 13h6',
+    'M9 16.5h4',
+  ],
+  download: ['M12 4v11', 'm7.5 11 4.5 4.5 4.5-4.5', 'M5 19.5h14'],
+  close: ['m6 6 12 12', 'M18 6 6 18'],
 } as const;
 
 /** The Home prompt cards (0.21.0): glyph, copy, and the message a tap sends. */
@@ -381,6 +412,24 @@ const HOME_PROMPT_CARDS: Record<
     title: 'homeOrderStatusTitle',
     sub: 'homeOrderStatusSub',
     message: 'homeOrderStatusMessage',
+  },
+  projects: {
+    icon: 'building',
+    title: 'homeProjectsTitle',
+    sub: 'homeProjectsSub',
+    message: 'homeProjectsMessage',
+  },
+  showroom_visit: {
+    icon: 'pin',
+    title: 'homeShowroomTitle',
+    sub: 'homeShowroomSub',
+    message: 'homeShowroomMessage',
+  },
+  after_sales: {
+    icon: 'wrench',
+    title: 'homeAfterSalesTitle',
+    sub: 'homeAfterSalesSub',
+    message: 'homeAfterSalesMessage',
   },
 };
 
@@ -702,6 +751,42 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   sendBtn.textContent = t('send');
   form.append(honeypot, input, sendBtn);
 
+  // --- Photo attach (0.24.0) ---
+  // Built on first `setPhotoUpload(true)`: a tenant without it keeps the old
+  // composer node for node. Photos are STAGED in a tray above the composer and
+  // leave with the next send, so the buyer can add a line of context.
+  const MAX_PHOTOS = 4;
+  let attachBtn: HTMLButtonElement | null = null;
+  let fileInput: HTMLInputElement | null = null;
+  let tray: HTMLElement | null = null;
+  const staged: Array<{ file: File; url: string }> = [];
+  function paintTray(): void {
+    if (!tray) return;
+    tray.replaceChildren();
+    tray.hidden = staged.length === 0;
+    staged.forEach((entry, i) => {
+      const item = document.createElement('div');
+      item.className = 'vtr-tray-item';
+      const img = document.createElement('img');
+      img.src = entry.url;
+      img.alt = '';
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'vtr-tray-x';
+      rm.dataset.trayRemove = String(i);
+      rm.setAttribute('aria-label', t('removePhoto'));
+      rm.appendChild(strokeIcon(ICONS.close));
+      item.append(img, rm);
+      tray!.appendChild(item);
+    });
+    if (attachBtn) attachBtn.disabled = staged.length >= MAX_PHOTOS;
+  }
+  function clearStaged(revoke: boolean): void {
+    if (revoke) for (const e of staged) URL.revokeObjectURL(e.url);
+    staged.length = 0;
+    paintTray();
+  }
+
   // The footer holds up to two lines of fine print: the AI / demo disclaimer
   // (sidebar layouts) and the «Con tecnología de Vitrina» credit. Separate
   // nodes so a disclaimer swap never wipes the credit link.
@@ -850,12 +935,20 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   };
 
   /** At most this many facts on a card: it is a teaser, the listing has the rest. */
-  const CARD_MAX_FACTS = 4;
+  const CARD_MAX_FACTS = 6;
+  const CARD_MAX_ACTIONS = 2;
+
+  type CardAction = { label: string; url: string | null; message: string | null };
 
   /**
-   * A catalog card: photo, title, price, the kind's facts, and a link when the
-   * listing has one. One renderer for every kind (vehicle, product, property,
-   * service…); a vehicle prints no facts, so it looks exactly as it always has.
+   * A catalog card: photo, title, a subtitle, the price, the kind's facts as a
+   * small grid (value over label), and up to two buttons. One renderer for every
+   * kind (vehicle, product, property, unidad, service…); a vehicle prints no
+   * facts, so it looks exactly as it always has.
+   *
+   * Nothing here knows a vocabulary: labels, facts and button text are what the
+   * server sent. Only a card with no button of its own and a listing URL gets
+   * the generic link, worded by kind.
    *
    * Built from DOM nodes like everything else here. The image and link URLs were
    * validated server-side AND are validated again through validateLogoUrl: a
@@ -865,10 +958,12 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     kind: string;
     itemId: string;
     title: string;
+    subtitle: string | null;
     price: string | null;
     thumbnailUrl: string | null;
     listingUrl: string | null;
     facts: Array<{ label: string; value: string }>;
+    actions: CardAction[];
   }): HTMLElement {
     const el = document.createElement('div');
     el.className = 'vtr-card';
@@ -893,6 +988,13 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     title.className = 'vtr-card-title';
     title.textContent = card.title;
     body.appendChild(title);
+
+    if (card.subtitle) {
+      const sub = document.createElement('div');
+      sub.className = 'vtr-card-sub';
+      sub.textContent = card.subtitle;
+      body.appendChild(sub);
+    }
 
     if (card.price) {
       const price = document.createElement('div');
@@ -919,14 +1021,38 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     }
 
     const href = validateLogoUrl(card.listingUrl);
-    if (href) {
-      const link = document.createElement('a');
-      link.className = 'vtr-card-link';
-      link.href = href;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = t(CARD_LINK_LABEL[card.kind] ?? 'viewItem');
-      body.appendChild(link);
+    const actions = card.actions.slice(0, CARD_MAX_ACTIONS);
+    const generic = actions.length === 0 && !!href;
+    if (generic && href) {
+      actions.push({ label: t(CARD_LINK_LABEL[card.kind] ?? 'viewItem'), url: href, message: null });
+    }
+    if (actions.length > 0) {
+      const bar = document.createElement('div');
+      bar.className = 'vtr-card-actions';
+      actions.forEach((action, i) => {
+        const url = validateLogoUrl(action.url);
+        let btn: HTMLElement;
+        if (url) {
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          btn = link;
+        } else if (action.message) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.dataset.cardMessage = action.message;
+          btn = b;
+        } else {
+          return;
+        }
+        btn.className =
+          (i === 0 ? 'vtr-card-btn' : 'vtr-card-btn vtr-card-btn-alt') +
+          (generic ? ' vtr-card-link' : '');
+        btn.textContent = action.label;
+        bar.appendChild(btn);
+      });
+      if (bar.childElementCount > 0) body.appendChild(bar);
     }
 
     el.appendChild(body);
@@ -940,16 +1066,29 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
    */
   function cardOf(m: WidgetMessage): Parameters<typeof catalogCard>[0] | null {
     const ic = m.itemCard;
+    const text = (v: unknown): string | null =>
+      typeof v === 'string' && v.trim() ? v.trim() : null;
     if (
       ic &&
       typeof ic.kind === 'string' && ic.kind &&
       typeof ic.itemId === 'string' && ic.itemId &&
       typeof ic.title === 'string' && ic.title.trim()
     ) {
+      const rawActions = [
+        ...(ic.cta ? [ic.cta] : []),
+        ...(Array.isArray(ic.actions) ? ic.actions : []),
+      ];
+      const actions: CardAction[] = [];
+      for (const a of rawActions) {
+        const label = text(a?.label);
+        if (!label || (!text(a.url) && !text(a.message))) continue;
+        actions.push({ label, url: text(a.url), message: text(a.message) });
+      }
       return {
         kind: ic.kind,
         itemId: ic.itemId,
         title: ic.title,
+        subtitle: text(ic.subtitle),
         price: typeof ic.price === 'string' && ic.price.trim() ? ic.price : null,
         thumbnailUrl: ic.thumbnailUrl ?? null,
         listingUrl: ic.listingUrl ?? null,
@@ -958,6 +1097,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
               (f) => f && typeof f.label === 'string' && typeof f.value === 'string' && f.value.trim(),
             )
           : [],
+        actions,
       };
     }
     const sc = m.stockCard;
@@ -966,13 +1106,90 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
         kind: 'vehicle',
         itemId: sc.vehicleId,
         title: sc.title,
+        subtitle: null,
         price: sc.price,
         thumbnailUrl: sc.thumbnailUrl,
         listingUrl: sc.listingUrl,
         facts: [],
+        actions: [],
       };
     }
     return null;
+  }
+
+  const DOC_EXT = /\.(pdf|docx?|xlsx?|pptx?|csv|txt|zip|rtf)(?:[?#]|$)/i;
+
+  /** A media URL that is a document rather than a picture (older servers send those in mediaUrls). */
+  function isDocumentUrl(raw: string): boolean {
+    return DOC_EXT.test(raw);
+  }
+
+  function formatBytes(n: number): string {
+    const nf = (v: number, d: number) =>
+      new Intl.NumberFormat(currentLocale, { maximumFractionDigits: d }).format(v);
+    if (n >= 1024 * 1024) return `${nf(n / (1024 * 1024), 1)} MB`;
+    return `${nf(Math.max(1, Math.round(n / 1024)), 0)} KB`;
+  }
+
+  /**
+   * Document cards for a file row: a page glyph with the extension, the file's
+   * name and «PDF · 2,4 MB», and one action. The whole card is the link, so the
+   * tap target is the card; it opens the file (PDFs render in the browser's
+   * viewer and download from there). URLs are validated like every other.
+   */
+  function fileCards(
+    files: Array<{ url: string; filename?: string | null; mimeType?: string | null; size?: number | null }>,
+  ): HTMLElement | null {
+    const wrap = document.createElement('div');
+    wrap.className = 'vtr-files';
+    for (const f of files) {
+      const href = validateLogoUrl(f.url);
+      if (!href) continue;
+      let name = typeof f.filename === 'string' && f.filename.trim() ? f.filename.trim() : '';
+      if (!name) {
+        try {
+          name = decodeURIComponent(new URL(href).pathname.split('/').pop() ?? '');
+        } catch {
+          name = '';
+        }
+      }
+      const extMatch = /\.([a-z0-9]{1,5})$/i.exec(name);
+      const isPdf = f.mimeType === 'application/pdf' || extMatch?.[1]?.toLowerCase() === 'pdf';
+      const kindLabel = isPdf ? 'PDF' : (extMatch?.[1] ?? '').toUpperCase();
+      const link = document.createElement('a');
+      link.className = 'vtr-file';
+      link.href = href;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.setAttribute('download', name);
+      const icon = document.createElement('span');
+      icon.className = 'vtr-file-icon';
+      icon.appendChild(strokeIcon(ICONS.file));
+      if (kindLabel) {
+        const tag = document.createElement('span');
+        tag.className = 'vtr-file-ext';
+        tag.textContent = kindLabel;
+        icon.appendChild(tag);
+      }
+      const text = document.createElement('span');
+      text.className = 'vtr-file-text';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'vtr-file-name';
+      nameEl.textContent = name || kindLabel || t('fileOpen');
+      const meta = document.createElement('span');
+      meta.className = 'vtr-file-meta';
+      const parts = [kindLabel, typeof f.size === 'number' && f.size > 0 ? formatBytes(f.size) : ''].filter(Boolean);
+      meta.textContent = parts.join(' · ');
+      text.append(nameEl);
+      if (parts.length > 0) text.append(meta);
+      const action = document.createElement('span');
+      action.className = 'vtr-file-action';
+      action.setAttribute('aria-label', isPdf ? t('fileOpen') : t('fileDownload'));
+      action.appendChild(strokeIcon(ICONS.download));
+      link.append(icon, text, action);
+      wrap.appendChild(link);
+    }
+    return wrap.childElementCount > 0 ? wrap : null;
   }
 
   /**
@@ -1592,6 +1809,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
         case 'list_property':
         case 'products':
         case 'order_status':
+        case 'projects':
+        case 'showroom_visit':
+        case 'after_sales':
           // A conversation starter, not a form: land in the transcript and send
           // the visitor's words through the composer's own path — same gates,
           // same onSend — so there is one way a visitor message leaves.
@@ -1719,6 +1939,7 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       if (chrome?.mountSlot()) root.setAttribute('data-slotted', '');
     },
     destroy(): void {
+      clearStaged(true);
       chrome?.destroy();
       settleTimers.forEach(clearTimeout);
       for (const { target, type, handler } of listeners) {
@@ -1790,9 +2011,21 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
             if (m.status) el.setAttribute('data-status', m.status);
             // Photos ride ABOVE the caption. A row whose every URL fails
             // validation is simply its caption — never a blank bubble.
-            if (m.mediaUrls && m.mediaUrls.length > 0) {
-              const media = mediaImages(m.mediaUrls);
+            const imageUrls = (m.mediaUrls ?? []).filter((u) => !isDocumentUrl(u));
+            const docFiles = [
+              ...(Array.isArray(m.files) ? m.files : []),
+              ...(m.mediaUrls ?? [])
+                .filter(isDocumentUrl)
+                .filter((u) => !(m.files ?? []).some((f) => f.url === u))
+                .map((url) => ({ url })),
+            ];
+            if (imageUrls.length > 0) {
+              const media = mediaImages(imageUrls);
               if (media) el.prepend(media);
+            }
+            if (docFiles.length > 0) {
+              const docs = fileCards(docFiles);
+              if (docs) el.prepend(docs);
             }
             // The card ENHANCES the prose; it never replaces it. A row whose
             // type we do not recognise, or whose card the server declined to
@@ -2077,6 +2310,48 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
         (n as HTMLElement).hidden = on;
       });
     },
+    setPhotoUpload(enabled: boolean): void {
+      if (enabled && !attachBtn) {
+        attachBtn = document.createElement('button');
+        attachBtn.type = 'button';
+        attachBtn.className = 'vtr-attach';
+        attachBtn.setAttribute('aria-label', t('attachPhoto'));
+        attachBtn.title = t('attachPhoto');
+        attachBtn.appendChild(strokeIcon(ICONS.paperclip));
+        fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.multiple = true;
+        fileInput.hidden = true;
+        fileInput.tabIndex = -1;
+        tray = document.createElement('div');
+        tray.className = 'vtr-tray';
+        tray.hidden = true;
+        form.insertBefore(attachBtn, input);
+        form.appendChild(fileInput);
+        form.before(tray);
+        on(attachBtn, 'click', () => fileInput?.click());
+        on(fileInput, 'change', () => {
+          const picked = Array.from(fileInput?.files ?? []).filter((f) => f.type.startsWith('image/'));
+          if (fileInput) fileInput.value = '';
+          for (const file of picked) {
+            if (staged.length >= MAX_PHOTOS) break;
+            staged.push({ file, url: URL.createObjectURL(file) });
+          }
+          paintTray();
+        });
+        on(tray, 'click', (e) => {
+          const idx = (e.target as Element | null)?.closest?.('[data-tray-remove]') as HTMLElement | null;
+          if (!idx) return;
+          const [gone] = staged.splice(Number(idx.dataset.trayRemove), 1);
+          if (gone) URL.revokeObjectURL(gone.url);
+          paintTray();
+        });
+      }
+      if (attachBtn) attachBtn.hidden = !enabled;
+      if (!enabled) clearStaged(true);
+      form.toggleAttribute('data-photos', enabled);
+    },
     setHomePrompts(prompts: readonly WidgetHomePrompt[] | undefined): void {
       homePrompts = resolveHomePrompts(prompts);
       paintHomeCards();
@@ -2113,6 +2388,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     const target = e.target as HTMLElement | null;
     const clientMessageId = target?.dataset?.retry;
     if (clientMessageId) callbacks.onRetry(clientMessageId);
+    const cardMessage = (target?.closest?.('[data-card-message]') as HTMLElement | null)?.dataset
+      .cardMessage;
+    if (cardMessage) sendAsVisitor(cardMessage);
     const action = target?.dataset?.noticeAction;
     if (action === 'demo_yes' || action === 'demo_no' || action === 'demo_resume') {
       callbacks.onNoticeAction?.(action);
@@ -2130,6 +2408,15 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
 
   function submit(): void {
     const text = input.value.trim();
+    if (staged.length > 0 && callbacks.onSendPhotos) {
+      const files = staged.map((e) => e.file);
+      input.value = '';
+      // The tray's previews live on as the echo's photos: the host owns its own
+      // object URLs, so ours are released.
+      clearStaged(true);
+      callbacks.onSendPhotos(files, text, honeypot.value);
+      return;
+    }
     if (text === '') return;
     input.value = '';
     sendAsVisitor(text);

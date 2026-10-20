@@ -51,6 +51,7 @@ import {
   newDemoSessionId,
 } from './demo-mode';
 import { makeT } from './i18n';
+import { MAX_PHOTO_BYTES, preparePhoto } from './photo';
 import { createRemoteConfigCache } from './remote-config';
 import { createTokenStore } from './token-store';
 import {
@@ -629,6 +630,9 @@ export function init(config: WidgetConfig): WidgetInstance {
       onSend: (text, honeypot) => {
         void sendFlow(text, honeypot);
       },
+      onSendPhotos: (files, text, honeypot) => {
+        void sendPhotosFlow(files, text, honeypot);
+      },
       onRetry: (clientMessageId) => {
         void retryFlow(clientMessageId);
       },
@@ -694,6 +698,7 @@ export function init(config: WidgetConfig): WidgetInstance {
   // constructs nothing when all three are off, which is every tenant today.
   applyHomeCards(homeCards);
   ui.setHomePrompts(resolved.home.prompts);
+  ui.setPhotoUpload(resolved.photoUploadEnabled);
 
   // --- Server-resolved appearance (ADR 0046) --------------------------------
   let revealTimer: ReturnType<typeof setTimeout> | null = null;
@@ -746,6 +751,7 @@ export function init(config: WidgetConfig): WidgetInstance {
           applyHomeCards(resolveHomeCards(resolved.home.cards));
           // The prompt cards follow the live answer the same way, both ways.
           ui.setHomePrompts(resolved.home.prompts);
+          ui.setPhotoUpload(resolved.photoUploadEnabled);
           // The gate is server-owned and can move in both directions: a dealer
           // who switches booking off mid-session gets the chip taken away
           // rather than a chip that opens a 404.
@@ -938,6 +944,7 @@ export function init(config: WidgetConfig): WidgetInstance {
   async function beginSend(
     text: string,
     identity?: SendIdentity,
+    mediaUrls?: string[],
   ): Promise<string | null> {
     if (destroyed) return null;
     // Ensure the session (and its initial history paint) first, THEN echo — the
@@ -959,7 +966,8 @@ export function init(config: WidgetConfig): WidgetInstance {
         createdAt: nextLocalTimestamp(),
         content: text,
         direction: 'inbound',
-        type: 'text',
+        type: mediaUrls && mediaUrls.length > 0 ? 'image' : 'text',
+        ...(mediaUrls && mediaUrls.length > 0 ? { mediaUrls } : {}),
         clientMessageId,
         status: 'pending',
         ...(demoMode ? { mode: 'demo' as const } : {}),
@@ -974,6 +982,62 @@ export function init(config: WidgetConfig): WidgetInstance {
     const clientMessageId = await beginSend(text);
     if (clientMessageId === null) return;
     await deliver(clientMessageId, text, honeypot);
+  }
+
+  /**
+   * Photos the visitor staged in the composer (0.24.0). The echo shows the
+   * photos at once (object URLs of what will be uploaded); the upload then
+   * reports on the message itself like any send, and a failure keeps the files
+   * so Retry re-sends the same photos under the same client id.
+   */
+  const photoJobs = new Map<string, { files: File[]; text: string }>();
+  const photoUrls: string[] = [];
+  async function sendPhotosFlow(files: File[], text: string, honeypot: string): Promise<void> {
+    if (destroyed || files.length === 0) return;
+    if (prepareSend(text, true) === 'held') return;
+    const prepared = await Promise.all(files.map(preparePhoto));
+    if (destroyed) return;
+    const usable = prepared.filter((f) => f.size <= MAX_PHOTO_BYTES);
+    if (usable.length === 0) {
+      showRateLimited(t('photoTooLarge'));
+      return;
+    }
+    const urls = usable.map((f) => URL.createObjectURL(f));
+    photoUrls.push(...urls);
+    const clientMessageId = await beginSend(text, undefined, urls);
+    if (clientMessageId === null) return;
+    photoJobs.set(clientMessageId, { files: usable, text });
+    await deliverPhotos(clientMessageId, honeypot);
+  }
+
+  async function deliverPhotos(clientMessageId: string, honeypot: string): Promise<void> {
+    const job = photoJobs.get(clientMessageId);
+    if (!job) return;
+    setStatus(clientMessageId, 'pending');
+    setSend('sending');
+    const res = await transport.sendPhotos({
+      message: job.text,
+      files: job.files,
+      honeypot,
+      clientMessageId,
+      pageContext: pageContextWithChips(),
+    });
+    if (destroyed) return;
+    if ('error' in res && res.error) {
+      stopAwaitingReply();
+      paintTyping();
+      setStatus(clientMessageId, 'failed');
+      setSend('error');
+      if ((res.status === 429 || res.status === 413 || res.status === 415) && res.message) {
+        showRateLimited(res.message);
+      }
+      return;
+    }
+    photoJobs.delete(clientMessageId);
+    setStatus(clientMessageId, undefined);
+    setSend('idle');
+    startAwaitingReply();
+    await refreshHistory();
   }
 
   /**
@@ -1008,6 +1072,10 @@ export function init(config: WidgetConfig): WidgetInstance {
     if (destroyed) return;
     const entry = messages.find((m) => String(m.id) === localIdFor(clientMessageId));
     if (!entry) return;
+    if (photoJobs.has(clientMessageId)) {
+      await deliverPhotos(clientMessageId, '');
+      return;
+    }
     await deliver(clientMessageId, entry.content, '');
   }
 
@@ -1473,6 +1541,7 @@ export function init(config: WidgetConfig): WidgetInstance {
       if (demoIdleTimer) clearTimeout(demoIdleTimer);
       if (destroyed) return;
       destroyed = true;
+      for (const u of photoUrls) URL.revokeObjectURL(u);
       if (booking) {
         booking.destroy();
         booking = null;

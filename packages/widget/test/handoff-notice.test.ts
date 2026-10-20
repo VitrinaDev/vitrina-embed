@@ -453,17 +453,17 @@ describe('embed#36: item cards', () => {
     w.destroy();
   });
 
-  it('labels an unknown kind neutrally and caps facts at four', async () => {
+  it('labels an unknown kind neutrally and caps facts at six', async () => {
     history = row({
       itemCard: {
         ...PRODUCT,
         kind: 'boat',
-        facts: [1, 2, 3, 4, 5].map((n) => ({ label: `F${n}`, value: String(n) })),
+        facts: [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ label: `F${n}`, value: String(n) })),
       },
     }) as never;
     const w = await open();
     expect(card()!.querySelector('.vtr-card-link')!.textContent).toBe('Ver el detalle');
-    expect(facts()).toHaveLength(4);
+    expect(facts()).toHaveLength(6);
     w.destroy();
   });
 
