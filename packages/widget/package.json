@@ -1,6 +1,6 @@
 {
   "name": "@vitrina/widget",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "description": "Vitrina embeddable chat widget for dealer websites — shadow-DOM UI, real-time SSE, publishable origin-locked key.",
   "type": "module",
   "license": "MIT",
@@ -15,7 +15,8 @@
     },
     "./loader": "./dist/loader.global.js",
     "./tag": "./dist/tag.global.js",
-    "./boot": "./dist/boot.global.js"
+    "./boot": "./dist/boot.global.js",
+    "./visor": "./dist/visor.global.js"
   },
   "files": [
     "dist",

@@ -1,5 +1,18 @@
 # @vitrina/widget
 
+## 0.25.0
+
+**Inmobiliarias: the floor-plan visor.** Minor. Stacked on 0.24.0 (embed#46).
+
+- **`visor.global.js`** (`@vitrina/widget/visor`, served by the API at `/visor.js`): draws a proyecto's
+  floor plans on the inmobiliaria's site with every placed unidad coloured by its live status
+  (disponible, reservada, vendida, no disponible). It reads `GET /widget/projects/{id}/visor` once and
+  polls `…/visor/status` at the server's cadence (30 s; paused while the tab is hidden). Tabs per plan,
+  keyboard-operable shapes, light and dark. A price shows only when the server sends one.
+  `<script src=".../visor.js" data-key="pk_…" data-project="…" data-container="#visor" async>`.
+- **`setUnit(id | null)`** on the widget: the next message carries `unit_id`, so the agent opens on the
+  unidad the visitor tapped («Consultar por esta unidad» sets it and opens the chat prefilled).
+
 ## 0.24.0
 
 **Inmobiliarias: documents, developer actions, buyer photos and richer unit cards.** Minor.
