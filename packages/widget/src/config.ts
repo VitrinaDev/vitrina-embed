@@ -268,6 +268,8 @@ export interface ResolvedHome {
    * `cards`: a tenant without them resolves to the object it always did.
    */
   prompts?: WidgetHomePrompt[];
+  /** The validated catalog URL the `products` card opens, ABSENT when unset. */
+  productsUrl?: string;
 }
 
 const HOME_PROMPTS: readonly WidgetHomePrompt[] = [
@@ -557,6 +559,8 @@ export function resolveHome(input: WidgetHomeConfig | undefined): ResolvedHome {
   if (cards.buy || cards.sell || cards.search) home.cards = cards;
   const prompts = resolveHomePrompts(input?.prompts);
   if (prompts.length > 0) home.prompts = prompts;
+  const productsUrl = validateHttpUrl(input?.productsUrl);
+  if (productsUrl) home.productsUrl = productsUrl;
   return home;
 }
 

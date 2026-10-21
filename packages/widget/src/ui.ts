@@ -47,7 +47,8 @@ import { STYLES } from './styles';
 export function coarsePointer(): boolean {
   return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 }
-import { resolveAccent, resolvePosition, validateLogoUrl } from './theme';
+import { goToPage } from './navigation';
+import { resolveAccent, resolvePosition, validateHttpUrl, validateLogoUrl } from './theme';
 import type { WidgetFont, WidgetHomeAction, WidgetHomePrompt, WidgetLocale, WidgetTheme } from './types';
 
 export type BannerState = 'none' | 'offline' | 'reconnecting' | 'error' | 'sending';
@@ -247,8 +248,9 @@ export interface WidgetUi {
    *  first time any of them is on. */
   setHomeCards(cards: ResolvedHomeCards | undefined): void;
   /** The prompt cards on Home (0.21.0), in order. Nothing to build or tear
-   *  down: a tap sends a message through the composer's own send path. */
-  setHomePrompts(prompts: readonly WidgetHomePrompt[] | undefined): void;
+   *  down: a tap sends a message through the composer's own send path. With a
+   *  `productsUrl` (0.23.5) the `products` card opens that page instead. */
+  setHomePrompts(prompts: readonly WidgetHomePrompt[] | undefined, productsUrl?: string | null): void;
   /** Cover the panel with one quick-action flow. The transcript is NOT destroyed. */
   openHomeAction(kind: WidgetHomeAction): void;
   /** Uncover the transcript. A `hidden` flip, never a re-render. */
@@ -835,6 +837,8 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   let homeCards: ResolvedHomeCards = resolveHomeCards(opts.home?.cards);
   /** The prompt cards, seeded the same way; moved only through setHomePrompts. */
   let homePrompts: WidgetHomePrompt[] = resolveHomePrompts(opts.home?.prompts);
+  /** The store's catalog page for «Ver productos»; null = the card sends its message. */
+  let homeProductsUrl: string | null = validateHttpUrl(opts.home?.productsUrl);
 
   function scrollToBottom(): void {
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1496,7 +1500,11 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       const p = HOME_PROMPT_CARDS[id];
       const card = homeCard(id, ICONS[p.icon], true);
       cardLine(card, 'vtr-home-card-title', t(p.title));
-      cardLine(card, 'vtr-home-card-sub', t(p.sub));
+      // «Ver productos» with a catalog page is a link: same title, a subline
+      // that says where it goes, and a card a screen reader announces as one.
+      const isLink = id === 'products' && homeProductsUrl !== null;
+      if (isLink) card.setAttribute('role', 'link');
+      cardLine(card, 'vtr-home-card-sub', t(isLink ? 'homeProductsLinkSub' : p.sub));
       homeCardsEl.appendChild(card);
     }
 
@@ -1592,6 +1600,12 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
         case 'list_property':
         case 'products':
         case 'order_status':
+          // «Ver productos» with the store's catalog page goes there instead
+          // of asking the agent (0.23.5); without one it stays a starter.
+          if (kind === 'products' && homeProductsUrl) {
+            goToPage(homeProductsUrl, () => callbacks.onRequestClose());
+            break;
+          }
           // A conversation starter, not a form: land in the transcript and send
           // the visitor's words through the composer's own path — same gates,
           // same onSend — so there is one way a visitor message leaves.
@@ -2077,8 +2091,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
         (n as HTMLElement).hidden = on;
       });
     },
-    setHomePrompts(prompts: readonly WidgetHomePrompt[] | undefined): void {
+    setHomePrompts(prompts: readonly WidgetHomePrompt[] | undefined, productsUrl?: string | null): void {
       homePrompts = resolveHomePrompts(prompts);
+      homeProductsUrl = validateHttpUrl(productsUrl);
       paintHomeCards();
     },
     setUnread(count: number): void {

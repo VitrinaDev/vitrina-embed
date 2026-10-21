@@ -1,5 +1,19 @@
 # @vitrina/widget
 
+## 0.23.5
+
+**«Ver productos» can open the store's catalog** (MacPhones, vitrina-app `webchat.products_url`).
+Additive: a config without the new field behaves exactly as 0.23.4.
+
+- New `home.productsUrl` (server config or inline): an absolute http(s) URL, sanitized like the
+  logo; anything else is dropped. Inline beats the server's, field-wise like the rest of `home`.
+- With it, the `products` prompt card keeps its title and icon, says «Mira el catálogo completo»
+  ("Browse the full catalog") underneath and is announced as a link. A tap goes to the catalog
+  instead of sending «Quiero ver productos»: in the same tab when the URL is on the host page's
+  own origin (the visitor is already on the store; the panel closes first, and only closes when
+  they are already on that page), in a new tab otherwise. Nothing is sent to the agent.
+- A config refresh moves it both ways, like the prompt cards themselves.
+
 ## 0.23.4
 
 **Phones: the keyboard fit works on the first open after a reload** (Android Chrome, real device,
