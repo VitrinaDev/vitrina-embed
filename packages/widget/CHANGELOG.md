@@ -1,5 +1,17 @@
 # @vitrina/widget
 
+## 0.23.6
+
+**The combined tag (`tag.js`) starts Atribu tracking.** Patch.
+
+- Atribu's tracker reads its key and collect endpoint from `window.ATRIBU_TRACKING_KEY` /
+  `window.ATRIBU_TRACKING_ENDPOINT`, which Atribu's own snippet sets before loading it. The tag
+  injected only the tracker script, so the tracker booted without a key and posted to the host
+  page's origin. The tag now sets both from tag-config (`tracking.key`, the new
+  `tracking.endpoint`) before it injects the script. Globals the page already set win.
+- Additive: a tag-config without `endpoint` sets the key only (the server also carries both on
+  `tracker_src`).
+
 ## 0.23.5
 
 **«Ver productos» can open the store's catalog** (MacPhones, vitrina-app `webchat.products_url`).
