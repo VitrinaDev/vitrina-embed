@@ -135,6 +135,7 @@ export interface WidgetStrings {
   homeProductsTitle: string;
   homeProductsSub: string;
   homeProductsMessage: string;
+  homeProductsLinkSub: string;
   homeOrderStatusTitle: string;
   homeOrderStatusSub: string;
   homeOrderStatusMessage: string;
@@ -471,6 +472,7 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     homeProductsTitle: 'Ver productos',
     homeProductsSub: 'Te muestro lo que tenemos, con precio y stock',
     homeProductsMessage: 'Quiero ver productos',
+    homeProductsLinkSub: 'Mira el catálogo completo',
     homeOrderStatusTitle: 'Estado de mi pedido',
     homeOrderStatusSub: 'Te digo en qué va tu compra',
     homeOrderStatusMessage: '¿Cuál es el estado de mi pedido?',
@@ -752,6 +754,7 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     homeProductsTitle: 'See products',
     homeProductsSub: "I'll show you what we have, with price and stock",
     homeProductsMessage: "I'd like to see products",
+    homeProductsLinkSub: 'Browse the full catalog',
     homeOrderStatusTitle: 'My order status',
     homeOrderStatusSub: "I'll tell you where your purchase is",
     homeOrderStatusMessage: "What's the status of my order?",

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveConfig, resolveHomePrompts } from '../src/config';
 import { init } from '../src/index';
+import { navigation } from '../src/navigation';
 import { coerceRemoteConfig } from '../src/remote-config';
 
 const BASE = 'https://api.example.com/api/v1';
@@ -240,6 +241,133 @@ describe('store prompt cards on Home', () => {
     must<HTMLButtonElement>('.vtr-home-card[data-card="products"]').click();
     await vi.waitFor(() => expect(posts().length).toBe(1));
     expect(posts()[0]).toMatchObject({ message: "I'd like to see products" });
+    w.destroy();
+  });
+});
+
+// 0.23.5 — «Ver productos» with the store's catalog page (`home.productsUrl`)
+// goes there instead of sending «Quiero ver productos». Same tab when the page
+// is on the host's own origin (the visitor is already on the store), new tab
+// otherwise. Without the field the card behaves exactly as in 0.22.0.
+describe('«Ver productos» with a catalog URL', () => {
+  const here = (): string => window.location.origin;
+
+  it('coerces and resolves productsUrl as an http(s) URL only', () => {
+    expect(
+      coerceRemoteConfig({
+        home: { enabled: true, prompts: ['products'], productsUrl: 'https://shop.example/iphone' },
+      })?.home,
+    ).toEqual({ enabled: true, prompts: ['products'], productsUrl: 'https://shop.example/iphone' });
+    for (const bad of ['javascript:alert(1)', '/iphone', '', 42, null]) {
+      expect(
+        coerceRemoteConfig({ home: { enabled: true, productsUrl: bad } })?.home,
+      ).toEqual({ enabled: true });
+      expect(
+        resolveConfig(
+          { publicKey: PK, apiBaseUrl: BASE },
+          { home: { enabled: true, productsUrl: bad as string } },
+        ).home.productsUrl,
+      ).toBeUndefined();
+    }
+    // Inline beats the server's, field-wise like the rest of `home`.
+    expect(
+      resolveConfig(
+        { publicKey: PK, apiBaseUrl: BASE, home: { productsUrl: 'https://a.example/x' } },
+        { home: { enabled: true, productsUrl: 'https://b.example/y' } },
+      ).home.productsUrl,
+    ).toBe('https://a.example/x');
+  });
+
+  it('a catalog on another origin opens in a new tab and sends nothing', async () => {
+    const openTab = vi.spyOn(navigation, 'openTab').mockImplementation(() => {});
+    const assign = vi.spyOn(navigation, 'assign').mockImplementation(() => {});
+    configData = {
+      home: {
+        enabled: true,
+        prompts: ['products', 'order_status'],
+        productsUrl: 'https://store.example/iphone',
+      },
+    };
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
+    await settled();
+    must<HTMLButtonElement>('.vtr-launcher').click();
+    const card = must<HTMLButtonElement>('.vtr-home-card[data-card="products"]');
+    expect(card.querySelector('.vtr-home-card-title')?.textContent).toBe('Ver productos');
+    expect(card.querySelector('.vtr-home-card-sub')?.textContent).toBe('Mira el catálogo completo');
+    expect(card.getAttribute('role')).toBe('link');
+    const closes: string[] = [];
+    w.on('close', (e) => closes.push(e.source));
+    card.click();
+    expect(openTab).toHaveBeenCalledWith('https://store.example/iphone');
+    expect(closes).toEqual([]);
+    expect(assign).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(posts()).toEqual([]);
+    // The panel stays where it was: the store opened beside it.
+    expect(must('.vtr-panel').getAttribute('data-active-view')).toBe('home');
+    // «Estado de mi pedido» is untouched.
+    expect(must('.vtr-home-card[data-card="order_status"] .vtr-home-card-sub').textContent).not.toBe(
+      'Mira el catálogo completo',
+    );
+    w.destroy();
+  });
+
+  it('a catalog on the host page origin navigates this tab and closes the panel', async () => {
+    const openTab = vi.spyOn(navigation, 'openTab').mockImplementation(() => {});
+    const assign = vi.spyOn(navigation, 'assign').mockImplementation(() => {});
+    configData = {
+      home: { enabled: true, prompts: ['products'], productsUrl: `${here()}/catalogo?x=1` },
+    };
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
+    await settled();
+    const closes: string[] = [];
+    w.on('close', (e) => closes.push(e.source));
+    must<HTMLButtonElement>('.vtr-launcher').click();
+    must<HTMLButtonElement>('.vtr-home-card[data-card="products"]').click();
+    expect(assign).toHaveBeenCalledWith(`${here()}/catalogo?x=1`);
+    expect(openTab).not.toHaveBeenCalled();
+    expect(closes).toEqual(['visitor']);
+    expect(posts()).toEqual([]);
+    w.destroy();
+  });
+
+  it('without productsUrl the card still sends «Quiero ver productos»', async () => {
+    const openTab = vi.spyOn(navigation, 'openTab').mockImplementation(() => {});
+    const assign = vi.spyOn(navigation, 'assign').mockImplementation(() => {});
+    configData = { home: { enabled: true, prompts: ['products'] } };
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
+    await settled();
+    must<HTMLButtonElement>('.vtr-launcher').click();
+    const card = must<HTMLButtonElement>('.vtr-home-card[data-card="products"]');
+    expect(card.querySelector('.vtr-home-card-sub')?.textContent).toBe(
+      'Te muestro lo que tenemos, con precio y stock',
+    );
+    expect(card.hasAttribute('role')).toBe(false);
+    card.click();
+    await vi.waitFor(() => expect(posts().length).toBe(1));
+    expect(posts()[0]).toMatchObject({ message: 'Quiero ver productos' });
+    expect(openTab).not.toHaveBeenCalled();
+    expect(assign).not.toHaveBeenCalled();
+    w.destroy();
+  });
+
+  it('follows a config refresh: a cached link is dropped when the server stops sending it', async () => {
+    globalThis.localStorage.setItem(
+      `vtr:widget:${PK}:config`,
+      JSON.stringify({
+        home: { enabled: true, prompts: ['products'], productsUrl: 'https://store.example/' },
+      }),
+    );
+    configData = { home: { enabled: true, prompts: ['products'] } };
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es' });
+    expect(must('.vtr-home-card[data-card="products"] .vtr-home-card-sub').textContent).toBe(
+      'Mira el catálogo completo',
+    );
+    await vi.waitFor(() =>
+      expect(must('.vtr-home-card[data-card="products"] .vtr-home-card-sub').textContent).toBe(
+        'Te muestro lo que tenemos, con precio y stock',
+      ),
+    );
     w.destroy();
   });
 });
