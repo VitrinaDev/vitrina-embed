@@ -91,6 +91,7 @@ export function coerceRemoteConfig(input: unknown): RemoteWidgetConfig | null {
   // without the line the flag would round-trip out of the cache as undefined
   // and the chip would flicker off on every repeat pageview.
   if (raw.bookingEnabled === true) out.bookingEnabled = true;
+  if (raw.photoUploadEnabled === true) out.photoUploadEnabled = true;
   // The clinic booking flow (vitrina-app#3707). Same explicit-true rule.
   const clinic = raw.clinicBooking as { enabled?: unknown } | null | undefined;
   if (clinic && typeof clinic === 'object' && clinic.enabled === true) {

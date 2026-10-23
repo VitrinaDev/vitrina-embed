@@ -284,7 +284,7 @@ The rule, in full:
 | `welcomeMessage` | `string`                      | no       | localized greeting | Greeting shown before the visitor sends the first message.                  |
 | `home`           | `{ enabled?, title?, subtitle?, cards?, prompts? }` | no | off          | The Home tab. See **Home and Help tabs** below. Off unless `enabled` is `true`. |
 | `home.cards`     | `{ buy?, sell?, search? }`    | no       | all off            | The automotive quick actions. See **Quick actions** below. Each card is off unless its key is explicitly `true`. |
-| `home.prompts`   | `('properties' \| 'visit' \| 'list_property' \| 'products' \| 'order_status')[]` | no | none | Prompt cards (real estate, store), in order. See **Prompt cards** below. Unknown ids and repeats are dropped. |
+| `home.prompts`   | `('properties' \| 'visit' \| 'list_property' \| 'products' \| 'order_status' \| 'projects' \| 'showroom_visit' \| 'after_sales')[]` | no | none | Prompt cards (real estate, store), in order. See **Prompt cards** below. Unknown ids and repeats are dropped. |
 | `home.productsUrl` | `string` (http(s) URL) | no | none | The store's catalog page. The `products` card opens it instead of sending a message (0.23.5). See **Prompt cards** below. |
 | `help`           | `{ enabled?, faqs? }`         | no       | off                | The Help tab (FAQ accordion). Off unless `enabled` is `true` **and** at least one usable question survives. |
 | `team`           | `Array<{ name, avatarUrl? }>` | no       | `[]`               | Faces for the Home hero. Up to 5 accepted, first 3 drawn. Non-http(s) `avatarUrl` ⇒ initials. |
@@ -462,6 +462,12 @@ send path (same honeypot, consent and Turnstile gates, same `message` event):
 | `list_property` | Publicar mi propiedad   | «Quiero publicar mi propiedad» | "I'd like to list my property" |
 | `products`      | Ver productos           | «Quiero ver productos»         | "I'd like to see products"     |
 | `order_status`  | Estado de mi pedido     | «¿Cuál es el estado de mi pedido?» | "What's the status of my order?" |
+| `projects`      | Ver proyectos           | «Quiero ver los proyectos»     | "I'd like to see the developments" |
+| `showroom_visit`| Agendar visita a sala   | «Quiero agendar una visita a la sala de ventas» | "I'd like to book a visit to the sales showroom" |
+| `after_sales`   | Post-venta              | «Tengo una consulta de post-venta» | "I have an after-sales question" |
+
+`projects`, `showroom_visit` and `after_sales` (0.24.0) are the inmobiliaria's set; the server sends
+them for tenants running Módulo Proyectos.
 
 They paint in the given order, after the chat and booking cards and before the
 automotive quick actions. The server sends `home.prompts` only when at least one

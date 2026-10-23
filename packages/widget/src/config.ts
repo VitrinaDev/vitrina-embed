@@ -73,7 +73,26 @@ export interface WidgetMessageDto {
     thumbnailUrl: string | null;
     listingUrl: string | null;
     facts: Array<{ label: string; value: string }>;
+    /**
+     * Developer cards (0.24.0): a line under the title («Los Cerezos · Tipología
+     * C») and up to two buttons. A button either opens a `url` or, with a
+     * `message`, sends that line as the visitor («Quiero agendar una visita»).
+     * Absent on older servers: the card is then exactly what it was.
+     */
+    subtitle?: string | null;
+    actions?: Array<{ label: string; url?: string | null; message?: string | null }>;
+    cta?: { label: string; url?: string | null; message?: string | null } | null;
   };
+  /**
+   * Documents on a `file` row (0.24.0): the brochure, a cotización. The caption
+   * stays in `content`; the card is the file itself. `size` is bytes, when known.
+   */
+  files?: Array<{
+    url: string;
+    filename?: string | null;
+    mimeType?: string | null;
+    size?: number | null;
+  }>;
   /**
    * Attachment URLs on a media row (`type` image/file) — the photos an agent
    * sent with send_attachment. The server projects only http(s) URLs; the UI
@@ -278,6 +297,9 @@ const HOME_PROMPTS: readonly WidgetHomePrompt[] = [
   'list_property',
   'products',
   'order_status',
+  'projects',
+  'showroom_visit',
+  'after_sales',
 ];
 
 /**
@@ -342,6 +364,11 @@ export interface ResolvedConfig {
    */
   bookingEnabled: boolean;
   /**
+   * The composer shows a photo button (0.24.0). Server-owned like the booking
+   * gate: a page cannot switch on a button the tenant's inbox is not ready for.
+   */
+  photoUploadEnabled: boolean;
+  /**
    * WHICH booking flow the chip opens. `clinic` exactly when the server says
    * the tenant is a clinic with a live online-booking landing
    * (`clinicBooking`); the dealer's test-drive flow otherwise. Server-only,
@@ -398,6 +425,8 @@ export interface RemoteWidgetConfig extends RemoteSidebarConfig {
    * which is also the default.
    */
   bookingEnabled?: true;
+  /** Buyers may attach photos in the chat (0.24.0). Explicit `true` only. */
+  photoUploadEnabled?: true;
   /**
    * The tenant's own name for the booking chip ("Agendar demo").
    *
@@ -708,6 +737,7 @@ export function resolveConfig(
     // Deliberately NOT layered with an inline override: a booking surface that
     // calls routes the tenant has switched off would only ever paint a 404.
     bookingEnabled: remote?.bookingEnabled === true || remote?.clinicBooking?.enabled === true,
+    photoUploadEnabled: remote?.photoUploadEnabled === true,
     bookingFlow: remote?.clinicBooking?.enabled === true ? 'clinic' : 'dealer',
     landing:
       typeof config.landing === 'string' && /^[a-z0-9][a-z0-9-]{0,62}$/.test(config.landing)

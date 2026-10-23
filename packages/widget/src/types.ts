@@ -104,13 +104,19 @@ export interface WidgetHomeConfig {
  *   products      — "Ver productos"         → «Quiero ver productos» (0.22.0), or the
  *                                             store's catalog page when `productsUrl` is set (0.23.5)
  *   order_status  — "Estado de mi pedido"   → «¿Cuál es el estado de mi pedido?» (0.22.0)
+ *   projects      — "Ver proyectos"         → «Quiero ver los proyectos» (0.24.0, inmobiliarias)
+ *   showroom_visit — "Agendar visita a sala" → «Quiero agendar una visita a la sala de ventas» (0.24.0)
+ *   after_sales   — "Post-venta"            → «Tengo una consulta de post-venta» (0.24.0)
  */
 export type WidgetHomePrompt =
   | 'properties'
   | 'visit'
   | 'list_property'
   | 'products'
-  | 'order_status';
+  | 'order_status'
+  | 'projects'
+  | 'showroom_visit'
+  | 'after_sales';
 
 /** Which quick-action flow a card (or `openHomeAction`) opens. */
 export type WidgetHomeAction = 'buy' | 'sell' | 'search';

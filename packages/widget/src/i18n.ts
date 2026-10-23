@@ -139,6 +139,22 @@ export interface WidgetStrings {
   homeOrderStatusTitle: string;
   homeOrderStatusSub: string;
   homeOrderStatusMessage: string;
+  /** The inmobiliaria's three (0.24.0): proyectos, sala de ventas, post-venta. */
+  homeProjectsTitle: string;
+  homeProjectsSub: string;
+  homeProjectsMessage: string;
+  homeShowroomTitle: string;
+  homeShowroomSub: string;
+  homeShowroomMessage: string;
+  homeAfterSalesTitle: string;
+  homeAfterSalesSub: string;
+  homeAfterSalesMessage: string;
+  /** The composer's photo button, its staged tray, and the document card (0.24.0). */
+  attachPhoto: string;
+  removePhoto: string;
+  photoTooLarge: string;
+  fileDownload: string;
+  fileOpen: string;
 
   /** Overlay titles. Buy and sell reuse their card titles; search cannot — its
    *  card title is a question, which does not read as a header. */
@@ -476,6 +492,20 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     homeOrderStatusTitle: 'Estado de mi pedido',
     homeOrderStatusSub: 'Te digo en qué va tu compra',
     homeOrderStatusMessage: '¿Cuál es el estado de mi pedido?',
+    homeProjectsTitle: 'Ver proyectos',
+    homeProjectsSub: 'Te muestro los proyectos y sus tipologías',
+    homeProjectsMessage: 'Quiero ver los proyectos',
+    homeShowroomTitle: 'Agendar visita a sala',
+    homeShowroomSub: 'Elige el proyecto y te ofrezco horarios',
+    homeShowroomMessage: 'Quiero agendar una visita a la sala de ventas',
+    homeAfterSalesTitle: 'Post-venta',
+    homeAfterSalesSub: 'Cuéntame qué pasó con tu unidad',
+    homeAfterSalesMessage: 'Tengo una consulta de post-venta',
+    attachPhoto: 'Adjuntar foto',
+    removePhoto: 'Quitar foto',
+    photoTooLarge: 'La foto es muy pesada. Prueba con otra.',
+    fileDownload: 'Descargar',
+    fileOpen: 'Abrir',
 
     haSearchTitle: 'Lo buscamos por ti',
     haSellCarTitle: 'Tu auto',
@@ -758,6 +788,20 @@ export const STRINGS: Record<WidgetLocale, WidgetStrings> = {
     homeOrderStatusTitle: 'My order status',
     homeOrderStatusSub: "I'll tell you where your purchase is",
     homeOrderStatusMessage: "What's the status of my order?",
+    homeProjectsTitle: 'See developments',
+    homeProjectsSub: 'I show you the developments and their unit types',
+    homeProjectsMessage: "I'd like to see the developments",
+    homeShowroomTitle: 'Book a showroom visit',
+    homeShowroomSub: "Pick the development and I'll offer you times",
+    homeShowroomMessage: "I'd like to book a visit to the sales showroom",
+    homeAfterSalesTitle: 'After-sales',
+    homeAfterSalesSub: 'Tell me what happened with your unit',
+    homeAfterSalesMessage: 'I have an after-sales question',
+    attachPhoto: 'Attach a photo',
+    removePhoto: 'Remove photo',
+    photoTooLarge: 'That photo is too large. Try another one.',
+    fileDownload: 'Download',
+    fileOpen: 'Open',
 
     haSearchTitle: "We'll find it for you",
     haSellCarTitle: 'Your car',
