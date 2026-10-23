@@ -47,6 +47,7 @@ export const API_METHODS = [
   'openBooking',
   'openHomeAction',
   'setVehicle',
+  'setUnit',
   'on',
 ] as const;
 

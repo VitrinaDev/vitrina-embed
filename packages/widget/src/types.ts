@@ -498,6 +498,11 @@ export interface WidgetInstance {
    * can never leave the previous car's name on a booking summary.
    */
   setVehicle(vehicleId: string | null, label?: string | null): void;
+  /**
+   * The unidad of a proyecto the visitor is asking about (set by the floor-plan
+   * visor). The next message carries it as `unit_id`; null clears it.
+   */
+  setUnit(unitId: string | null): void;
   /** Put text in the composer without sending it, and open the panel. */
   prefill(text: string): void;
   /** Open the panel and send `text` as the visitor's message. */

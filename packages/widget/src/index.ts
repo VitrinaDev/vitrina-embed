@@ -177,6 +177,7 @@ export function init(config: WidgetConfig): WidgetInstance {
   );
 
   let vehicleId: string | null = resolved.vehicleId;
+  let unitId: string | null = null;
   let vehicleLabel: string | null = resolved.vehicleLabel;
   let messages: WidgetMessage[] = [];
   let cursor: string | undefined;
@@ -899,6 +900,7 @@ export function init(config: WidgetConfig): WidgetInstance {
       honeypot,
       clientMessageId,
       vehicleId: vehicleId ?? undefined,
+      unitId: unitId ?? undefined,
       pageContext: pageContextWithChips(),
       pricePolicy,
       ...(demoMode
@@ -1536,6 +1538,11 @@ export function init(config: WidgetConfig): WidgetInstance {
       // booking summary. No id ⇒ no label, ever.
       if (label !== undefined) vehicleLabel = label;
       else if (id === null) vehicleLabel = null;
+    },
+    setUnit(id: string | null): void {
+      // The floor-plan visor sets the unidad the visitor tapped; the next send()
+      // carries it as `unit_id`, so the agent opens on that unidad. null clears it.
+      unitId = id;
     },
     destroy(): void {
       if (demoIdleTimer) clearTimeout(demoIdleTimer);
