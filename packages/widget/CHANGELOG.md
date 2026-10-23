@@ -34,6 +34,32 @@
   link when it has a `listingUrl`. No labels are hardcoded.
 - Dark mode: the selected tab is readable on the navy bar.
 
+## 0.23.6
+
+**The combined tag (`tag.js`) starts Atribu tracking.** Patch.
+
+- Atribu's tracker reads its key and collect endpoint from `window.ATRIBU_TRACKING_KEY` /
+  `window.ATRIBU_TRACKING_ENDPOINT`, which Atribu's own snippet sets before loading it. The tag
+  injected only the tracker script, so the tracker booted without a key and posted to the host
+  page's origin. The tag now sets both from tag-config (`tracking.key`, the new
+  `tracking.endpoint`) before it injects the script. Globals the page already set win.
+- Additive: a tag-config without `endpoint` sets the key only (the server also carries both on
+  `tracker_src`).
+
+## 0.23.5
+
+**«Ver productos» can open the store's catalog** (MacPhones, vitrina-app `webchat.products_url`).
+Additive: a config without the new field behaves exactly as 0.23.4.
+
+- New `home.productsUrl` (server config or inline): an absolute http(s) URL, sanitized like the
+  logo; anything else is dropped. Inline beats the server's, field-wise like the rest of `home`.
+- With it, the `products` prompt card keeps its title and icon, says «Mira el catálogo completo»
+  ("Browse the full catalog") underneath and is announced as a link. A tap goes to the catalog
+  instead of sending «Quiero ver productos»: in the same tab when the URL is on the host page's
+  own origin (the visitor is already on the store; the panel closes first, and only closes when
+  they are already on that page), in a new tab otherwise. Nothing is sent to the agent.
+- A config refresh moves it both ways, like the prompt cards themselves.
+
 ## 0.23.4
 
 **Phones: the keyboard fit works on the first open after a reload** (Android Chrome, real device,

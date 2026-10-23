@@ -19,8 +19,6 @@ import { mountVisor, type VisorChat } from './visor';
 
 declare global {
   interface Window {
-    vitrinaChat?: Record<string, unknown>;
-    vitrinaChatInstance?: unknown;
     __vitrinaVisorBooted?: Set<Element>;
   }
 }
@@ -48,7 +46,7 @@ export function resolveContainer(script: HTMLScriptElement): HTMLElement {
 }
 
 const live = (): VisorChat | null => {
-  const inst = window.vitrinaChatInstance as VisorChat | undefined;
+  const inst = window.vitrinaChatInstance as unknown as VisorChat | undefined;
   return inst && typeof inst.setUnit === 'function' ? inst : null;
 };
 

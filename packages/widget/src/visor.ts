@@ -297,8 +297,9 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLEl
 const NS = 'http://www.w3.org/2000/svg';
 
 export async function mountVisor(opts: MountOptions): Promise<VisorHandle | null> {
-  const data = await fetchVisor(opts);
-  if (!data || data.floor_plans.length === 0) return null;
+  const fetched = await fetchVisor(opts);
+  if (!fetched || fetched.floor_plans.length === 0) return null;
+  const data: VisorData = fetched;
 
   const host = opts.container;
   const root = host.shadowRoot ?? host.attachShadow({ mode: 'open' });

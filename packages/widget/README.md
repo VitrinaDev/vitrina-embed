@@ -285,6 +285,7 @@ The rule, in full:
 | `home`           | `{ enabled?, title?, subtitle?, cards?, prompts? }` | no | off          | The Home tab. See **Home and Help tabs** below. Off unless `enabled` is `true`. |
 | `home.cards`     | `{ buy?, sell?, search? }`    | no       | all off            | The automotive quick actions. See **Quick actions** below. Each card is off unless its key is explicitly `true`. |
 | `home.prompts`   | `('properties' \| 'visit' \| 'list_property' \| 'products' \| 'order_status' \| 'projects' \| 'showroom_visit' \| 'after_sales')[]` | no | none | Prompt cards (real estate, store), in order. See **Prompt cards** below. Unknown ids and repeats are dropped. |
+| `home.productsUrl` | `string` (http(s) URL) | no | none | The store's catalog page. The `products` card opens it instead of sending a message (0.23.5). See **Prompt cards** below. |
 | `help`           | `{ enabled?, faqs? }`         | no       | off                | The Help tab (FAQ accordion). Off unless `enabled` is `true` **and** at least one usable question survives. |
 | `team`           | `Array<{ name, avatarUrl? }>` | no       | `[]`               | Faces for the Home hero. Up to 5 accepted, first 3 drawn. Non-http(s) `avatarUrl` ⇒ initials. |
 | `remoteConfig`   | `boolean`                     | no       | `true`             | Fetch appearance from Vitrina at load. `false` = fully self-contained.      |
@@ -472,6 +473,18 @@ They paint in the given order, after the chat and booking cards and before the
 automotive quick actions. The server sends `home.prompts` only when at least one
 is on; an inline `home.prompts` replaces the server's list wholesale (it is an
 array, like `team`). A config refresh repaints them in both directions.
+
+**«Ver productos» as a link (0.23.5).** With `home.productsUrl` set (the server
+sends it from the tenant's «Link del catálogo», `webchat.products_url`), the
+`products` card opens that page instead of sending «Quiero ver productos». Its
+subline becomes «Mira el catálogo completo». A URL on the host page's own origin
+opens in the same tab and closes the panel (the visitor is already on the
+store); any other origin opens in a new tab. Without the field the card sends
+its message, as before.
+
+```json
+{ "home": { "enabled": true, "prompts": ["products", "order_status"], "productsUrl": "https://macphones.cl/iphone" } }
+```
 
 ### Quick actions — comprar, vender, lo buscamos por ti
 

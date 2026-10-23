@@ -27,6 +27,7 @@ import {
 import type { WidgetLocale } from './types';
 import { isWidgetFont } from './fonts';
 import { coerceRemoteSidebar } from './sidebar-config';
+import { validateHttpUrl } from './theme';
 import { safeLocalStorage, storageKey } from './storage';
 
 const KEY_SUFFIX = ':config';
@@ -142,6 +143,9 @@ export function coerceRemoteConfig(input: unknown): RemoteWidgetConfig | null {
     // empty result is dropped for the same reason as an empty cards bag.
     const prompts = resolveHomePrompts(h.prompts);
     if (prompts.length > 0) next.prompts = prompts;
+    // The catalog link for «Ver productos»: http(s) only, same gate as a logo.
+    const productsUrl = validateHttpUrl(h.productsUrl as string | undefined);
+    if (productsUrl) next.productsUrl = productsUrl;
     if (Object.keys(next).length > 0) out.home = next;
   }
 
