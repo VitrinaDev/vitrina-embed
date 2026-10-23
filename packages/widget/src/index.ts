@@ -697,7 +697,7 @@ export function init(config: WidgetConfig): WidgetInstance {
   // Same for the quick-action cards — and `setHomeCards` is a no-op that
   // constructs nothing when all three are off, which is every tenant today.
   applyHomeCards(homeCards);
-  ui.setHomePrompts(resolved.home.prompts);
+  ui.setHomePrompts(resolved.home.prompts, resolved.home.productsUrl);
   ui.setPhotoUpload(resolved.photoUploadEnabled);
 
   // --- Server-resolved appearance (ADR 0046) --------------------------------
@@ -750,7 +750,7 @@ export function init(config: WidgetConfig): WidgetInstance {
           // form the tenant no longer answers.
           applyHomeCards(resolveHomeCards(resolved.home.cards));
           // The prompt cards follow the live answer the same way, both ways.
-          ui.setHomePrompts(resolved.home.prompts);
+          ui.setHomePrompts(resolved.home.prompts, resolved.home.productsUrl);
           ui.setPhotoUpload(resolved.photoUploadEnabled);
           // The gate is server-owned and can move in both directions: a dealer
           // who switches booking off mid-session gets the chip taken away

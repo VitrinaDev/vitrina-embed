@@ -62,7 +62,20 @@ declare global {
     /** Set once the Atribu tracker script has been appended — the tag's own
      *  idempotency guard, separate from `vitrinaChatInstance`'s. */
     __vitrinaTagTrackerBooted?: boolean;
+    /** Atribu's tracker config globals — what its own snippet sets before
+     *  loading the script, and what the tracker reads first. */
+    ATRIBU_TRACKING_KEY?: string;
+    ATRIBU_TRACKING_ENDPOINT?: string;
   }
+}
+
+/** What tag-config hands over for the tracking half. */
+export interface TagTrackingConfig {
+  key: string;
+  tracker_src: string;
+  /** Atribu's collect URL for the key (vitrina-app ≥ the tag-config fix);
+   *  absent from older servers. */
+  endpoint?: string | null;
 }
 
 /** The shape `GET /public/sites/{siteId}/tag-config` answers (vitrina-app,
@@ -70,7 +83,7 @@ declare global {
  *  package does not depend on vitrina-app's generated client). */
 export interface TagConfigResponse {
   assistant?: Partial<WidgetConfig> | null;
-  tracking?: { key: string; tracker_src: string } | null;
+  tracking?: TagTrackingConfig | null;
   /** Which hosted-booking-page links carry the visitor id across domains
    *  (vitrina-app#3701) — see `booking-link.ts`. */
   booking_link?: BookingLinkConfig | null;
@@ -161,15 +174,33 @@ function bootAssistant(config: Partial<WidgetConfig> | null | undefined): void {
   }
 }
 
-function injectTrackerScript(tracking: { key: string; tracker_src: string }): void {
+/**
+ * Atribu's tracker reads its key and collect endpoint from window globals,
+ * which its own snippet sets in an inline script before loading it. This tag
+ * loads only the script, so it sets them first — without them the tracker
+ * boots keyless and posts to the host page's own origin. A value the page
+ * already set (its own Atribu snippet) wins.
+ */
+export function setTrackerGlobals(tracking: TagTrackingConfig): void {
+  if (!window.ATRIBU_TRACKING_KEY && tracking.key) {
+    window.ATRIBU_TRACKING_KEY = tracking.key;
+  }
+  const endpoint = typeof tracking.endpoint === 'string' ? tracking.endpoint.trim() : '';
+  if (!window.ATRIBU_TRACKING_ENDPOINT && endpoint) {
+    window.ATRIBU_TRACKING_ENDPOINT = endpoint;
+  }
+}
+
+function injectTrackerScript(tracking: TagTrackingConfig): void {
   if (window.__vitrinaTagTrackerBooted) return;
   window.__vitrinaTagTrackerBooted = true;
   try {
+    setTrackerGlobals(tracking);
     const el = document.createElement('script');
     el.src = tracking.tracker_src;
     el.async = true;
-    // Not required by Atribu's collector (the key is already baked into
-    // `tracker_src`) — carried for observability/debugging on the page only.
+    // For observability/debugging on the page only: the tracker reads its key
+    // from the globals above (and from `key` on `tracker_src`).
     el.setAttribute('data-vitrina-tracker-key', tracking.key);
     document.head.appendChild(el);
   } catch (err) {
@@ -178,7 +209,7 @@ function injectTrackerScript(tracking: { key: string; tracker_src: string }): vo
   }
 }
 
-function bootTracker(tracking: { key: string; tracker_src: string } | null | undefined): void {
+function bootTracker(tracking: TagTrackingConfig | null | undefined): void {
   // `null` means the tenant holds no Vitrina Ads entitlement — nothing to
   // boot, silently. This is the expected, common state for a dealer who has
   // not bought the Add-on; it is not an error.

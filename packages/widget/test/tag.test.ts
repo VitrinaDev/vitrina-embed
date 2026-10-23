@@ -26,6 +26,8 @@ beforeEach(() => {
   delete (window as { __vitrinaTagTrackerBooted?: unknown }).__vitrinaTagTrackerBooted;
   delete (window as { __vitrinaConsent?: unknown }).__vitrinaConsent;
   delete (window as { dataLayer?: unknown }).dataLayer;
+  delete (window as { ATRIBU_TRACKING_KEY?: unknown }).ATRIBU_TRACKING_KEY;
+  delete (window as { ATRIBU_TRACKING_ENDPOINT?: unknown }).ATRIBU_TRACKING_ENDPOINT;
 });
 
 afterEach(() => {
@@ -216,6 +218,51 @@ describe('tag.ts (combined <script> entry)', () => {
     const trackerEl = document.querySelector('script[data-vitrina-tracker-key]');
     expect(trackerEl).not.toBeNull();
     expect(trackerEl?.getAttribute('src')).toBe('https://track.atribu.app/t.js?k=trk_live_x');
+  });
+
+  it('sets the tracker key and collect endpoint before the tracker loads', async () => {
+    appendScript({ src: 'https://api.example.com/tag.js?site=' + PK });
+    (window as { __vitrinaConsent?: unknown }).__vitrinaConsent = true;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          stubJsonResponse({
+            data: {
+              assistant: { publicKey: PK, apiBaseUrl: 'https://api.example.com/api/v1' },
+              tracking: {
+                key: 'trk_live_x',
+                tracker_src: 'https://www.atribu.app/tracker.js',
+                endpoint: 'https://www.atribu.app/api/tracking/collect',
+              },
+            },
+          }),
+        ),
+      ),
+    );
+    const order: string[] = [];
+    const append = document.head.appendChild.bind(document.head);
+    vi.spyOn(document.head, 'appendChild').mockImplementation(<T extends Node>(node: T): T => {
+      if ((node as unknown as HTMLScriptElement).src?.includes('tracker.js')) {
+        order.push(`script:${window.ATRIBU_TRACKING_KEY}:${window.ATRIBU_TRACKING_ENDPOINT}`);
+      }
+      return append(node);
+    });
+
+    await import('../src/tag');
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(order).toEqual(['script:trk_live_x:https://www.atribu.app/api/tracking/collect']);
+  });
+
+  it("keeps the page's own tracker globals and tolerates a server without endpoint", async () => {
+    const { setTrackerGlobals } = await import('../src/tag');
+    window.ATRIBU_TRACKING_KEY = 'trk_live_page';
+    setTrackerGlobals({ key: 'trk_live_x', tracker_src: 'https://www.atribu.app/tracker.js' });
+    expect(window.ATRIBU_TRACKING_KEY).toBe('trk_live_page');
+    expect(window.ATRIBU_TRACKING_ENDPOINT).toBeUndefined();
   });
 
   it('boots the assistant even when tracking is null (no Ads entitlement)', async () => {

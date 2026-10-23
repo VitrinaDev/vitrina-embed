@@ -84,6 +84,15 @@ export interface WidgetHomeConfig {
    * rather than merging id by id. Absent or empty ⇒ no prompt cards.
    */
   prompts?: WidgetHomePrompt[];
+  /**
+   * The store's catalog page (0.23.5). With it, the `products` prompt card
+   * («Ver productos») goes there instead of sending «Quiero ver productos»: in
+   * the same tab when the URL is on the host page's own origin (the visitor is
+   * already on the store, and the panel closes), in a new tab otherwise.
+   * Absolute http(s) only; anything else is dropped and the card keeps sending
+   * its message.
+   */
+  productsUrl?: string;
 }
 
 /**
@@ -92,7 +101,8 @@ export interface WidgetHomeConfig {
  *   properties    — "Ver propiedades"       → «Quiero ver propiedades»
  *   visit         — "Agendar una visita"    → «Quiero agendar una visita»
  *   list_property — "Publicar mi propiedad" → «Quiero publicar mi propiedad»
- *   products      — "Ver productos"         → «Quiero ver productos» (0.22.0)
+ *   products      — "Ver productos"         → «Quiero ver productos» (0.22.0), or the
+ *                                             store's catalog page when `productsUrl` is set (0.23.5)
  *   order_status  — "Estado de mi pedido"   → «¿Cuál es el estado de mi pedido?» (0.22.0)
  *   projects      — "Ver proyectos"         → «Quiero ver los proyectos» (0.24.0, inmobiliarias)
  *   showroom_visit — "Agendar visita a sala" → «Quiero agendar una visita a la sala de ventas» (0.24.0)
