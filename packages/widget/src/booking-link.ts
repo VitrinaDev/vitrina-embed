@@ -171,3 +171,22 @@ export function installBookingLinkDecoration(
     attempts = Number.POSITIVE_INFINITY;
   };
 }
+
+/** The page's Meta browser cookies (`_fbp` / `_fbc`), verbatim, when present. */
+export function readMetaBrowserIds(doc: Document = document): {
+  fbp?: string;
+  fbc?: string;
+} {
+  const out: { fbp?: string; fbc?: string } = {};
+  try {
+    for (const part of (doc.cookie || '').split(';')) {
+      const [name, ...rest] = part.trim().split('=');
+      if (name !== '_fbp' && name !== '_fbc') continue;
+      const value = decodeURIComponent(rest.join('=')).trim();
+      if (value && value.length <= 600) out[name === '_fbp' ? 'fbp' : 'fbc'] = value;
+    }
+  } catch {
+    /* unreadable cookie jar */
+  }
+  return out;
+}

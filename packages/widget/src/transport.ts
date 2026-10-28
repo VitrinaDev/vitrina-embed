@@ -37,6 +37,7 @@ import type {
   WidgetMessage,
   WidgetMessageDto,
 } from './config';
+import { readMetaBrowserIds, readTrackerAnonymousId } from './booking-link';
 import { coerceRemoteConfig } from './remote-config';
 import type {
   ClinicAvailableDays,
@@ -772,6 +773,15 @@ export class VitrinaTransport {
       body.page_context = input.pageContext;
     }
     if (input.pricePolicy) body.price_policy = input.pricePolicy;
+    // The Atribu tracker's visitor id and Meta's `_fbp` / `_fbc`, when the page
+    // has them: they tie this chat's lead to the visit and carry the browser
+    // ids into the lead's ads outcomes. Absent on a site without the tag or
+    // the pixel (nothing is sent). A demo turn is a role-play: never sent.
+    if (input.mode !== 'demo' && typeof document !== 'undefined') {
+      const anonymousId = readTrackerAnonymousId();
+      if (anonymousId) body.tracking_anonymous_id = anonymousId;
+      Object.assign(body, readMetaBrowserIds());
+    }
     if (input.mode === 'demo') {
       body.mode = 'demo';
       if (input.demoWorld) body.demo_world = input.demoWorld;
