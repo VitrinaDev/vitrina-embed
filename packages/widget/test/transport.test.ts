@@ -152,6 +152,38 @@ describe('VitrinaTransport.send', () => {
     expect(store.get()).toBe('vt_2');
   });
 
+  it('sends the tracker visitor id and the _fbp / _fbc cookies when the page has them, nothing otherwise', async () => {
+    const ok = () =>
+      jsonRes(202, { status: 'accepted', visitorToken: 'vt_1', conversationExternalId: 'web:a' });
+    fetchMock.mockResolvedValueOnce(ok());
+    const bare = new VitrinaTransport({ apiBaseUrl: BASE, publicKey: PK }, memStore('vt_1'));
+    await bare.send({ message: 'hola' });
+    expect(Object.keys(JSON.parse(lastCall()[1].body as string))).toEqual(['message', 'hp_website']);
+
+    window.localStorage.setItem('atribu_anon_id', 'anon-9f2c1b7e');
+    document.cookie = '_fbp=fb.1.1761600000000.1234567890';
+    document.cookie = '_fbc=fb.1.1761600000000.IwAR0abc';
+    try {
+      fetchMock.mockResolvedValueOnce(ok());
+      await bare.send({ message: 'hola' });
+      expect(JSON.parse(lastCall()[1].body as string)).toMatchObject({
+        tracking_anonymous_id: 'anon-9f2c1b7e',
+        fbp: 'fb.1.1761600000000.1234567890',
+        fbc: 'fb.1.1761600000000.IwAR0abc',
+      });
+      // A demo turn never carries the visitor's ids.
+      fetchMock.mockResolvedValueOnce(ok());
+      await bare.send({ message: 'hola', mode: 'demo' });
+      const demo = JSON.parse(lastCall()[1].body as string);
+      expect(demo.tracking_anonymous_id).toBeUndefined();
+      expect(demo.fbp).toBeUndefined();
+    } finally {
+      window.localStorage.removeItem('atribu_anon_id');
+      document.cookie = '_fbp=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = '_fbc=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    }
+  });
+
   it('always sends hp_website (empty string) even without a honeypot value', async () => {
     const store = memStore('vt_1');
     fetchMock.mockResolvedValueOnce(

@@ -1,5 +1,14 @@
 # @vitrina/widget
 
+## 0.26.0
+
+**Chat messages carry the visitor id, `_fbp` and `_fbc`.** Minor.
+
+- A message now sends `tracking_anonymous_id` (the Atribu tracker's `atribu_anon_id` / `atribu_visitor_id`),
+  `fbp` and `fbc` (the `_fbp` / `_fbc` cookies) when the page has them, so the chat lead joins the visit and
+  Meta can match it. Sites without the tracker or the pixel send exactly what they did before. Demo-mode turns
+  never carry them. Needs vitrina-app 15.2.0 or later (older servers ignore the fields). No host-site change.
+
 ## 0.25.0
 
 **Inmobiliarias: the floor-plan visor.** Minor. Stacked on 0.24.0 (embed#46).
