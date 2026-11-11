@@ -1,5 +1,27 @@
 # @vitrina/widget
 
+## 0.27.0
+
+**Brand palette, heading face and host Home actions.** Minor. Additive and opt-in: a page that sets none of the
+new fields gets exactly the 0.26.0 widget (same stylesheet, same DOM).
+
+- **`theme.palette`**: the host brand's colours (`surface`, `surfaceAlt`, `text`, `muted`, `border`, `accent`,
+  `accentText`, `bubbleIn`/`bubbleInText`, `bubbleOut`/`bubbleOutText`, `launcher`/`launcherIcon`). Each goes
+  through the colour sanitizer; an unusable one counts as absent. With any usable entry the widget pins its
+  surfaces in both colour schemes, and derives what was left out from what was given (text readable on the
+  surface, ink readable on the accent, bubbles and launcher). The dark-ground logo follows the painted surface.
+- **`theme.radius`**: `soft` or `pill` (fully round buttons) for a brand whose buttons are pills.
+- **Fonts**: `jost` and `playfairDisplay` join the list, and **`headingFont`** sets a face for the titles only
+  (Home greeting, header name, section titles), loaded the same way as `font`.
+- **`home.actions`**: up to 4 host-defined Home cards (`id`, `title`, `subtitle?`, `icon?`, `href?`,
+  `closeOnTap?`) above the built-in cards. A tap emits the new **`action { id }`** event; with `href` the card is a
+  plain new-tab link, without it the panel closes after the event unless `closeOnTap: false`.
+- **`booking: false`**: a page with its own booking step switches the in-widget booking off even when the tenant
+  has it on (Home booking card, booking chip and «Mis visitas» gone, the pinned CTA hands off to the host,
+  `openBooking()` falls back to the conversation). It can only turn booking off; booking stays server-gated.
+- **`logoUrl: null`**: drops the logo the server sends, and its dark-ground variant. Unset keeps today's behaviour.
+- All of these are inline-only: `GET /widget/config` does not send them, so no server change is needed.
+
 ## 0.26.0
 
 **Chat messages carry the visitor id, `_fbp` and `_fbc`.** Minor.

@@ -19,7 +19,9 @@ import {
 import {
   resolveHomeCards,
   resolveHomePrompts,
+  resolveHostActions,
   type ResolvedHelp,
+  type ResolvedHostAction,
   type ResolvedHome,
   type ResolvedHomeCards,
   type TeamMember,
@@ -37,7 +39,7 @@ import { makeT, type StringKey, type Translate } from './i18n';
 import { renderMarkdown } from './markdown';
 import { createSidebarChrome, sendIcon, type SidebarChrome, type SidebarUiCallbacks, type SidebarUiOptions } from './sidebar-ui';
 import { SIDEBAR_STYLES } from './sidebar-styles';
-import { STYLES } from './styles';
+import { BRAND_STYLES, STYLES } from './styles';
 
 /**
  * A touch-first device (phone, tablet without a trackpad). Opening the panel
@@ -48,7 +50,15 @@ export function coarsePointer(): boolean {
   return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 }
 import { goToPage } from './navigation';
-import { resolveAccent, resolvePosition, validateHttpUrl, validateLogoUrl } from './theme';
+import {
+  PALETTE_VARS,
+  resolveAccent,
+  resolvePalette,
+  resolvePosition,
+  resolveRadius,
+  validateHttpUrl,
+  validateLogoUrl,
+} from './theme';
 import type { WidgetFont, WidgetHomeAction, WidgetHomePrompt, WidgetLocale, WidgetTheme } from './types';
 
 export type BannerState = 'none' | 'offline' | 'reconnecting' | 'error' | 'sending';
@@ -74,6 +84,12 @@ export interface WidgetUiCallbacks {
   booking?: BookingCallbacks;
   /** A Home quick-action card was tapped. Absent ⇒ the cards are inert. */
   onHomeAction?(kind: WidgetHomeAction): void;
+  /**
+   * A host-defined Home card (`home.actions`, 0.27.0) was tapped. `close` is
+   * true when the host asked for the panel to close after it (a card without
+   * an href whose `closeOnTap` is not false).
+   */
+  onHostAction?(id: string, close: boolean): void;
   /** Everything the quick-action overlay reports. */
   homeActions?: HomeActionCallbacks;
 }
@@ -121,6 +137,8 @@ export interface WidgetUiOptions {
   welcomeMessage: string | null;
   /** Typeface. Omitted ⇒ 'system': nothing is loaded and nothing changes. */
   font?: WidgetFont;
+  /** Titles-only typeface (0.27.0). Omitted / null ⇒ titles use `font`. */
+  headingFont?: WidgetFont | null;
   /**
    * The tenant's own name for the booking chip, already normalized. null ⇒ the
    * built-in "Agendar visita" / "Book a visit", which follows the locale.
@@ -191,6 +209,11 @@ export interface WidgetUi {
    * 'system' both loads nothing and restores the original stack exactly.
    */
   applyFont(font: WidgetFont): void;
+  /**
+   * Point the panel's titles (Home greeting, header name, section titles) at
+   * their own typeface (0.27.0). null removes it: titles follow `font` again.
+   */
+  applyHeadingFont(font: WidgetFont | null): void;
   /** Swap the booking chip's copy. null restores the built-in, locale-driven one. */
   setBookingLabel(label: string | null): void;
   /** Swap the pre-conversation greeting, repainting it if it is on screen. */
@@ -377,6 +400,16 @@ const ICONS = {
     'M9 16.5h4',
   ],
   download: ['M12 4v11', 'm7.5 11 4.5 4.5 4.5-4.5', 'M5 19.5h14'],
+  // Host Home actions (0.27.0): a chat bubble with a handset, and a sparkle.
+  whatsapp: [
+    'M3.6 20.4 4.9 16.5A8.6 8.6 0 1 1 8 19.5z',
+    'M9.3 8.4c.2-.4.5-.5.8-.5h.4c.2 0 .4.1.5.3l.7 1.6c.1.2 0 .5-.1.6l-.6.7c.6 1.1 1.5 2 2.6 2.6l.7-.6c.2-.1.4-.2.6-.1l1.6.7c.2.1.3.3.3.5v.4c0 .3-.1.6-.5.8-.6.3-1.8.4-3.4-.5a8.6 8.6 0 0 1-3.1-3.1c-.9-1.6-.8-2.8-.5-3.4z',
+  ],
+  sparkle: [
+    'M11 3.5 12.9 9l5.6 1.9-5.6 1.9L11 18.3l-1.9-5.5-5.6-1.9L9.1 9z',
+    'M18.5 15v5',
+    'M16 17.5h5',
+  ],
   close: ['m6 6 12 12', 'M18 6 6 18'],
 } as const;
 
@@ -433,6 +466,16 @@ const HOME_PROMPT_CARDS: Record<
     sub: 'homeAfterSalesSub',
     message: 'homeAfterSalesMessage',
   },
+};
+
+/** Host action icon name → the glyph it draws (0.27.0). */
+const HOST_ACTION_ICONS: Record<NonNullable<ResolvedHostAction['icon']>, keyof typeof ICONS> = {
+  calendar: 'calendar',
+  message: 'chat',
+  whatsapp: 'whatsapp',
+  question: 'help',
+  pin: 'pin',
+  sparkle: 'sparkle',
 };
 
 /** One stroked 24×24 glyph. `paths` is always a module constant (see ICONS). */
@@ -576,6 +619,65 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     root.style.setProperty('--vtr-font', fontStack(font));
   }
   applyFont(opts.font ?? 'system');
+
+  // --- Brand (0.27.0): palette, corner style, heading face, host actions -----
+  // Their stylesheet is appended only once one of them is in use, so a widget
+  // without them carries exactly the stylesheet it always has.
+  let brandStyle: HTMLStyleElement | null = null;
+  function ensureBrandStyles(): void {
+    if (brandStyle) return;
+    brandStyle = document.createElement('style');
+    brandStyle.textContent = BRAND_STYLES;
+    shadow.appendChild(brandStyle);
+  }
+
+  /**
+   * Pin the host palette on the root, or take it away. Every value comes out
+   * of resolvePalette (sanitized, derived for contrast); a palette with no
+   * usable entry is no palette, and the accent the caller just set stands.
+   */
+  function applyPalette(next: WidgetTheme): void {
+    const palette = resolvePalette(next.palette, next.accent);
+    if (!palette) {
+      if (!root.hasAttribute('data-palette')) return;
+      for (const prop of PALETTE_VARS) {
+        if (prop !== '--vtr-accent') root.style.removeProperty(prop);
+      }
+      root.removeAttribute('data-palette');
+      root.removeAttribute('data-accent-tone');
+      return;
+    }
+    ensureBrandStyles();
+    for (const [prop, value] of Object.entries(palette.vars)) root.style.setProperty(prop, value);
+    root.setAttribute('data-palette', palette.tone);
+    root.setAttribute('data-accent-tone', palette.accentTone);
+  }
+
+  function applyRadius(next: WidgetTheme): void {
+    const radius = resolveRadius(next.radius);
+    if (!radius) {
+      root.removeAttribute('data-radius');
+      return;
+    }
+    ensureBrandStyles();
+    root.setAttribute('data-radius', radius);
+  }
+  applyPalette(theme);
+  applyRadius(theme);
+
+  /** Titles-only face: declared in the host document like `font`, applied via --vtr-heading-font. */
+  function applyHeadingFont(font: WidgetFont | null): void {
+    if (font === null) {
+      root.style.removeProperty('--vtr-heading-font');
+      root.removeAttribute('data-heading-font');
+      return;
+    }
+    ensureFontLoaded(font);
+    ensureBrandStyles();
+    root.style.setProperty('--vtr-heading-font', fontStack(font));
+    root.setAttribute('data-heading-font', font);
+  }
+  applyHeadingFont(opts.headingFont ?? null);
 
   if (opts.hidden) root.style.setProperty('visibility', 'hidden');
 
@@ -867,6 +969,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     const sbStyle = document.createElement('style');
     sbStyle.textContent = SIDEBAR_STYLES;
     shadow.appendChild(sbStyle);
+    // The brand sheet overrides some sidebar rules at equal specificity, so it
+    // has to stay the last one.
+    if (brandStyle) shadow.appendChild(brandStyle);
     root.setAttribute('data-layout', sb.options.layout);
     root.setAttribute('data-preset', sb.options.preset);
     chrome = createSidebarChrome(sb.options, sb.callbacks, () => t, on);
@@ -924,6 +1029,9 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   let homePrompts: WidgetHomePrompt[] = resolveHomePrompts(opts.home?.prompts);
   /** The store's catalog page for «Ver productos»; null = the card sends its message. */
   let homeProductsUrl: string | null = validateHttpUrl(opts.home?.productsUrl);
+  // The host page's own Home cards (0.27.0), painted above the built-in ones.
+  let hostActions: ResolvedHostAction[] = resolveHostActions(opts.home?.actions);
+  if (hostActions.length > 0) ensureBrandStyles();
 
   function scrollToBottom(): void {
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1648,6 +1756,21 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
     return btn;
   }
 
+  /** A Home card that is a link: same body and icon slot as homeCard(). */
+  function hostLinkCard(href: string): HTMLAnchorElement {
+    const a = document.createElement('a');
+    a.className = 'vtr-home-card';
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    const body = document.createElement('div');
+    body.className = 'vtr-home-card-body';
+    const icon = document.createElement('span');
+    icon.className = 'vtr-home-card-icon';
+    a.append(body, icon);
+    return a;
+  }
+
   /** Add a title/sub pair into a card body. */
   function cardLine(card: HTMLElement, cls: string, text: string): void {
     const el = document.createElement('div');
@@ -1693,6 +1816,22 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
   function paintHomeCards(): void {
     if (!homeCardsEl) return;
     homeCardsEl.replaceChildren();
+
+    // The host page's own cards first, in its order (0.27.0). With an href the
+    // card IS a link — a plain anchor, new tab, never window.open.
+    for (const action of hostActions) {
+      const card = action.href ? hostLinkCard(action.href) : homeCard('host', [], true);
+      card.dataset.card = 'host';
+      card.dataset.actionId = action.id;
+      const icon = card.querySelector('.vtr-home-card-icon');
+      if (icon) {
+        icon.replaceChildren(strokeIcon(ICONS[action.icon ? HOST_ACTION_ICONS[action.icon] : 'chevronRight']));
+        if (!action.icon) icon.classList.add('vtr-home-card-chev');
+      }
+      cardLine(card, 'vtr-home-card-title', action.title);
+      if (action.subtitle) cardLine(card, 'vtr-home-card-sub', action.subtitle);
+      homeCardsEl.appendChild(card);
+    }
 
     if (lastPreview) {
       const card = homeCard('recent', ICONS.chevronRight, false);
@@ -1794,6 +1933,14 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       const el = (e.target as Element | null)?.closest?.('[data-card]') as HTMLElement | null;
       const kind = el?.dataset.card;
       switch (kind) {
+        case 'host': {
+          const action = hostActions.find((a) => a.id === el?.dataset.actionId);
+          if (!action) break;
+          // A link card navigates on its own (the anchor's default action);
+          // only a plain card may close the panel behind the host's handler.
+          callbacks.onHostAction?.(action.id, !action.href && action.closeOnTap);
+          break;
+        }
         case 'recent':
           setView('messages');
           break;
@@ -2096,9 +2243,12 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
       // hostile or malformed colour leaves a coherent widget rather than one
       // wearing half of two themes.
       root.style.setProperty('--vtr-accent', resolveAccent(next.accent));
+      applyPalette(next);
+      applyRadius(next);
       applyLogo(next.logoUrl, next.logoOnDarkUrl);
     },
     applyFont,
+    applyHeadingFont,
     setBookingLabel(label: string | null): void {
       const next = label ?? null;
       if (next === bookingLabel) return;
@@ -2254,6 +2404,8 @@ export function createWidgetUI(opts: WidgetUiOptions): WidgetUi {
         title: home?.title ?? null,
         subtitle: home?.subtitle ?? null,
       };
+      hostActions = resolveHostActions(home?.actions);
+      if (hostActions.length > 0) ensureBrandStyles();
       if (homeCfg.enabled) ensureHomeView();
       paintHome();
       syncTabChrome();
