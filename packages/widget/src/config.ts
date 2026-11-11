@@ -11,6 +11,7 @@ import type {
   WidgetHomeCardsConfig,
   WidgetHomePrompt,
   WidgetHomeConfig,
+  WidgetHomeActionIcon,
   WidgetLocale,
   WidgetTeamMemberConfig,
   WidgetTheme,
@@ -289,6 +290,66 @@ export interface ResolvedHome {
   prompts?: WidgetHomePrompt[];
   /** The validated catalog URL the `products` card opens, ABSENT when unset. */
   productsUrl?: string;
+  /**
+   * The host page's own cards (0.27.0), sanitized and in order, ABSENT when
+   * there are none — so a page without them resolves to the object it did.
+   */
+  actions?: ResolvedHostAction[];
+}
+
+/** A sanitized host Home action. Every field is safe to paint as-is. */
+export interface ResolvedHostAction {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  icon: WidgetHomeActionIcon | null;
+  /** Validated absolute http(s) href, or null (the card only emits). */
+  href: string | null;
+  closeOnTap: boolean;
+}
+
+export const MAX_HOST_ACTIONS = 4;
+export const MAX_HOST_ACTION_TITLE = 60;
+export const MAX_HOST_ACTION_SUBTITLE = 120;
+const HOST_ACTION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/;
+const HOST_ACTION_ICONS: readonly WidgetHomeActionIcon[] = [
+  'calendar',
+  'message',
+  'whatsapp',
+  'question',
+  'pin',
+  'sparkle',
+];
+
+/**
+ * Keep the usable host actions, in order, up to the cap. An entry without a
+ * safe id or a usable title drops itself; a repeated id keeps the first. An
+ * unusable `href` (not absolute http/https) is dropped on its own, leaving a
+ * card that only emits; an unknown icon becomes the chevron.
+ */
+export function resolveHostActions(input: unknown): ResolvedHostAction[] {
+  if (!Array.isArray(input)) return [];
+  const out: ResolvedHostAction[] = [];
+  for (const raw of input) {
+    if (out.length >= MAX_HOST_ACTIONS) break;
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as Record<string, unknown>;
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    if (!HOST_ACTION_ID.test(id) || out.some((a) => a.id === id)) continue;
+    const title = boundedText(item.title, MAX_HOST_ACTION_TITLE);
+    if (title === null) continue;
+    out.push({
+      id,
+      title,
+      subtitle: boundedText(item.subtitle, MAX_HOST_ACTION_SUBTITLE),
+      icon: (HOST_ACTION_ICONS as readonly unknown[]).includes(item.icon)
+        ? (item.icon as WidgetHomeActionIcon)
+        : null,
+      href: validateHttpUrl(typeof item.href === 'string' ? item.href : null),
+      closeOnTap: item.closeOnTap !== false,
+    });
+  }
+  return out;
 }
 
 const HOME_PROMPTS: readonly WidgetHomePrompt[] = [
@@ -355,6 +416,8 @@ export interface ResolvedConfig {
   bookingLabel: string | null;
   /** Always a value this widget can render; unknown names collapse to 'system'. */
   font: WidgetFont;
+  /** Titles-only typeface (0.27.0); null ⇒ titles use `font`, as before. */
+  headingFont: WidgetFont | null;
   /**
    * Whether this tenant takes bookings from the widget. SERVER-ONLY, and false
    * unless `GET /widget/config` said otherwise: a dealer's page cannot turn on
@@ -590,6 +653,8 @@ export function resolveHome(input: WidgetHomeConfig | undefined): ResolvedHome {
   if (prompts.length > 0) home.prompts = prompts;
   const productsUrl = validateHttpUrl(input?.productsUrl);
   if (productsUrl) home.productsUrl = productsUrl;
+  const actions = resolveHostActions(input?.actions);
+  if (actions.length > 0) home.actions = actions;
   return home;
 }
 
@@ -670,6 +735,7 @@ export function hasInlineAppearance(config: WidgetConfig): boolean {
     config?.locale !== undefined ||
     config?.bookingLabel !== undefined ||
     config?.font !== undefined ||
+    config?.headingFont !== undefined ||
     config?.logoUrl !== undefined ||
     config?.logoOnDarkUrl !== undefined
   );
@@ -734,6 +800,7 @@ export function resolveConfig(
     welcomeMessage: welcome,
     bookingLabel: normalizeBookingLabel(config.bookingLabel ?? remote?.bookingLabel),
     font: resolveFont(config.font ?? remote?.font),
+    headingFont: config.headingFont === undefined ? null : resolveFont(config.headingFont),
     // Deliberately NOT layered with an inline override: a booking surface that
     // calls routes the tenant has switched off would only ever paint a 404.
     bookingEnabled: remote?.bookingEnabled === true || remote?.clinicBooking?.enabled === true,

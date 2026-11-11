@@ -41,6 +41,10 @@ const FAMILY: Record<Exclude<WidgetFont, 'system'>, string> = {
   archivo: 'Archivo',
   montserrat: 'Montserrat',
   saira: 'Saira',
+  // 0.27.0: a geometric sans and a serif display face, so a host brand can pair
+  // them (body `jost`, `headingFont: 'playfairDisplay'`).
+  jost: 'Jost',
+  playfairDisplay: 'Playfair Display',
 };
 
 /** Weights the widget actually paints: body, chips/labels, and the code/CTA bold. */

@@ -277,15 +277,19 @@ The rule, in full:
 | `theme.accent`   | `string` (CSS color)          | no       | `#111827`          | Brand accent for the launcher + inbound bubbles. Sanitized; bad values fall back. |
 | `theme.position` | `'br' \| 'bl'`                | no       | `'br'`             | Launcher corner: bottom-right or bottom-left.                               |
 | `theme.logoUrl`  | `string` (http/https URL)     | no       | —                  | Older spelling of `logoUrl` below. Still honoured; the top-level one wins.  |
+| `theme.palette`  | `WidgetPalette`               | no       | none               | The host brand's colours (0.27.0). Pins the widget's surfaces in both colour schemes. See **Brand palette and typography** below. Inline only. |
+| `theme.radius`   | `'default' \| 'soft' \| 'pill'` | no    | `'default'`        | Corner style (0.27.0). `pill` = fully round buttons, rounder panel and cards. |
 | `logoUrl`        | `string` (http/https URL)     | no       | —                  | Logo in the panel header, ~22px tall, never cropped. Non-http(s) URLs are ignored — no logo, never a broken image. |
 | `logoOnDarkUrl`  | `string` (http/https URL)     | no       | —                  | Logo variant for dark grounds (also `theme.logoOnDarkUrl`). Drawn instead of `logoUrl` on the accent header, and on the surface headers under `prefers-color-scheme: dark`. CSS picks the variant. Unset ⇒ `logoUrl` everywhere. |
 | `font`           | `WidgetFont`                  | no       | `'system'`         | Typeface for the whole widget. See **Fonts** below. Unknown values fall back to `system`. |
+| `headingFont`    | `WidgetFont`                  | no       | unset (= `font`)   | Typeface for the titles only: Home greeting, header name, section titles (0.27.0). Inline only. |
 | `bookingLabel`   | `string`                      | no       | localized copy     | What the booking chip says, verbatim — e.g. `Agendar demo`. Trimmed; blank or over 40 chars falls back to the built-in copy. Only visible when the tenant has booking on. |
 | `welcomeMessage` | `string`                      | no       | localized greeting | Greeting shown before the visitor sends the first message.                  |
 | `home`           | `{ enabled?, title?, subtitle?, cards?, prompts? }` | no | off          | The Home tab. See **Home and Help tabs** below. Off unless `enabled` is `true`. |
 | `home.cards`     | `{ buy?, sell?, search? }`    | no       | all off            | The automotive quick actions. See **Quick actions** below. Each card is off unless its key is explicitly `true`. |
 | `home.prompts`   | `('properties' \| 'visit' \| 'list_property' \| 'products' \| 'order_status' \| 'projects' \| 'showroom_visit' \| 'after_sales')[]` | no | none | Prompt cards (real estate, store), in order. See **Prompt cards** below. Unknown ids and repeats are dropped. |
 | `home.productsUrl` | `string` (http(s) URL) | no | none | The store's catalog page. The `products` card opens it instead of sending a message (0.23.5). See **Prompt cards** below. |
+| `home.actions`   | `WidgetHomeHostAction[]`      | no       | none               | The page's own Home cards, max 4, above the built-in ones (0.27.0). A tap emits `action {id}`. See **Host Home actions** below. Inline only. |
 | `help`           | `{ enabled?, faqs? }`         | no       | off                | The Help tab (FAQ accordion). Off unless `enabled` is `true` **and** at least one usable question survives. |
 | `team`           | `Array<{ name, avatarUrl? }>` | no       | `[]`               | Faces for the Home hero. Up to 5 accepted, first 3 drawn. Non-http(s) `avatarUrl` ⇒ initials. |
 | `remoteConfig`   | `boolean`                     | no       | `true`             | Fetch appearance from Vitrina at load. `false` = fully self-contained.      |
@@ -486,6 +490,43 @@ its message, as before.
 { "home": { "enabled": true, "prompts": ["products", "order_status"], "productsUrl": "https://macphones.cl/iphone" } }
 ```
 
+### Host Home actions
+
+`home.actions` puts the page's own calls to action on the Home tab, in the
+same card style as the built-in ones and above them, in the order given:
+
+```js
+home: {
+  enabled: true,
+  title: 'Hola',
+  subtitle: '¿Te ayudamos a reservar tu evaluación?',
+  actions: [
+    { id: 'reserve', title: 'Reservar mi evaluación', subtitle: 'Elige tu hora con la Dra. Valentina', icon: 'calendar' },
+    { id: 'whatsapp', title: 'Seguir por WhatsApp', icon: 'whatsapp', href: 'https://wa.me/56900000000' },
+  ],
+},
+```
+
+```js
+window.vitrinaChatInstance.on('action', ({ id }) => {
+  if (id === 'reserve') document.querySelector('#agenda').scrollIntoView();
+});
+```
+
+- A tap emits `action { id }`. A card **without** `href` then closes the
+  panel (set `closeOnTap: false` to keep it open). A card **with** `href` is a
+  plain link that opens in a new tab (`rel="noopener noreferrer"`); the event
+  still fires and the panel stays open.
+- `icon`: `calendar`, `message`, `whatsapp`, `question`, `pin` or `sparkle`;
+  absent or unknown ⇒ a chevron.
+- Sanitized like everything else: at most 4 cards; `id` must be letters,
+  digits, `-` or `_` (≤ 40, first a letter or digit) and repeats are dropped;
+  `title` is trimmed and a blank or over-60-character one drops the card;
+  `subtitle` over 120 characters is omitted; an `href` that is not absolute
+  http(s) is dropped and the card only emits. Titles are text, never markup.
+- The built-in «Envíanos un mensaje» card stays, so Home with only host
+  actions is still a complete screen. Inline only for now.
+
 ### Quick actions — comprar, vender, lo buscamos por ti
 
 Three more Home cards, each opening a short form **inside the panel** rather
@@ -555,6 +596,8 @@ stylesheet:
 | `archivo`       | Archivo       |
 | `montserrat`    | Montserrat    |
 | `saira`         | Saira         |
+| `jost`          | Jost (0.27.0) |
+| `playfairDisplay` | Playfair Display (0.27.0) |
 
 **How it works, and why it is not all inside the Shadow DOM.** A shadow root
 scopes selectors, but `@font-face` is not a selector — browsers only match
@@ -585,6 +628,54 @@ font-src   https://fonts.gstatic.com;
 ```
 
 You do not need either directive when `font` is `system`.
+
+### Brand palette and typography
+
+For a page with its own design system (a clinic's ad landing, a brand site),
+`theme.palette` paints the widget in the host's colours instead of the
+widget's own light/dark tokens. Every entry is optional and goes through the
+same colour sanitizer as `theme.accent`; an unusable entry counts as absent.
+
+```js
+theme: {
+  radius: 'pill',                // optional: fully round buttons
+  palette: {
+    surface: '#1B2341',          // panel background
+    surfaceAlt: '#242E52',       // hovers, chips, the agent's bubble
+    text: '#EFE6D7',             // body text on surface
+    muted: '#CCBFAE',            // subtitles, hints
+    border: '#3A4468',           // hairlines, input borders
+    accent: '#C79D87',           // buttons, links, selected tab (beats theme.accent)
+    accentText: '#1B2341',       // text and icons on the accent
+    bubbleIn: '#C79D87',         // the visitor's bubble   (default: accent)
+    bubbleInText: '#1B2341',     //                        (default: readable on it)
+    bubbleOut: '#242E52',        // the agent's bubble     (default: surfaceAlt)
+    bubbleOutText: '#EFE6D7',    //                        (default: text)
+    launcher: '#1B2341',         // the round launcher     (default: accent)
+    launcherIcon: '#EFE6D7',     // its glyph              (default: readable on it)
+  },
+},
+font: 'jost',
+headingFont: 'playfairDisplay',
+```
+
+- **Both colour schemes.** Once any entry is usable, the widget stops
+  following the visitor's `prefers-color-scheme`: a navy panel stays navy on a
+  light-mode phone, a cream one stays cream in dark mode. Without a palette
+  (or with nothing usable in it) the widget is exactly what it was.
+- **Readable by default.** Entries you leave out are derived from the ones you
+  gave, never from the widget's own tokens: `text` is black or white,
+  whichever reads on `surface`; `muted`, `border` and `surfaceAlt` are mixes of
+  `text` into `surface`; `accentText` is black or white, whichever reads on
+  `accent` (same for the bubbles and the launcher).
+- **Logo.** With `logoOnDarkUrl` set, the variant follows the ground the
+  palette actually paints (a dark `surface` shows the dark-ground logo), not
+  the visitor's scheme.
+- `headingFont` takes the same values as `font` and loads the same way. It
+  applies to the Home greeting, the header name and the section titles only,
+  so a serif display face can sit over a sans body.
+- `palette`, `radius` and `headingFont` are inline-only for now: the server's
+  `GET /widget/config` does not send them.
 
 ### Sidebar mode
 
@@ -657,8 +748,8 @@ pageview, never by re-mounting a widget the visitor may be typing into.
 
 Events: `open {source}`, `close {source}`, `hide {}`, `show {restored}`, `autoopen {mode, device, variant}`,
 `dismiss {surface}`, `chip {index, label, action}`, `message {clientMessageId}`,
-`handoff_whatsapp {ref}`, `demo_enter {entry, world}`, `demo_turn {turns}`, `demo_exit {reason, turns}`, and
-`cta {source}`. The pinned CTA (and a `booking` chip) opens the in-widget agenda
+`handoff_whatsapp {ref}`, `demo_enter {entry, world}`, `demo_turn {turns}`, `demo_exit {reason, turns}`,
+`cta {source}`, and `action {id}` (a `home.actions` card was tapped, 0.27.0). The pinned CTA (and a `booking` chip) opens the in-widget agenda
 when the tenant has it on; otherwise it only emits `cta`, and the host opens
 its own booking sheet.
 

@@ -887,3 +887,91 @@ select.vtr-ha-input { cursor: pointer; }
   input, textarea, select { font-size: 16px !important; }
 }
 `;
+
+/**
+ * Brand stylesheet (0.27.0): host palette, corner style, heading face and the
+ * host Home actions. Appended to the shadow root ONLY when one of those is
+ * configured, and kept LAST (after the sidebar sheet), so a widget without
+ * them carries exactly STYLES — and every rule here is scoped to an attribute
+ * or element that only those features create. Constant, never built from input:
+ * the colours arrive as the sanitized --vtr-* properties theme.ts resolves.
+ *
+ * NOTE: one big template literal — no backticks in these comments.
+ */
+export const BRAND_STYLES = `
+/* Palette: the tokens are pinned inline on .vtr-root; these rules move the
+   widget's hard-coded white-on-accent ink to --vtr-on-accent, and undo the
+   dark-scheme tweaks that assumed the widget's own navy. */
+.vtr-root[data-palette] .vtr-launcher { background: var(--vtr-launcher); color: var(--vtr-launcher-icon); }
+.vtr-root[data-palette]:not([data-layout]) .vtr-panel:not([data-tabs]) .vtr-header,
+.vtr-root[data-palette]:not([data-layout]) .vtr-panel:not([data-tabs]) .vtr-header .vtr-close,
+.vtr-root[data-palette] .vtr-sendbtn, .vtr-root[data-palette] .vtr-card-btn:not(.vtr-card-btn-alt),
+.vtr-root[data-palette] .vtr-file-ext, .vtr-root[data-palette] .vtr-bk-head, .vtr-root[data-palette] .vtr-ha-head,
+.vtr-root[data-palette] .vtr-bk-back, .vtr-root[data-palette] .vtr-bk-close,
+.vtr-root[data-palette] .vtr-ha-back, .vtr-root[data-palette] .vtr-ha-close,
+.vtr-root[data-palette] .vtr-bk-primary, .vtr-root[data-palette] .vtr-ha-primary,
+.vtr-root[data-palette] .vtr-bk-pay, .vtr-root[data-palette] .vtr-sb-cta,
+.vtr-root[data-palette] .vtr-sbtab-chat { color: var(--vtr-on-accent); }
+.vtr-root[data-palette] .vtr-msg[data-dir="inbound"] { background: var(--vtr-bubble-in); color: var(--vtr-bubble-in-text); }
+.vtr-root[data-palette] .vtr-msg[data-dir="outbound"] { background: var(--vtr-msg-out); color: var(--vtr-msg-out-text); }
+.vtr-root[data-palette] .vtr-card-btn-alt { color: var(--vtr-accent); border-color: var(--vtr-accent); }
+.vtr-root[data-palette] .vtr-file-icon { color: var(--vtr-accent); }
+.vtr-root[data-palette] .vtr-tab[aria-selected="true"],
+.vtr-root[data-palette] .vtr-tab[aria-selected="true"]:hover { color: var(--vtr-accent); }
+.vtr-root[data-palette][data-layout] .vtr-input { background: var(--vtr-surface); }
+.vtr-root[data-palette] .vtr-home-card { box-shadow: 0 2px 10px rgba(0,0,0,0.10); }
+.vtr-root[data-palette="light"] { color-scheme: light; }
+.vtr-root[data-palette="dark"] { color-scheme: dark; }
+.vtr-root[data-palette="light"] .vtr-msg .vtr-code, .vtr-root[data-palette="light"] .vtr-faq-a .vtr-code { background: rgba(0,0,0,0.07); }
+.vtr-root[data-palette="dark"] .vtr-msg .vtr-code, .vtr-root[data-palette="dark"] .vtr-faq-a .vtr-code { background: rgba(255,255,255,0.12); }
+/* Logo variant by the ground the palette actually paints, not by the scheme.
+   Surface grounds: the tabs header, the sidebar header, the Home hero. */
+.vtr-root[data-palette="light"] .vtr-panel[data-tabs] .vtr-header > .vtr-logo[data-ondark]:not([hidden]),
+.vtr-root[data-palette="light"] .vtr-sb-head > .vtr-logo[data-ondark]:not([hidden]),
+.vtr-root[data-palette="light"] .vtr-home-top > .vtr-logo[data-ondark]:not([hidden]) { display: block; }
+.vtr-root[data-palette="light"] .vtr-panel[data-tabs] .vtr-header > .vtr-logo-ondark,
+.vtr-root[data-palette="light"] .vtr-sb-head > .vtr-logo-ondark,
+.vtr-root[data-palette="light"] .vtr-home-top > .vtr-logo-ondark { display: none; }
+.vtr-root[data-palette="dark"] .vtr-panel[data-tabs] .vtr-header > .vtr-logo[data-ondark],
+.vtr-root[data-palette="dark"] .vtr-sb-head > .vtr-logo[data-ondark],
+.vtr-root[data-palette="dark"] .vtr-home-top > .vtr-logo[data-ondark] { display: none; }
+.vtr-root[data-palette="dark"] .vtr-panel[data-tabs] .vtr-header > .vtr-logo-ondark,
+.vtr-root[data-palette="dark"] .vtr-sb-head:not([data-agent]) > .vtr-logo-ondark,
+.vtr-root[data-palette="dark"] .vtr-home-top > .vtr-logo-ondark { display: block; }
+/* The classic header is the accent: a light accent shows the plain logo. */
+.vtr-root[data-accent-tone="light"] .vtr-panel:not([data-tabs]) .vtr-header:not(.vtr-sb-head) > .vtr-logo[data-ondark]:not([hidden]) { display: block; }
+.vtr-root[data-accent-tone="light"] .vtr-panel:not([data-tabs]) .vtr-header:not(.vtr-sb-head) > .vtr-logo-ondark { display: none; }
+
+/* Heading face: titles only. */
+.vtr-root[data-heading-font] .vtr-home-title, .vtr-root[data-heading-font] .vtr-title,
+.vtr-root[data-heading-font] .vtr-sb-name, .vtr-root[data-heading-font] .vtr-bk-title,
+.vtr-root[data-heading-font] .vtr-ha-title { font-family: var(--vtr-heading-font); font-weight: 500; letter-spacing: 0; }
+.vtr-root[data-heading-font] .vtr-home-title { font-size: 30px; line-height: 1.15; }
+
+/* Corner style. */
+.vtr-root[data-radius="soft"]:not([data-layout]) .vtr-panel { border-radius: 20px; }
+.vtr-root[data-radius="soft"] .vtr-home-card { border-radius: 16px; }
+.vtr-root[data-radius="soft"] .vtr-msg { border-radius: 18px; }
+.vtr-root[data-radius="soft"] .vtr-input, .vtr-root[data-radius="soft"] .vtr-sendbtn,
+.vtr-root[data-radius="soft"] .vtr-bk-primary, .vtr-root[data-radius="soft"] .vtr-ha-primary,
+.vtr-root[data-radius="soft"] .vtr-card-btn, .vtr-root[data-radius="soft"] .vtr-bk-pay,
+.vtr-root[data-radius="soft"] .vtr-bk-input, .vtr-root[data-radius="soft"] .vtr-ha-input { border-radius: 14px; }
+.vtr-root[data-radius="pill"]:not([data-layout]) .vtr-panel { border-radius: 24px; }
+.vtr-root[data-radius="pill"] .vtr-home-card { border-radius: 20px; }
+.vtr-root[data-radius="pill"] .vtr-msg { border-radius: 18px; }
+.vtr-root[data-radius="pill"] .vtr-input { border-radius: 20px; }
+.vtr-root[data-radius="pill"] .vtr-bk-input, .vtr-root[data-radius="pill"] .vtr-ha-input { border-radius: 14px; }
+.vtr-root[data-radius="pill"] .vtr-sendbtn, .vtr-root[data-radius="pill"] .vtr-bk-primary,
+.vtr-root[data-radius="pill"] .vtr-ha-primary, .vtr-root[data-radius="pill"] .vtr-card-btn,
+.vtr-root[data-radius="pill"] .vtr-bk-pay, .vtr-root[data-radius="pill"] .vtr-sb-cta,
+.vtr-root[data-radius="pill"] .vtr-bk-secondary, .vtr-root[data-radius="pill"] .vtr-bk-manage-btn,
+.vtr-root[data-radius="pill"] .vtr-bk-slot { border-radius: 999px; }
+.vtr-root[data-radius] .vtr-msg[data-dir="inbound"] { border-bottom-right-radius: 6px; }
+.vtr-root[data-radius] .vtr-msg[data-dir="outbound"] { border-bottom-left-radius: 6px; }
+@media (max-width: 480px) {
+  .vtr-root[data-radius]:not([data-layout]) .vtr-panel { border-radius: 0; }
+}
+
+/* Host Home actions: a link card is an anchor, styled as the button cards. */
+a.vtr-home-card { text-decoration: none; box-sizing: border-box; }
+`;

@@ -347,9 +347,9 @@ describe('font', () => {
       );
       hrefs.add(href as string);
     }
-    // Eight values, seven real families, no duplicates.
-    expect(WIDGET_FONTS).toHaveLength(8);
-    expect(hrefs.size).toBe(7);
+    // Ten values, nine real families, no duplicates (jost + playfairDisplay, 0.27.0).
+    expect(WIDGET_FONTS).toHaveLength(10);
+    expect(hrefs.size).toBe(9);
     expect(googleFontsHref('nunitoSans')).toContain('family=Nunito+Sans:');
   });
 

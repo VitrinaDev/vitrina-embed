@@ -22,7 +22,54 @@ export type WidgetFont =
   | 'nunitoSans'
   | 'archivo'
   | 'montserrat'
-  | 'saira';
+  | 'saira'
+  | 'jost'
+  | 'playfairDisplay';
+
+/**
+ * A host brand's colours (0.27.0). Every entry is any CSS colour the accent
+ * accepts (#hex, rgb()/hsl(), a short list of names) and goes through the same
+ * sanitizer; an unusable entry counts as absent.
+ *
+ * Opt-in and all-or-nothing on the SCHEME: once any entry is usable, the widget
+ * stops following the visitor's light/dark preference and paints this palette in
+ * both. Entries left out are derived from the ones given — `text` from
+ * `surface`, `accentText` from `accent`, and so on — so a surface without a text
+ * colour still gets readable text. No usable entry ⇒ today's widget.
+ */
+export interface WidgetPalette {
+  /** Panel background. Default white. */
+  surface?: string;
+  /** Secondary surface: hovers, chips, the agent's bubble unless `bubbleOut` is set. */
+  surfaceAlt?: string;
+  /** Body text on `surface`. Default: black or white, whichever reads on it. */
+  text?: string;
+  /** Secondary text (subtitles, hints). Default: `text` mixed into `surface`. */
+  muted?: string;
+  /** Hairlines and input borders. Default: a faint mix of `text` into `surface`. */
+  border?: string;
+  /** Buttons, links, selected tab, focus rings. Beats `theme.accent`. */
+  accent?: string;
+  /** Text and icons ON the accent (buttons, the classic header). Default: readable on `accent`. */
+  accentText?: string;
+  /** The visitor's bubble. Default `accent`. */
+  bubbleIn?: string;
+  bubbleInText?: string;
+  /** The agent's bubble. Default `surfaceAlt`. */
+  bubbleOut?: string;
+  bubbleOutText?: string;
+  /** The round launcher. Default `accent`. */
+  launcher?: string;
+  /** The launcher's glyph. Default: readable on `launcher`. */
+  launcherIcon?: string;
+}
+
+/**
+ * Corner style (0.27.0). `soft` rounds the panel, cards and buttons more;
+ * `pill` makes buttons fully round, for a brand whose buttons are pills.
+ * Absent / `default` ⇒ today's radii.
+ */
+export type WidgetRadius = 'default' | 'soft' | 'pill';
 
 export interface WidgetTheme {
   /** Brand accent for the launcher + agent bubbles. Any CSS color. */
@@ -38,6 +85,36 @@ export interface WidgetTheme {
    * variant; unset ⇒ `logoUrl` everywhere, exactly as before.
    */
   logoOnDarkUrl?: string;
+  /** The host brand's colours (0.27.0). Inline only for now. See {@link WidgetPalette}. */
+  palette?: WidgetPalette;
+  /** Corner style (0.27.0). Default `default`. */
+  radius?: WidgetRadius;
+}
+
+/** The glyphs a host Home action may use (0.27.0). */
+export type WidgetHomeActionIcon = 'calendar' | 'message' | 'whatsapp' | 'question' | 'pin' | 'sparkle';
+
+/**
+ * A host-defined Home card (0.27.0): the page's own call to action, painted
+ * in the widget's card style above the built-in cards.
+ *
+ * A tap emits `action { id }` through `on('action', …)`. With `href` the card
+ * is a plain link (new tab) to that absolute http(s) URL; without one, the
+ * panel closes after the event unless `closeOnTap` is false.
+ */
+export interface WidgetHomeHostAction {
+  /** Letters, digits, `-` and `_`, starting with a letter or digit; at most 40. */
+  id: string;
+  /** Card title. Trimmed; blank or over 60 characters drops the card. */
+  title: string;
+  /** Line under the title. Trimmed; blank or over 120 characters is omitted. */
+  subtitle?: string;
+  /** Glyph on the card. Absent (or unknown) ⇒ a chevron. */
+  icon?: WidgetHomeActionIcon;
+  /** Absolute http(s) URL; anything else is dropped and the card only emits. */
+  href?: string;
+  /** Close the panel after a tap without `href`. Default true. */
+  closeOnTap?: boolean;
 }
 
 /**
@@ -93,6 +170,12 @@ export interface WidgetHomeConfig {
    * its message.
    */
   productsUrl?: string;
+  /**
+   * The host page's own Home cards (0.27.0), at most 4, painted in this order
+   * ABOVE the built-in ones. An array: an inline value replaces the server's.
+   * Inline only for now; the server does not send them.
+   */
+  actions?: WidgetHomeHostAction[];
 }
 
 /**
@@ -330,6 +413,13 @@ export interface WidgetConfig {
    */
   font?: WidgetFont;
   /**
+   * Typeface for the panel's titles only (0.27.0): the Home greeting, the
+   * header name and the section titles. Same closed set and loading as `font`,
+   * so a host can pair a serif display face with a sans body. Unset ⇒ titles
+   * use `font`, exactly as before. Inline only for now.
+   */
+  headingFont?: WidgetFont;
+  /**
    * Logo shown in the panel header, ~22px tall (absolute http(s) URL).
    *
    * The same slot as `theme.logoUrl`, hoisted to the top level because it is
@@ -562,5 +652,7 @@ export interface WidgetEventMap {
   show: { restored: 'panel' | 'teaser' | 'launcher' };
   /** The pinned CTA (or a booking chip) was tapped and the host should act. */
   cta: { source: 'pinned' | 'chip' };
+  /** A host-defined Home card (`home.actions`) was tapped (0.27.0). */
+  action: { id: string };
 }
 export type WidgetEventName = keyof WidgetEventMap;

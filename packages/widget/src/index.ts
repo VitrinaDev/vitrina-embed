@@ -580,6 +580,7 @@ export function init(config: WidgetConfig): WidgetInstance {
     theme: presetTheme(),
     welcomeMessage: resolved.welcomeMessage,
     font: presetFont(),
+    headingFont: resolved.headingFont,
     bookingLabel: chipLabel(),
     // A repeat visitor's cached config already knows whether this tenant has
     // the tabs, so they paint with the panel rather than a round trip after it.
@@ -677,6 +678,12 @@ export function init(config: WidgetConfig): WidgetInstance {
         if (!homeCards[kind]) return;
         showHomeAction(kind);
       },
+      // A host Home card (0.27.0): the page hears about it first, then the
+      // panel closes when the card asked for that.
+      onHostAction: (id, close) => {
+        emitter.emit('action', { id });
+        if (close) instanceClose('visitor');
+      },
       // Bound through a getter for the same reason as booking's: the overlay is
       // only built on the first setHomeCards with a card on, always after this.
       homeActions: {
@@ -738,6 +745,7 @@ export function init(config: WidgetConfig): WidgetInstance {
           // label must be the LAST word on what that button says.
           ui.setBookingLabel(chipLabel());
           ui.applyFont(presetFont());
+          ui.applyHeadingFont(resolved.headingFont);
           ui.setWelcomeMessage(resolved.welcomeMessage);
           // The tab surfaces, AFTER setLocale so their built-in copy lands in
           // the language we just switched to — and, like the booking label,
