@@ -279,10 +279,11 @@ The rule, in full:
 | `theme.logoUrl`  | `string` (http/https URL)     | no       | —                  | Older spelling of `logoUrl` below. Still honoured; the top-level one wins.  |
 | `theme.palette`  | `WidgetPalette`               | no       | none               | The host brand's colours (0.27.0). Pins the widget's surfaces in both colour schemes. See **Brand palette and typography** below. Inline only. |
 | `theme.radius`   | `'default' \| 'soft' \| 'pill'` | no    | `'default'`        | Corner style (0.27.0). `pill` = fully round buttons, rounder panel and cards. |
-| `logoUrl`        | `string` (http/https URL)     | no       | —                  | Logo in the panel header, ~22px tall, never cropped. Non-http(s) URLs are ignored — no logo, never a broken image. |
+| `logoUrl`        | `string` (http/https URL) \| `null` | no | —            | Logo in the panel header, ~22px tall, never cropped. Non-http(s) URLs are ignored — no logo, never a broken image. `null` (0.27.0) drops the logo entirely, including the one Vitrina sends and its dark-ground variant. |
 | `logoOnDarkUrl`  | `string` (http/https URL)     | no       | —                  | Logo variant for dark grounds (also `theme.logoOnDarkUrl`). Drawn instead of `logoUrl` on the accent header, and on the surface headers under `prefers-color-scheme: dark`. CSS picks the variant. Unset ⇒ `logoUrl` everywhere. |
 | `font`           | `WidgetFont`                  | no       | `'system'`         | Typeface for the whole widget. See **Fonts** below. Unknown values fall back to `system`. |
 | `headingFont`    | `WidgetFont`                  | no       | unset (= `font`)   | Typeface for the titles only: Home greeting, header name, section titles (0.27.0). Inline only. |
+| `booking`        | `false`                       | no       | unset (server decides) | `false` (0.27.0) switches the in-widget booking off from the page even when the tenant has it on: no Home booking card, no booking chip, the pinned CTA emits `cta` for the host, and `openBooking()` falls back to the conversation. For a landing with its own booking step. It can only turn booking off; nothing inline turns it on. |
 | `bookingLabel`   | `string`                      | no       | localized copy     | What the booking chip says, verbatim — e.g. `Agendar demo`. Trimmed; blank or over 40 chars falls back to the built-in copy. Only visible when the tenant has booking on. |
 | `welcomeMessage` | `string`                      | no       | localized greeting | Greeting shown before the visitor sends the first message.                  |
 | `home`           | `{ enabled?, title?, subtitle?, cards?, prompts? }` | no | off          | The Home tab. See **Home and Help tabs** below. Off unless `enabled` is `true`. |
@@ -316,11 +317,17 @@ The rule, in full:
 
 ### Booking ("Agendar visita", or whatever you call it)
 
-There is no option for this. Booking is **server-gated per tenant**: `GET
+There is no option to turn this on. Booking is **server-gated per tenant**: `GET
 /widget/config` answers `bookingEnabled` and nothing on the page can turn it on,
 because the booking routes 404 for a tenant that has it off. When it is on, a
 chip appears over the composer and opens a `fecha → hora → datos → resumen`
 overlay laid over the panel; the conversation underneath is never destroyed.
+
+A page can only turn it **off**: `booking: false` (0.27.0) hides every booking
+entry point (the Home card, the chip, «Mis visitas») even for a tenant that has
+it on, the pinned CTA then only emits `cta`, and `openBooking()` falls back to the
+conversation. Use it on a landing that runs its own booking step, so the visitor
+does not see two ways to book.
 
 A confirmed booking is kept in `localStorage` under
 `vtr:widget:<pk_>:bookings` as a list of management tokens, which is how a

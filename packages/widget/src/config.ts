@@ -767,14 +767,23 @@ export function resolveConfig(
   // The logo has TWO spellings: `theme.logoUrl` (where it has always lived) and
   // the top-level `logoUrl` the server sends. Same slot, same sanitizer — the
   // top-level one simply wins WITHIN each tier, and inline still beats remote.
-  const logoUrl =
-    config.logoUrl ?? config.theme?.logoUrl ?? remote?.logoUrl ?? remote?.theme?.logoUrl;
+  // An explicit inline `logoUrl: null` (0.27.0) is the page saying "no logo":
+  // it drops the server's logo AND its dark-ground variant.
+  const noLogo = config.logoUrl === null;
+  if (noLogo) {
+    delete theme.logoUrl;
+    delete theme.logoOnDarkUrl;
+  }
+  const logoUrl = noLogo
+    ? undefined
+    : (config.logoUrl ?? config.theme?.logoUrl ?? remote?.logoUrl ?? remote?.theme?.logoUrl);
   // Its dark-ground variant follows the same two spellings and the same order.
-  const logoOnDarkUrl =
-    config.logoOnDarkUrl ??
-    config.theme?.logoOnDarkUrl ??
-    remote?.logoOnDarkUrl ??
-    remote?.theme?.logoOnDarkUrl;
+  const logoOnDarkUrl = noLogo
+    ? undefined
+    : (config.logoOnDarkUrl ??
+      config.theme?.logoOnDarkUrl ??
+      remote?.logoOnDarkUrl ??
+      remote?.theme?.logoOnDarkUrl);
   // Home and Help merge FIELD-WISE, exactly like `theme`: inline `home.title`
   // beats the server's, and the server's `home.enabled` still applies when the
   // page said nothing about it. `team` is an array and merges wholesale —
@@ -803,7 +812,10 @@ export function resolveConfig(
     headingFont: config.headingFont === undefined ? null : resolveFont(config.headingFont),
     // Deliberately NOT layered with an inline override: a booking surface that
     // calls routes the tenant has switched off would only ever paint a 404.
-    bookingEnabled: remote?.bookingEnabled === true || remote?.clinicBooking?.enabled === true,
+    // The page may only switch it OFF (`booking: false`, 0.27.0), never on.
+    bookingEnabled:
+      config.booking !== false &&
+      (remote?.bookingEnabled === true || remote?.clinicBooking?.enabled === true),
     photoUploadEnabled: remote?.photoUploadEnabled === true,
     bookingFlow: remote?.clinicBooking?.enabled === true ? 'clinic' : 'dealer',
     landing:

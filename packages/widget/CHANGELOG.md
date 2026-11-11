@@ -16,7 +16,11 @@ new fields gets exactly the 0.26.0 widget (same stylesheet, same DOM).
 - **`home.actions`**: up to 4 host-defined Home cards (`id`, `title`, `subtitle?`, `icon?`, `href?`,
   `closeOnTap?`) above the built-in cards. A tap emits the new **`action { id }`** event; with `href` the card is a
   plain new-tab link, without it the panel closes after the event unless `closeOnTap: false`.
-- All four are inline-only: `GET /widget/config` does not send them, so no server change is needed.
+- **`booking: false`**: a page with its own booking step switches the in-widget booking off even when the tenant
+  has it on (Home booking card, booking chip and «Mis visitas» gone, the pinned CTA hands off to the host,
+  `openBooking()` falls back to the conversation). It can only turn booking off; booking stays server-gated.
+- **`logoUrl: null`**: drops the logo the server sends, and its dark-ground variant. Unset keeps today's behaviour.
+- All of these are inline-only: `GET /widget/config` does not send them, so no server change is needed.
 
 ## 0.26.0
 

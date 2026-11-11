@@ -404,6 +404,14 @@ export interface WidgetConfig {
    * clinic's main landing. Ignored by a dealer's widget.
    */
   landing?: string;
+  /**
+   * `false` switches the in-widget booking OFF from the page (0.27.0): no Home
+   * booking card, no booking chip, the pinned CTA hands off to the host, and
+   * `openBooking()` falls back to the conversation, even when the tenant has
+   * booking on. For a landing with its own booking step. It can only turn
+   * booking off: no inline value turns it on (that stays server-owned).
+   */
+  booking?: false;
   bookingLabel?: string;
   /**
    * Typeface for the whole widget. Default `system` — today's native stack,
@@ -426,8 +434,11 @@ export interface WidgetConfig {
    * brand identity rather than a colour choice, and because that is the shape
    * `GET /widget/config` sends. This wins over `theme.logoUrl` when both are
    * set inline; an unusable URL simply means no logo, never a broken image.
+   *
+   * `null` (0.27.0) drops the logo entirely, including one the server sends
+   * and its dark-ground variant. Unset ⇒ the server's logo, as before.
    */
-  logoUrl?: string;
+  logoUrl?: string | null;
   /**
    * The logo for dark header grounds — same slot as `theme.logoOnDarkUrl`,
    * same precedence and the same URL gate as {@link logoUrl}.

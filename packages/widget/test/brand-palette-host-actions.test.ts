@@ -505,3 +505,137 @@ describe('home.actions', () => {
     w.destroy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 6. Page-only opt-outs: `booking: false` and `logoUrl: null`.
+// ---------------------------------------------------------------------------
+
+describe('page opt-outs', () => {
+  /** Serve this as GET /widget/config; everything else as before. */
+  function serveConfig(data: Record<string, unknown>): void {
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.includes('/widget/config')) return Promise.resolve(jsonRes(200, data));
+      if (u.includes('/widget/conversations')) {
+        return Promise.resolve(jsonRes(200, { visitorToken: 'vt', conversationExternalId: 'web:a', expiresAt: 'x' }));
+      }
+      if (u.includes('/widget/messages')) return Promise.resolve(jsonRes(200, { messages: [], conversation: null }));
+      return Promise.resolve(jsonRes(404, {}));
+    });
+  }
+  const configCalls = (): number =>
+    fetchMock.mock.calls.filter((c) => String(c[0]).includes('/widget/config')).length;
+  async function live(extra: Partial<WidgetConfig>): Promise<ReturnType<typeof init>> {
+    const before = configCalls();
+    const w = init({ publicKey: PK, apiBaseUrl: BASE, locale: 'es', home: { enabled: true }, ...extra });
+    await vi.waitFor(() => expect(configCalls()).toBe(before + 1));
+    for (let i = 0; i < 4; i += 1) await Promise.resolve();
+    must<HTMLButtonElement>('.vtr-launcher').click();
+    return w;
+  }
+  const bookingFetches = (): number =>
+    fetchMock.mock.calls.filter((c) => String(c[0]).includes('/widget/appointments')).length;
+
+  it('booking: false hides every booking entry even when the server has it on', async () => {
+    for (const server of [{ bookingEnabled: true }, { clinicBooking: { enabled: true } }]) {
+      serveConfig(server);
+      // Control: the server's gate does reach the page without the opt-out.
+      const on = await live({});
+      await vi.waitFor(() => expect(cards().map((c) => c.card)).toContain('book'));
+      expect(shadow().querySelector('.vtr-chip-book')).not.toBeNull();
+      on.destroy();
+
+      const off = await live({ booking: false, home: { enabled: true, actions: [{ id: 'reserve', title: 'Reservar' }] } });
+      expect(cards().map((c) => c.card)).toEqual(['host', 'chat']);
+      expect(shadow().querySelector('.vtr-chip-book')).toBeNull();
+      expect(shadow().querySelector('.vtr-booking')).toBeNull();
+      // openBooking() falls back to the conversation, as for a tenant with it off.
+      expect(off.openBooking()).toBe(false);
+      expect(shadow().querySelector('.vtr-booking')).toBeNull();
+      expect(must('.vtr-panel').hasAttribute('data-booking')).toBe(false);
+      expect(bookingFetches()).toBe(0);
+      off.destroy();
+      fetchMock.mockClear();
+    }
+  });
+
+  it('booking: false hands the pinned CTA to the host', async () => {
+    serveConfig({ bookingEnabled: true });
+    const w = await live({ booking: false, layout: 'sidebar', cta: { label: 'Reservar' } });
+    const ctas: unknown[] = [];
+    w.on('cta', (p) => ctas.push(p));
+    must<HTMLButtonElement>('.vtr-sb-cta').click();
+    expect(ctas).toEqual([{ source: 'pinned' }]);
+    expect(shadow().querySelector('.vtr-booking')).toBeNull();
+    w.destroy();
+  });
+
+  it('nothing on the page can turn booking ON when the server has it off', async () => {
+    serveConfig({});
+    const attempts = [
+      { booking: true },
+      { bookingEnabled: true },
+      { clinicBooking: { enabled: true } },
+      { booking: 'yes' },
+    ] as unknown as Array<Partial<WidgetConfig>>;
+    for (const extra of attempts) {
+      const w = await live(extra);
+      expect(cards().map((c) => c.card)).toEqual(['chat']);
+      expect(shadow().querySelector('.vtr-chip-book')).toBeNull();
+      expect(w.openBooking()).toBe(false);
+      expect(shadow().querySelector('.vtr-booking')).toBeNull();
+      w.destroy();
+    }
+    expect(bookingFetches()).toBe(0);
+    for (const extra of attempts) {
+      expect(resolveConfig({ publicKey: PK, apiBaseUrl: BASE, ...extra } as WidgetConfig, {}).bookingEnabled).toBe(false);
+    }
+  });
+
+  it('booking unset or false leaves resolution as before', () => {
+    const remote = { bookingEnabled: true as const };
+    expect(resolveConfig({ publicKey: PK, apiBaseUrl: BASE }, remote).bookingEnabled).toBe(true);
+    expect(resolveConfig({ publicKey: PK, apiBaseUrl: BASE }, {}).bookingEnabled).toBe(false);
+    expect(resolveConfig({ publicKey: PK, apiBaseUrl: BASE, booking: false }, remote).bookingEnabled).toBe(false);
+  });
+
+  it('logoUrl: null drops the server logo and its dark variant from every slot', async () => {
+    const server = {
+      logoUrl: 'https://cdn.example.com/logo.png',
+      logoOnDarkUrl: 'https://cdn.example.com/logo-dark.png',
+      theme: { logoUrl: 'https://cdn.example.com/theme-logo.png' },
+    };
+    serveConfig(server);
+    const on = await live({});
+    expect(
+      Array.from(shadow().querySelectorAll<HTMLImageElement>('img.vtr-logo')).filter((i) => !i.hidden).length,
+    ).toBeGreaterThan(0);
+    on.destroy();
+
+    const off = await live({ logoUrl: null });
+    const imgs = Array.from(shadow().querySelectorAll<HTMLImageElement>('img.vtr-logo'));
+    expect(imgs.every((i) => i.hidden && !i.hasAttribute('src'))).toBe(true);
+    expect(shadow().querySelector('.vtr-logo-ondark')).toBeNull();
+    off.destroy();
+
+    const resolved = resolveConfig({ publicKey: PK, apiBaseUrl: BASE, logoUrl: null }, server);
+    expect(resolved.theme.logoUrl).toBeUndefined();
+    expect(resolved.theme.logoOnDarkUrl).toBeUndefined();
+  });
+
+  it('logoUrl unset keeps the server logo (today)', () => {
+    const resolved = resolveConfig({ publicKey: PK, apiBaseUrl: BASE }, { logoUrl: 'https://cdn.example.com/l.png' });
+    expect(resolved.theme.logoUrl).toBe('https://cdn.example.com/l.png');
+  });
+
+  it('is byte-identical to today with both options unset', async () => {
+    serveConfig({ bookingEnabled: true, logoUrl: 'https://cdn.example.com/logo.png' });
+    const a = await live({});
+    const today = serialize(shadow());
+    a.destroy();
+    const b = await live({ booking: undefined, logoUrl: undefined });
+    expect(serialize(shadow())).toBe(today);
+    expect(styles()).toEqual([STYLES]);
+    b.destroy();
+  });
+});
